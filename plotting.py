@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 import cufflinks as cf
+import seaborn as sns
+import matplotlib.pyplot as plt
 cf.go_offline()
 
 
@@ -491,3 +493,14 @@ class Plotter:
             layout=layout,
         )
         py.offline.iplot(fig)
+
+    def plot_attention_map(self, adj_matrix, title="Attention Map"):
+        """
+        可视化注意力图或邻接矩阵
+        :param adj_matrix: Tensor shape (batch, K, K)
+        """
+        adj_matrix = adj_matrix[0].cpu().detach().numpy()  # 取第一个样本
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(adj_matrix, cmap='viridis', annot=False)
+        plt.title(title)
+        plt.show()

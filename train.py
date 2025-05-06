@@ -4,10 +4,9 @@ import torch.nn as nn
 
 from args import get_parser
 from utils import *
-from mtad_gat import MTAD_GAT
+from mtad_gat import Enhanced_MTADGAT
 from prediction import Predictor
 from training import Trainer
-
 
 if __name__ == "__main__":
 
@@ -71,7 +70,7 @@ if __name__ == "__main__":
         train_dataset, batch_size, val_split, shuffle_dataset, test_dataset=test_dataset
     )
 
-    model = MTAD_GAT(
+    model = Enhanced_MTADGAT(
         n_features,
         window_size,
         out_dim,
@@ -86,7 +85,10 @@ if __name__ == "__main__":
         recon_n_layers=args.recon_n_layers,
         recon_hid_dim=args.recon_hid_dim,
         dropout=args.dropout,
-        alpha=args.alpha
+        alpha=args.alpha,
+        dynamic_graph = args.dynamic_graph,
+        correlation_aware = args.correlation_aware,
+        use_transformer=args.use_transformer
     )
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.init_lr)

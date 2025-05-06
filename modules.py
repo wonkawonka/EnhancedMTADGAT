@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 
 class ConvLayer(nn.Module):
     """1-D Convolution layer to extract high-level features of each time-series input
@@ -20,6 +20,47 @@ class ConvLayer(nn.Module):
         x = self.padding(x)
         x = self.relu(self.conv(x))
         return x.permute(0, 2, 1)  # Permute back
+
+
+class DynamicGraphLearner(nn.Module):
+    """使用 Transformer 自注意力机制动态构建图结构"""
+
+    def __init__(self, input_dim, hidden_dim=64, top_k=5):
+        super(DynamicGraphLearner, self).__init__()
+        self.top_k = top_k
+        self.linear1 = nn.Linear(input_dim, hidden_dim)
+        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
+        self.graph_attn = nn.MultiheadAttention(hidden_dim, num_heads=1)
+
+    def compute_correlation_matrix(self, X):
+        # 计算特征间的皮尔逊相关性矩阵
+        mean = X.mean(dim=1, keepdim=True)
+        std = X.std(dim=1, keepdim=True)
+        X_centered = (X - mean) / (std + 1e-8)
+        corr = torch.bmm(X_centered.transpose(1, 2), X_centered) / X.size(1)
+        return corr
+
+    def forward(self, x):
+        b, n, k = x.shape
+        x_flat = x.view(b, -1)  # Flatten to (b, window*features)
+
+        key_value = self.linear1(x_flat).unsqueeze(0)
+        query = self.linear2(x_flat).unsqueeze(0)
+
+        # 使用 Multi-head Attention 学习邻接矩阵
+        # TODO 添加物理拓扑、为什么注意力这样写
+        attn_output, _ = self.graph_attn(query, key_value, key_value)
+        adj_matrix = torch.bmm(attn_output.squeeze(0).unsqueeze(-1),
+                               attn_output.squeeze(0).unsqueeze(0))  # (k, k)
+        adj_matrix = F.softmax(adj_matrix, dim=-1)
+
+        # 加入相关性先验
+        #TODO 没有根据选项判断是否启用，需要单独拎出来在框架里判断，作为单个模块
+        corr = self.compute_correlation_matrix(x)
+        adj_matrix = adj_matrix + corr.unsqueeze(0)
+        adj_matrix = F.normalize(adj_matrix, p=1, dim=-1)
+
+        return adj_matrix
 
 
 class FeatureAttentionLayer(nn.Module):
@@ -72,15 +113,15 @@ class FeatureAttentionLayer(nn.Module):
         # Proposed by Brody et. al., 2021 (https://arxiv.org/pdf/2105.14491.pdf)
         # Linear transformation applied after concatenation and attention layer applied after leakyrelu
         if self.use_gatv2:
-            a_input = self._make_attention_input(x)                 # (b, k, k, 2*window_size)
-            a_input = self.leakyrelu(self.lin(a_input))             # (b, k, k, embed_dim)
-            e = torch.matmul(a_input, self.a).squeeze(3)            # (b, k, k, 1)
+            a_input = self._make_attention_input(x)  # (b, k, k, 2*window_size)
+            a_input = self.leakyrelu(self.lin(a_input))  # (b, k, k, embed_dim)
+            e = torch.matmul(a_input, self.a).squeeze(3)  # (b, k, k, 1)
 
         # Original GAT attention
         else:
-            Wx = self.lin(x)                                                  # (b, k, k, embed_dim)
-            a_input = self._make_attention_input(Wx)                          # (b, k, k, 2*embed_dim)
-            e = self.leakyrelu(torch.matmul(a_input, self.a)).squeeze(3)      # (b, k, k, 1)
+            Wx = self.lin(x)  # (b, k, k, embed_dim)
+            a_input = self._make_attention_input(Wx)  # (b, k, k, 2*embed_dim)
+            e = self.leakyrelu(torch.matmul(a_input, self.a)).squeeze(3)  # (b, k, k, 1)
 
         if self.use_bias:
             e += self.bias
@@ -171,15 +212,15 @@ class TemporalAttentionLayer(nn.Module):
         # Proposed by Brody et. al., 2021 (https://arxiv.org/pdf/2105.14491.pdf)
         # Linear transformation applied after concatenation and attention layer applied after leakyrelu
         if self.use_gatv2:
-            a_input = self._make_attention_input(x)              # (b, n, n, 2*n_features)
-            a_input = self.leakyrelu(self.lin(a_input))          # (b, n, n, embed_dim)
-            e = torch.matmul(a_input, self.a).squeeze(3)         # (b, n, n, 1)
+            a_input = self._make_attention_input(x)  # (b, n, n, 2*n_features)
+            a_input = self.leakyrelu(self.lin(a_input))  # (b, n, n, embed_dim)
+            e = torch.matmul(a_input, self.a).squeeze(3)  # (b, n, n, 1)
 
         # Original GAT attention
         else:
-            Wx = self.lin(x)                                                  # (b, n, n, embed_dim)
-            a_input = self._make_attention_input(Wx)                          # (b, n, n, 2*embed_dim)
-            e = self.leakyrelu(torch.matmul(a_input, self.a)).squeeze(3)      # (b, n, n, 1)
+            Wx = self.lin(x)  # (b, n, n, embed_dim)
+            a_input = self._make_attention_input(Wx)  # (b, n, n, 2*embed_dim)
+            e = self.leakyrelu(torch.matmul(a_input, self.a)).squeeze(3)  # (b, n, n, 1)
 
         if self.use_bias:
             e += self.bias  # (b, n, n, 1)
@@ -188,7 +229,7 @@ class TemporalAttentionLayer(nn.Module):
         attention = torch.softmax(e, dim=2)
         attention = torch.dropout(attention, self.dropout, train=self.training)
 
-        h = self.sigmoid(torch.matmul(attention, x))    # (b, n, k)
+        h = self.sigmoid(torch.matmul(attention, x))  # (b, n, k)
 
         return h
 

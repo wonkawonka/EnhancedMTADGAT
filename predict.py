@@ -4,7 +4,7 @@ import datetime
 
 from args import get_parser, str2bool
 from utils import *
-from mtad_gat import MTAD_GAT
+from mtad_gat import Enhanced_MTADGAT
 from prediction import Predictor
 
 if __name__ == "__main__":
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     train_dataset = SlidingWindowDataset(x_train, window_size, target_dims)
     test_dataset = SlidingWindowDataset(x_test, window_size, target_dims)
 
-    model = MTAD_GAT(
+    model = Enhanced_MTADGAT(
         n_features,
         window_size,
         out_dim,
@@ -116,7 +116,10 @@ if __name__ == "__main__":
         recon_n_layers=model_args.recon_n_layers,
         recon_hid_dim=model_args.recon_hid_dim,
         dropout=model_args.dropout,
-        alpha=model_args.alpha
+        alpha=model_args.alpha,
+        dynamic_graph = args.dynamic_graph,
+        correlation_aware = args.correlation_aware,
+        use_transformer = args.use_transformer
     )
 
     device = "cuda" if args.use_cuda and torch.cuda.is_available() else "cpu"

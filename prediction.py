@@ -68,7 +68,7 @@ class Predictor:
 
         if self.target_dims is not None:
             actual = actual[:, self.target_dims]
-
+        #TODO 计算异常分数需要加图结构权重吗？
         anomaly_scores = np.zeros_like(actual)
         df_dict = {}
         for i in range(preds.shape[1]):
