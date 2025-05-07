@@ -45,7 +45,7 @@ class Enhanced_MTADGAT(nn.Module):
             time_gat_embed_dim=None,
             use_gatv2=True,
             gru_n_layers=1,
-            gru_hid_dim=3 * n_features,
+            gru_hid_dim=150,
             forecast_n_layers=1,
             forecast_hid_dim=150,
             recon_n_layers=1,
@@ -72,6 +72,7 @@ class Enhanced_MTADGAT(nn.Module):
             encoder_layer = nn.TransformerEncoderLayer(d_model=3 * n_features, nhead=6)
             self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
         # TODO GRU选项
+        gru_hid_dim=3 * n_features
         self.gru = GRULayer(3 * n_features, gru_hid_dim, gru_n_layers, dropout)
         self.forecasting_model = Forecasting_Model(gru_hid_dim, forecast_hid_dim, out_dim, forecast_n_layers, dropout)
         self.recon_model = ReconstructionModel(window_size, gru_hid_dim, recon_hid_dim, out_dim, recon_n_layers,
@@ -88,7 +89,7 @@ class Enhanced_MTADGAT(nn.Module):
 
         # TODO 动态图加的位置不对，而且没和注意力的图结合，还没想好怎么结合，应该在进入图注意力前
         if self.dynamic_graph:
-            adj_matrix = self.graph_learner(x)
+            adj_matrix = self.graph_learner(x.view(x.size(0), -1))  # shape: (b, n*k)
             h_cat = torch.bmm(adj_matrix, h_cat)  # 应用图结构
 
         if self.use_transformer:
