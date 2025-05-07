@@ -45,7 +45,7 @@ class Enhanced_MTADGAT(nn.Module):
             time_gat_embed_dim=None,
             use_gatv2=True,
             gru_n_layers=1,
-            gru_hid_dim=150,
+            gru_hid_dim=3 * n_features,
             forecast_n_layers=1,
             forecast_hid_dim=150,
             recon_n_layers=1,
