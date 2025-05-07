@@ -1,6 +1,9 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 
 class ConvLayer(nn.Module):
     """1-D Convolution layer to extract high-level features of each time-series input
@@ -55,7 +58,7 @@ class DynamicGraphLearner(nn.Module):
         adj_matrix = F.softmax(adj_matrix, dim=-1)
 
         # 加入相关性先验
-        #TODO 没有根据选项判断是否启用，需要单独拎出来在框架里判断，作为单个模块
+        # TODO 没有根据选项判断是否启用，需要单独拎出来在框架里判断，作为单个模块
         corr = self.compute_correlation_matrix(x)
         adj_matrix = adj_matrix + corr.unsqueeze(0)
         adj_matrix = F.normalize(adj_matrix, p=1, dim=-1)
@@ -256,6 +259,27 @@ class TemporalAttentionLayer(nn.Module):
             return combined.view(v.size(0), K, K, 2 * self.n_features)
         else:
             return combined.view(v.size(0), K, K, 2 * self.embed_dim)
+
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)  # (1, max_len, d_model)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        """
+        x: Tensor, shape [batch_size, seq_len, d_model]
+        """
+        x = x + self.pe[:, :x.size(1), :]
+        return x
 
 
 class GRULayer(nn.Module):

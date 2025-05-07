@@ -8,7 +8,7 @@ from modules import (
     TemporalAttentionLayer,
     GRULayer,
     Forecasting_Model,
-    ReconstructionModel,
+    ReconstructionModel, PositionalEncoding,
 )
 
 
@@ -69,7 +69,8 @@ class Enhanced_MTADGAT(nn.Module):
 
         self.use_transformer = use_transformer
         if use_transformer:
-            encoder_layer = nn.TransformerEncoderLayer(d_model=3 * n_features, nhead=6)
+            self.pos_encoder = PositionalEncoding(3 * n_features, dropout)
+            encoder_layer = nn.TransformerEncoderLayer(d_model=3 * n_features, nhead=6,batch_first=True)
             self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
         # TODO GRU选项
         gru_hid_dim=3 * n_features
@@ -93,8 +94,11 @@ class Enhanced_MTADGAT(nn.Module):
             h_cat = torch.bmm(adj_matrix, h_cat)  # 应用图结构
 
         if self.use_transformer:
-            transformer_out = self.transformer_encoder(h_cat.permute(1, 0, 2))
-            h_end = transformer_out.mean(dim=0)  # [b, d]
+            # transformer_out = self.transformer_encoder(h_cat.permute(1, 0, 2))
+            # h_end = transformer_out.mean(dim=0)  # [b, d]
+            h_cat = self.pos_encoder(h_cat)  # 添加位置信息
+            trans_out = self.transformer_encoder(h_cat)
+            _, h_end = self.gru(trans_out)
         else:
             _, h_end = self.gru(h_cat)
         h_end = h_end.view(x.shape[0], -1)  # Hidden state for last timestamp
