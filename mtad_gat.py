@@ -70,7 +70,9 @@ class Enhanced_MTADGAT(nn.Module):
         self.use_transformer = use_transformer
         if use_transformer:
             self.pos_encoder = PositionalEncoding(3 * n_features, dropout)
-            encoder_layer = nn.TransformerEncoderLayer(d_model=3 * n_features, nhead=6,batch_first=True)
+            d_model = 3 * n_features
+            nhead = find_largest_valid_nhead(d_model)
+            encoder_layer = nn.TransformerEncoderLayer(d_model, nhead,batch_first=True)
             self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
         # TODO GRU选项
         gru_hid_dim=3 * n_features
@@ -107,3 +109,9 @@ class Enhanced_MTADGAT(nn.Module):
         recons = self.recon_model(h_end)
 
         return predictions, recons
+
+def find_largest_valid_nhead(d_model, max_nhead=8):
+    for nhead in range(max_nhead, 0, -1):
+        if d_model % nhead == 0:
+            return nhead
+    return 1
