@@ -92,7 +92,8 @@ class Enhanced_MTADGAT(nn.Module):
             h_cat = torch.bmm(adj_matrix, h_cat)  # 应用图结构
 
         if self.use_transformer:
-            _, h_end = self.transformer_encoder(h_cat.permute(1, 0, 2)).permute(1, 0, 2)  # Transformer 处理
+            transformer_out = self.transformer_encoder(h_cat.permute(1, 0, 2))
+            h_end = transformer_out.mean(dim=0)  # [b, d]
         else:
             _, h_end = self.gru(h_cat)
         h_end = h_end.view(x.shape[0], -1)  # Hidden state for last timestamp
