@@ -86,15 +86,15 @@ class Enhanced_MTADGAT(nn.Module):
 
         h_cat = torch.cat([x, h_feat, h_temp], dim=2)  # (b, n, 3k)
 
-        if self.use_transformer:
-            h_cat = self.transformer_encoder(h_cat.permute(1, 0, 2)).permute(1, 0, 2)  # Transformer 处理
-
         # TODO 动态图加的位置不对，而且没和注意力的图结合，还没想好怎么结合，应该在进入图注意力前
         if self.dynamic_graph:
             adj_matrix = self.graph_learner(x)
             h_cat = torch.bmm(adj_matrix, h_cat)  # 应用图结构
 
-        _, h_end = self.gru(h_cat)
+        if self.use_transformer:
+            _, h_end = self.transformer_encoder(h_cat.permute(1, 0, 2)).permute(1, 0, 2)  # Transformer 处理
+        else:
+            _, h_end = self.gru(h_cat)
         h_end = h_end.view(x.shape[0], -1)  # Hidden state for last timestamp
 
         predictions = self.forecasting_model(h_end)
