@@ -32,6 +32,8 @@ def get_parser():
     parser.add_argument("--use_gatv2", type=str2bool, default=True)
     parser.add_argument("--feat_gat_embed_dim", type=int, default=None,help="节点特征嵌入维度（GAT 层）")
     parser.add_argument("--time_gat_embed_dim", type=int, default=None,help="时间序列嵌入维度（GAT 层）")
+    # Transformer layers
+    parser.add_argument("--trans_enc_layers", type=int, default=2,help="Transformer encoder的层数")
     # GRU layer
     parser.add_argument("--gru_n_layers", type=int, default=1,help="GRU 的层数")
     parser.add_argument("--gru_hid_dim", type=int, default=150,help="GRU 隐藏层的维度")

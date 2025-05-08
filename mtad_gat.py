@@ -55,6 +55,7 @@ class Enhanced_MTADGAT(nn.Module):
             dynamic_graph=True,
             correlation_aware=True,
             use_transformer=True,
+            trans_enc_layers=2
     ):
         super(Enhanced_MTADGAT, self).__init__()
 
@@ -66,17 +67,17 @@ class Enhanced_MTADGAT(nn.Module):
         if dynamic_graph:
             self.graph_learner = DynamicGraphLearner(n_features * window_size, hidden_dim=64)
         #TODO 相关性模块加在这里
-
+        d_model = 3 * n_features
         self.use_transformer = use_transformer
         if use_transformer:
-            self.pos_encoder = PositionalEncoding(3 * n_features, dropout)
-            d_model = 3 * n_features
+            self.pos_encoder = PositionalEncoding(d_model, dropout)
             nhead = find_largest_valid_nhead(d_model)
             encoder_layer = nn.TransformerEncoderLayer(d_model, nhead,batch_first=True)
-            self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
+            self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=trans_enc_layers)
+            self.trans_proj = nn.Linear(d_model, gru_hid_dim)  # d_model -> 150
         # TODO GRU选项
-        gru_hid_dim=3 * n_features
-        self.gru = GRULayer(3 * n_features, gru_hid_dim, gru_n_layers, dropout)
+        else:
+            self.gru = GRULayer(d_model, gru_hid_dim, gru_n_layers, dropout)
         self.forecasting_model = Forecasting_Model(gru_hid_dim, forecast_hid_dim, out_dim, forecast_n_layers, dropout)
         self.recon_model = ReconstructionModel(window_size, gru_hid_dim, recon_hid_dim, out_dim, recon_n_layers,
                                                dropout)
@@ -96,11 +97,10 @@ class Enhanced_MTADGAT(nn.Module):
             h_cat = torch.bmm(adj_matrix, h_cat)  # 应用图结构
 
         if self.use_transformer:
-            # transformer_out = self.transformer_encoder(h_cat.permute(1, 0, 2))
-            # h_end = transformer_out.mean(dim=0)  # [b, d]
             h_cat = self.pos_encoder(h_cat)  # 添加位置信息
             trans_out = self.transformer_encoder(h_cat)
-            _, h_end = self.gru(trans_out)
+            h_end = trans_out.mean(dim=1)  # (b, d)
+            h_end = self.trans_proj(h_end)  # (b, 150)
         else:
             _, h_end = self.gru(h_cat)
         h_end = h_end.view(x.shape[0], -1)  # Hidden state for last timestamp
