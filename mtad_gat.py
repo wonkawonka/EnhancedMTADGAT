@@ -3,12 +3,11 @@ import torch.nn as nn
 
 from modules import (
     ConvLayer,
-    DynamicGraphLearner,
     FeatureAttentionLayer,
     TemporalAttentionLayer,
     GRULayer,
     Forecasting_Model,
-    ReconstructionModel, PositionalEncoding,
+    ReconstructionModel, PositionalEncoding, CorrelationLayer,
 )
 
 
@@ -52,30 +51,32 @@ class Enhanced_MTADGAT(nn.Module):
             recon_hid_dim=150,
             dropout=0.2,
             alpha=0.2,
-            dynamic_graph=True,
             correlation_aware=True,
             use_transformer=True,
+            top_k=20,
+            corr_dim=40,
+            corr_alpha=3,
     ):
         super(Enhanced_MTADGAT, self).__init__()
 
         self.conv = ConvLayer(n_features, kernel_size)
+        # 相关性层
+        if correlation_aware:
+            self.corr = CorrelationLayer(n_features, top_k, corr_dim,corr_alpha)
+        # 图注意力层
         self.feature_gat = FeatureAttentionLayer(n_features, window_size, dropout, alpha, feat_gat_embed_dim, use_gatv2)
         self.temporal_gat = TemporalAttentionLayer(n_features, window_size, dropout, alpha, time_gat_embed_dim,
                                                    use_gatv2)
-        self.dynamic_graph = dynamic_graph
-        if dynamic_graph:
-            self.graph_learner = DynamicGraphLearner(n_features * window_size, hidden_dim=64)
-        #TODO 相关性模块加在这里
-
+        # 是否在GRU前加transformer encoder
         self.use_transformer = use_transformer
         if use_transformer:
             self.pos_encoder = PositionalEncoding(3 * n_features, dropout)
             d_model = 3 * n_features
             nhead = find_largest_valid_nhead(d_model)
-            encoder_layer = nn.TransformerEncoderLayer(d_model, nhead,batch_first=True)
+            encoder_layer = nn.TransformerEncoderLayer(d_model, nhead, batch_first=True)
             self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
-        # TODO GRU选项
-        gru_hid_dim=3 * n_features
+        # TODO 注意当特征只有几个的时候需要调整一下
+        gru_hid_dim = 3 * n_features
         self.gru = GRULayer(3 * n_features, gru_hid_dim, gru_n_layers, dropout)
         self.forecasting_model = Forecasting_Model(gru_hid_dim, forecast_hid_dim, out_dim, forecast_n_layers, dropout)
         self.recon_model = ReconstructionModel(window_size, gru_hid_dim, recon_hid_dim, out_dim, recon_n_layers,
@@ -85,15 +86,15 @@ class Enhanced_MTADGAT(nn.Module):
         # x shape (b, n, k): b - batch size, n - window size, k - number of features
 
         x = self.conv(x)
+
+        if self.correlation_aware:
+            h_corr = self.corr(x)
+            # 后续维度适配
+            x = torch.cat([x, h_corr], dim=2)
         h_feat = self.feature_gat(x)
         h_temp = self.temporal_gat(x)
 
         h_cat = torch.cat([x, h_feat, h_temp], dim=2)  # (b, n, 3k)
-
-        # TODO 动态图加的位置不对，而且没和注意力的图结合，还没想好怎么结合，应该在进入图注意力前
-        if self.dynamic_graph:
-            adj_matrix = self.graph_learner(x.view(x.size(0), -1))  # shape: (b, n*k)
-            h_cat = torch.bmm(adj_matrix, h_cat)  # 应用图结构
 
         if self.use_transformer:
             # transformer_out = self.transformer_encoder(h_cat.permute(1, 0, 2))
@@ -109,6 +110,7 @@ class Enhanced_MTADGAT(nn.Module):
         recons = self.recon_model(h_end)
 
         return predictions, recons
+
 
 def find_largest_valid_nhead(d_model, max_nhead=8):
     for nhead in range(max_nhead, 0, -1):

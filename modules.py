@@ -25,45 +25,57 @@ class ConvLayer(nn.Module):
         return x.permute(0, 2, 1)  # Permute back
 
 
-class DynamicGraphLearner(nn.Module):
-    """使用 Transformer 自注意力机制动态构建图结构"""
+class CorrelationLayer(nn.Module):
+    """计算线性相关性
+    :param nnodes:节点数（如传感器数）
+    :param top_k: 每个节点保留的邻接边数
+    :param dim: 嵌入维度
+    :param alpha: 缩放因子，控制激活函数灵敏度
+    :param static_feat: 可选静态特征矩阵（形状为 [nnodes, xd]）
+    """
 
-    def __init__(self, input_dim, hidden_dim=64, top_k=5):
-        super(DynamicGraphLearner, self).__init__()
+    def __init__(self, nnodes, top_k, dim, alpha, static_feat=None):
+        super(CorrelationLayer, self).__init__()
+        self.nnodes = nnodes
+        if static_feat is not None:
+            xd = static_feat.shape[1]
+            self.lin1 = nn.Linear(xd, dim)
+            self.lin2 = nn.Linear(xd, dim)
+        else:
+            self.emb1 = nn.Embedding(nnodes, dim)
+            self.emb2 = nn.Embedding(nnodes, dim)
+            self.lin1 = nn.Linear(dim, dim)
+            self.lin2 = nn.Linear(dim, dim)
+
         self.top_k = top_k
-        self.linear1 = nn.Linear(input_dim, hidden_dim)
-        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
-        self.graph_attn = nn.MultiheadAttention(hidden_dim, num_heads=1)
+        self.dim = dim
+        # 这里alpha是否要作为传入参数
+        self.alpha = alpha
+        self.static_feat = static_feat
 
-    def compute_correlation_matrix(self, X):
-        # 计算特征间的皮尔逊相关性矩阵
-        mean = X.mean(dim=1, keepdim=True)
-        std = X.std(dim=1, keepdim=True)
-        X_centered = (X - mean) / (std + 1e-8)
-        corr = torch.bmm(X_centered.transpose(1, 2), X_centered) / X.size(1)
-        return corr
+    def forward(self, idx):
+        if self.static_feat is None:
+            nodevec1 = self.emb1(idx)
+            nodevec2 = self.emb2(idx)
+        else:
+            nodevec1 = self.static_feat[idx, :]
+            nodevec2 = nodevec1
 
-    def forward(self, x):
-        b, n, k = x.shape
-        x_flat = x.view(b, -1)  # Flatten to (b, window*features)
-
-        key_value = self.linear1(x_flat).unsqueeze(0)
-        query = self.linear2(x_flat).unsqueeze(0)
-
-        # 使用 Multi-head Attention 学习邻接矩阵
-        # TODO 添加物理拓扑、为什么注意力这样写
-        attn_output, _ = self.graph_attn(query, key_value, key_value)
-        adj_matrix = torch.bmm(attn_output.squeeze(0).unsqueeze(-1),
-                               attn_output.squeeze(0).unsqueeze(0))  # (k, k)
-        adj_matrix = F.softmax(adj_matrix, dim=-1)
-
-        # 加入相关性先验
-        # TODO 没有根据选项判断是否启用，需要单独拎出来在框架里判断，作为单个模块
-        corr = self.compute_correlation_matrix(x)
-        adj_matrix = adj_matrix + corr.unsqueeze(0)
-        adj_matrix = F.normalize(adj_matrix, p=1, dim=-1)
-
-        return adj_matrix
+        nodevec1 = torch.tanh(self.alpha * self.lin1(nodevec1))
+        nodevec2 = torch.tanh(self.alpha * self.lin2(nodevec2))
+        # 计算两个方向的外积差值，构建非对称的相似度矩阵
+        a = torch.mm(nodevec1, nodevec2.transpose(1, 0)) - torch.mm(nodevec2, nodevec1.transpose(1, 0))
+        # 使用 tanh 再次放大差异，然后通过 ReLU 截断负值，形成初步邻接矩阵
+        adj = F.relu(torch.tanh(self.alpha * a))
+        # 稀疏化操作
+        mask = torch.zeros(idx.size(0), idx.size(0))
+        mask.fill_(float('0'))
+        # 加一个小随机扰动以保证数值稳定性
+        s1, t1 = (adj + torch.rand_like(adj) * 0.01).topk(self.k, 1)  # rand for numerical stability
+        # 利用 scatter_ 在掩码上标记这些位置为 1
+        mask.scatter_(1, t1, s1.fill_(1))
+        adj = adj * mask
+        return adj
 
 
 class FeatureAttentionLayer(nn.Module):
@@ -276,13 +288,12 @@ class PositionalEncoding(nn.Module):
         pe = pe.unsqueeze(0)  # shape: [1, max_len, d_model]
         self.register_buffer('pe', pe)
 
-
     def forward(self, x):
-            """
-            x: Tensor, shape [batch_size, seq_len, d_model]
-            """
-            x = x + self.pe[:, :x.size(1), :]
-            return x
+        """
+        x: Tensor, shape [batch_size, seq_len, d_model]
+        """
+        x = x + self.pe[:, :x.size(1), :]
+        return x
 
 
 class GRULayer(nn.Module):

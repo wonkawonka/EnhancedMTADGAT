@@ -1,11 +1,11 @@
 import argparse
-import json
 import datetime
+import json
 
 from args import get_parser, str2bool
-from utils import *
 from mtad_gat import Enhanced_MTADGAT
 from prediction import Predictor
+from utils import *
 
 if __name__ == "__main__":
 
@@ -117,9 +117,11 @@ if __name__ == "__main__":
         recon_hid_dim=model_args.recon_hid_dim,
         dropout=model_args.dropout,
         alpha=model_args.alpha,
-        dynamic_graph = args.dynamic_graph,
-        correlation_aware = args.correlation_aware,
-        use_transformer = args.use_transformer
+        correlation_aware=model_args.correlation_aware,
+        use_transformer=model_args.use_transformer,
+        top_k=model_args.top_k,
+        corr_dim=model_args.corr_dim,
+        corr_alpha=model_args.corr_alpha,
     )
 
     device = "cuda" if args.use_cuda and torch.cuda.is_available() else "cpu"
