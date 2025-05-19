@@ -53,6 +53,7 @@ class Enhanced_MTADGAT(nn.Module):
             alpha=0.2,
             correlation_aware=True,
             use_transformer=True,
+            trans_enc_layers=2,
             top_k=20,
             corr_dim=40,
             corr_alpha=3,
@@ -67,17 +68,18 @@ class Enhanced_MTADGAT(nn.Module):
         self.feature_gat = FeatureAttentionLayer(n_features, window_size, dropout, alpha, feat_gat_embed_dim, use_gatv2)
         self.temporal_gat = TemporalAttentionLayer(n_features, window_size, dropout, alpha, time_gat_embed_dim,
                                                    use_gatv2)
+        d_model = 3 * n_features
         # 是否在GRU前加transformer encoder
         self.use_transformer = use_transformer
         if use_transformer:
-            self.pos_encoder = PositionalEncoding(3 * n_features, dropout)
-            d_model = 3 * n_features
+            self.pos_encoder = PositionalEncoding(d_model, dropout)
             nhead = find_largest_valid_nhead(d_model)
             encoder_layer = nn.TransformerEncoderLayer(d_model, nhead, batch_first=True)
-            self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
+            self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=trans_enc_layers)
+            self.trans_proj = nn.Linear(d_model, gru_hid_dim)  # d_model -> 150
         # TODO 注意当特征只有几个的时候需要调整一下
-        gru_hid_dim = 3 * n_features
-        self.gru = GRULayer(3 * n_features, gru_hid_dim, gru_n_layers, dropout)
+        else:
+            self.gru = GRULayer(d_model, gru_hid_dim, gru_n_layers, dropout)
         self.forecasting_model = Forecasting_Model(gru_hid_dim, forecast_hid_dim, out_dim, forecast_n_layers, dropout)
         self.recon_model = ReconstructionModel(window_size, gru_hid_dim, recon_hid_dim, out_dim, recon_n_layers,
                                                dropout)
@@ -101,7 +103,8 @@ class Enhanced_MTADGAT(nn.Module):
             # h_end = transformer_out.mean(dim=0)  # [b, d]
             h_cat = self.pos_encoder(h_cat)  # 添加位置信息
             trans_out = self.transformer_encoder(h_cat)
-            _, h_end = self.gru(trans_out)
+            h_end = trans_out.mean(dim=1)  # (b, d)
+            h_end = self.trans_proj(h_end)  # (b, 150)
         else:
             _, h_end = self.gru(h_cat)
         h_end = h_end.view(x.shape[0], -1)  # Hidden state for last timestamp
