@@ -1,12 +1,13 @@
 import json
 from datetime import datetime
+
 import torch.nn as nn
 
 from args import get_parser
-from utils import *
 from mtad_gat import Enhanced_MTADGAT
 from prediction import Predictor
 from training import Trainer
+from utils import *
 
 if __name__ == "__main__":
 
@@ -86,9 +87,11 @@ if __name__ == "__main__":
         recon_hid_dim=args.recon_hid_dim,
         dropout=args.dropout,
         alpha=args.alpha,
-        dynamic_graph = args.dynamic_graph,
-        correlation_aware = args.correlation_aware,
-        use_transformer=args.use_transformer
+        correlation_aware=args.correlation_aware,
+        use_transformer=args.use_transformer,
+        top_k=args.top_k,
+        corr_dim=args.corr_dim,
+        corr_alpha=args.corr_alpha,
     )
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.init_lr)
