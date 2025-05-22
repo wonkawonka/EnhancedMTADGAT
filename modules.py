@@ -53,72 +53,40 @@ class CorrelationLayer(nn.Module):
         self.alpha = alpha
         self.static_feat = static_feat
 
-    def forward(self, idx):
+    def forward(self,x):
+        """
+        :param x: shape (b, n, k) - batch of time series windows
+        :return: adj_matrix: shape (b, k, k)
+        """
+        b, n, k = x.size()
+        idx=torch.arange(self.nnodes).to(x.device)
         if self.static_feat is None:
-            nodevec1 = self.emb1(idx)
+            nodevec1 = self.emb1(idx) # (k, dim)
             nodevec2 = self.emb2(idx)
         else:
             nodevec1 = self.static_feat[idx, :]
             nodevec2 = nodevec1
 
-        nodevec1 = torch.tanh(self.alpha * self.lin1(nodevec1))
+        # TODO 可以使用 x 的统计信息增强 nodevec（存疑）
+        feature_mean = x.mean(dim=1)  # (b, k)
+
+        nodevec1 = torch.tanh(self.alpha * self.lin1(nodevec1)) # (k, dim)
         nodevec2 = torch.tanh(self.alpha * self.lin2(nodevec2))
-        # 计算两个方向的外积差值，构建非对称的相似度矩阵
+
+        # 计算两个方向的外积差值，构建非对称的相似度矩阵 a
         a = torch.mm(nodevec1, nodevec2.transpose(1, 0)) - torch.mm(nodevec2, nodevec1.transpose(1, 0))
         # 使用 tanh 再次放大差异，然后通过 ReLU 截断负值，形成初步邻接矩阵
-        adj = F.relu(torch.tanh(self.alpha * a))
+        # TODO 升维应该在这里吗，还是应该在上一步？
+        adj = F.relu(torch.tanh(self.alpha * a)).unsqueeze(0).expand(b, -1, -1) # 后面unsqeeze自行根据b计算
+
         # 稀疏化操作
-        mask = torch.zeros(idx.size(0), idx.size(0))
+        # TODO 这里a的shape是什么？
+        mask = torch.zeros_like(a)
+        # mask = torch.zeros(idx.size(0), idx.size(0))
         mask.fill_(float('0'))
         # 加一个小随机扰动以保证数值稳定性
-        s1, t1 = (adj + torch.rand_like(adj) * 0.01).topk(self.k, 1)  # rand for numerical stability
+        s1, t1 = (adj + torch.rand_like(adj) * 0.01).topk(self.top_k, 1)  # rand for numerical stability
         # 利用 scatter_ 在掩码上标记这些位置为 1
-        mask.scatter_(1, t1, s1.fill_(1))
-        adj = adj * mask
-        return adj
-
-
-class CorrelationGraphConstructor(nn.Module):
-    '''
-            Graph Constructor is the Multivariate Time Series Correlation Layer
-            (MTCL) in the paper.
-        '''
-
-    def __init__(self, nnodes, k, dim, device, alpha=3, static_feat=None):
-        super(CorrelationGraphConstructor, self).__init__()
-        self.nnodes = nnodes
-        if static_feat is not None:
-            xd = static_feat.shape[1]
-            self.lin1 = nn.Linear(xd, dim)
-            self.lin2 = nn.Linear(xd, dim)
-        else:
-            self.emb1 = nn.Embedding(nnodes, dim)
-            self.emb2 = nn.Embedding(nnodes, dim)
-            self.lin1 = nn.Linear(dim, dim)
-            self.lin2 = nn.Linear(dim, dim)
-
-        self.device = device
-        self.k = k
-        self.dim = dim
-        self.alpha = alpha
-        self.static_feat = static_feat
-
-    def forward(self, idx):
-        if self.static_feat is None:
-            nodevec1 = self.emb1(idx)
-            nodevec2 = self.emb2(idx)
-        else:
-            nodevec1 = self.static_feat[idx, :]
-            nodevec2 = nodevec1
-
-        nodevec1 = torch.tanh(self.alpha * self.lin1(nodevec1))
-        nodevec2 = torch.tanh(self.alpha * self.lin2(nodevec2))
-
-        a = torch.mm(nodevec1, nodevec2.transpose(1, 0)) - torch.mm(nodevec2, nodevec1.transpose(1, 0))
-        adj = F.relu(torch.tanh(self.alpha * a))
-        mask = torch.zeros(idx.size(0), idx.size(0)).to(self.device)
-        mask.fill_(float('0'))
-        s1, t1 = (adj + torch.rand_like(adj) * 0.01).topk(self.k, 1)  # rand for numerical stability
         mask.scatter_(1, t1, s1.fill_(1))
         adj = adj * mask
         return adj
@@ -164,7 +132,7 @@ class FeatureAttentionLayer(nn.Module):
         self.leakyrelu = nn.LeakyReLU(alpha)
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x):
+    def forward(self, x, adj_matrix=None):
         # x shape (b, n, k): b - batch size, n - window size, k - number of features
         # For feature attention we represent a node as the values of a particular feature across all timestamps
 
@@ -187,7 +155,13 @@ class FeatureAttentionLayer(nn.Module):
         if self.use_bias:
             e += self.bias
 
-        # Attention weights
+        # 相关性邻接矩阵作为边权重
+        if adj_matrix is not None:
+            # 扩展 adj_matrix 到与 e 同形状: (b, k, k) -> (b, k, k, 1)
+            adj_matrix = adj_matrix.unsqueeze(-1)
+            e = e + adj_matrix  # 加权融合，也可以乘法或其他方式
+
+        # Attention weights，softmax over feature dimension
         attention = torch.softmax(e, dim=2)
         attention = torch.dropout(attention, self.dropout, train=self.training)
 

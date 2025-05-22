@@ -107,7 +107,6 @@ class Trainer:
                 x = x.to(self.device)
                 y = y.to(self.device)
                 self.optimizer.zero_grad()
-
                 preds, recons = self.model(x)
 
                 if self.target_dims is not None:
