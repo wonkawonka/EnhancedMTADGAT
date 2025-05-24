@@ -67,27 +67,28 @@ class CorrelationLayer(nn.Module):
             nodevec1 = self.static_feat[idx, :]
             nodevec2 = nodevec1
 
-        # TODO 可以使用 x 的统计信息增强 nodevec（存疑）
-        feature_mean = x.mean(dim=1)  # (b, k)
+        # 将 nodevec 扩展为 batch-wise 形式
+        nodevec1 = nodevec1.unsqueeze(0).expand(b, -1, -1)  # (b, k, dim)
+        nodevec2 = nodevec2.unsqueeze(0).expand(b, -1, -1)
 
         nodevec1 = torch.tanh(self.alpha * self.lin1(nodevec1)) # (k, dim)
         nodevec2 = torch.tanh(self.alpha * self.lin2(nodevec2))
 
         # 计算两个方向的外积差值，构建非对称的相似度矩阵 a
-        a = torch.mm(nodevec1, nodevec2.transpose(1, 0)) - torch.mm(nodevec2, nodevec1.transpose(1, 0))
+        a = torch.bmm(nodevec1, nodevec2.transpose(2, 1)) - torch.mm(nodevec2, nodevec1.transpose(2, 1))
         # 使用 tanh 再次放大差异，然后通过 ReLU 截断负值，形成初步邻接矩阵
-        # TODO 升维应该在这里吗，还是应该在上一步？
-        adj = F.relu(torch.tanh(self.alpha * a)).unsqueeze(0).expand(b, -1, -1) # 后面unsqeeze自行根据b计算
+        adj = F.relu(torch.tanh(self.alpha * a))
 
         # 稀疏化操作
-        # TODO 这里a的shape是什么？
-        mask = torch.zeros_like(a)
+        mask = torch.zeros_like(adj)
         # mask = torch.zeros(idx.size(0), idx.size(0))
         mask.fill_(float('0'))
         # 加一个小随机扰动以保证数值稳定性
-        s1, t1 = (adj + torch.rand_like(adj) * 0.01).topk(self.top_k, 1)  # rand for numerical stability
+        s1, t1 = (a + torch.rand_like(a) * 0.01).topk(self.top_k, -1)
+        # s1, t1 = (adj + torch.rand_like(adj) * 0.01).topk(self.top_k, 1)  # rand for numerical stability
         # 利用 scatter_ 在掩码上标记这些位置为 1
-        mask.scatter_(1, t1, s1.fill_(1))
+        mask.scatter_(2, t1, s1.fill_(1))
+        # mask.scatter_(1, t1, s1.fill_(1))
         adj = adj * mask
         return adj
 
