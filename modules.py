@@ -53,15 +53,15 @@ class CorrelationLayer(nn.Module):
         self.alpha = alpha
         self.static_feat = static_feat
 
-    def forward(self,x):
+    def forward(self, x):
         """
         :param x: shape (b, n, k) - batch of time series windows
         :return: adj_matrix: shape (b, k, k)
         """
         b, n, k = x.size()
-        idx=torch.arange(self.nnodes).to(x.device)
+        idx = torch.arange(self.nnodes).to(x.device)
         if self.static_feat is None:
-            nodevec1 = self.emb1(idx) # (k, dim)
+            nodevec1 = self.emb1(idx)  # (k, dim)
             nodevec2 = self.emb2(idx)
         else:
             nodevec1 = self.static_feat[idx, :]
@@ -71,7 +71,7 @@ class CorrelationLayer(nn.Module):
         nodevec1 = nodevec1.unsqueeze(0).expand(b, -1, -1)  # (b, k, dim)
         nodevec2 = nodevec2.unsqueeze(0).expand(b, -1, -1)
 
-        nodevec1 = torch.tanh(self.alpha * self.lin1(nodevec1)) # (k, dim)
+        nodevec1 = torch.tanh(self.alpha * self.lin1(nodevec1))  # (k, dim)
         nodevec2 = torch.tanh(self.alpha * self.lin2(nodevec2))
 
         # 计算两个方向的外积差值，构建非对称的相似度矩阵 a
@@ -143,8 +143,11 @@ class FeatureAttentionLayer(nn.Module):
         # Proposed by Brody et. al., 2021 (https://arxiv.org/pdf/2105.14491.pdf)
         # Linear transformation applied after concatenation and attention layer applied after leakyrelu
         if self.use_gatv2:
+            # 把每个节点与其他所有节点拼接起来
             a_input = self._make_attention_input(x)  # (b, k, k, 2*window_size)
+            # 经过一个线性层 + LeakyReLU 激活函数，得到中间表示
             a_input = self.leakyrelu(self.lin(a_input))  # (b, k, k, embed_dim)
+            # 使用可学习的参数 self.a 做点积，得到原始注意力分数 e
             e = torch.matmul(a_input, self.a).squeeze(3)  # (b, k, k, 1)
 
         # Original GAT attention

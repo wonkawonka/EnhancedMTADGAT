@@ -15,8 +15,8 @@ def str2bool(v):
 def get_parser():
     parser = argparse.ArgumentParser()
     # -- enhanced params ---
-    parser.add_argument("--correlation_aware", type=str2bool, default=True)
-    parser.add_argument("--use_transformer", type=str2bool, default=True,help="目前是在gru前加transformer encoder")
+    parser.add_argument("--correlation_aware", type=str2bool, default=False)
+    parser.add_argument("--use_transformer", type=str2bool, default=False,help="目前是在gru前加transformer encoder")
     parser.add_argument('--top_k', type=int, default=15, help='k')
     parser.add_argument('--corr_dim', type=int, default=256, help='相关性嵌入维度')
     parser.add_argument('--corr_alpha', type=int, default=20, help='相关性缩放因子')
