@@ -93,6 +93,9 @@ if __name__ == "__main__":
         attention_top_k=args.attention_top_k,
         corr_dim=args.corr_dim,
         corr_alpha=args.corr_alpha,
+        multi_scale_stacked=args.multi_scale_stacked,
+        window_sizes=args.window_sizes,
+        num_attention_stacks=args.num_attention_stacks
     )
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.init_lr)

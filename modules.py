@@ -93,6 +93,88 @@ class CorrelationLayer(nn.Module):
         return adj
 
 
+class MultiScaleStackedAttentionLayer(nn.Module):
+    """Multi-Scale Stacked and Alternating Feature and Temporal Attention Layers
+    :param n_features: Number of input features
+    :param window_sizes: List of window sizes for multi-scale attention
+    :param dropout: Dropout rate
+    :param alpha: Negative slope in leaky relu
+    :param feat_embed_dim: Embedding dimension for feature attention
+    :param time_embed_dim: Embedding dimension for temporal attention
+    :param use_gatv2: Whether to use GATv2
+    :param num_stacks: Number of times to stack the attention layers
+    :param attention_sparse: Whether to apply sparsity to attention
+    :param attention_top_k: Number of top elements to keep in sparse attention
+    """
+
+    def __init__(self, n_features, window_sizes, dropout, alpha, feat_embed_dim=None, time_embed_dim=None,
+                 use_gatv2=True, num_stacks=2, attention_sparse=True, attention_top_k=10):
+        super(MultiScaleStackedAttentionLayer, self).__init__()
+        self.n_features = n_features
+        self.window_sizes = window_sizes if isinstance(window_sizes, list) else [window_sizes]
+        self.num_stacks = num_stacks
+        self.attention_sparse = attention_sparse
+        self.attention_top_k = attention_top_k
+
+        # Create multi-scale stacked attention layers
+        self.stacked_layers = nn.ModuleList()
+
+        for stack_idx in range(num_stacks):
+            scale_layers = nn.ModuleList()
+            for scale_idx, window_size in enumerate(self.window_sizes):
+                # Feature attention layer for this scale
+                feat_attn = FeatureAttentionLayer(
+                    n_features, window_size, dropout, alpha, feat_embed_dim, use_gatv2,
+                    attention_sparse=attention_sparse, attention_top_k=attention_top_k
+                )
+
+                # Temporal attention layer for this scale
+                temp_attn = TemporalAttentionLayer(
+                    n_features, window_size, dropout, alpha, time_embed_dim, use_gatv2
+                )
+
+                scale_layers.append(nn.ModuleDict({
+                    'feature_attn': feat_attn,
+                    'temporal_attn': temp_attn
+                }))
+
+            self.stacked_layers.append(scale_layers)
+
+    def forward(self, x_list, adj_matrix=None):
+        # x_list: list of tensors with shapes [(b, n1, k), (b, n2, k), ...]
+
+        # Initialize outputs for each scale
+        scale_outputs = [[] for _ in range(len(self.window_sizes))]
+
+        # Process each stack
+        for stack_idx, scale_layers in enumerate(self.stacked_layers):
+            # For each scale in the stack
+            for scale_idx, (x, layer_pair) in enumerate(zip(x_list, scale_layers)):
+                if stack_idx == 0:
+                    # First stack - use input directly
+                    feat_input = x
+                    temp_input = x
+                else:
+                    # Later stacks - use previous outputs
+                    feat_input = scale_outputs[scale_idx][-1] if scale_outputs[scale_idx] else x
+                    temp_input = scale_outputs[scale_idx][-1] if scale_outputs[scale_idx] else x
+
+                # Apply feature attention
+                feat_output = layer_pair['feature_attn'](feat_input, adj_matrix)
+
+                # Apply temporal attention
+                temp_output = layer_pair['temporal_attn'](feat_output)
+
+                # Store output for this scale
+                scale_outputs[scale_idx].append(temp_output)
+
+        # Return final outputs for each scale
+        final_outputs = [outputs[-1] for outputs in scale_outputs]
+
+        # Simple averaging of multi-scale outputs
+        # In a more advanced version, you could use a weighted fusion mechanism
+        return torch.mean(torch.stack(final_outputs), dim=0)
+
 class FeatureAttentionLayer(nn.Module):
     """Single Graph Feature/Spatial Attention Layer
     :param n_features: Number of input features/nodes
