@@ -120,6 +120,7 @@ if __name__ == "__main__":
         correlation_aware=model_args.correlation_aware,
         use_transformer=model_args.use_transformer,
         top_k=model_args.top_k,
+        attention_top_k=model_args.attention_top_k,
         corr_dim=model_args.corr_dim,
         corr_alpha=model_args.corr_alpha,
     )

@@ -17,7 +17,9 @@ def get_parser():
     # -- enhanced params ---
     parser.add_argument("--correlation_aware", type=str2bool, default=False)
     parser.add_argument("--use_transformer", type=str2bool, default=False,help="目前是在gru前加transformer encoder")
-    parser.add_argument('--top_k', type=int, default=15, help='k')
+    parser.add_argument("--attention_sparse", type=str2bool, default=False,help="是否使用稀疏注意力矩阵")
+    parser.add_argument('--top_k', type=int, default=15, help='相关性矩阵的top_k')
+    parser.add_argument('--attention_top_k', type=int, default=10, help='特征图注意力top_k连接')
     parser.add_argument('--corr_dim', type=int, default=256, help='相关性嵌入维度')
     parser.add_argument('--corr_alpha', type=int, default=20, help='相关性缩放因子')
     # -- Data params ---

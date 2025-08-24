@@ -90,6 +90,7 @@ if __name__ == "__main__":
         correlation_aware=args.correlation_aware,
         use_transformer=args.use_transformer,
         top_k=args.top_k,
+        attention_top_k=args.attention_top_k,
         corr_dim=args.corr_dim,
         corr_alpha=args.corr_alpha,
     )

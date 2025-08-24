@@ -55,6 +55,8 @@ class Enhanced_MTADGAT(nn.Module):
             use_transformer=True,
             trans_enc_layers=2,
             top_k=20,
+            attention_top_k=10,
+            attention_sparse=True,
             corr_dim=40,
             corr_alpha=3,
     ):
@@ -66,7 +68,7 @@ class Enhanced_MTADGAT(nn.Module):
         if correlation_aware:
             self.corr_adj = CorrelationLayer(n_features, top_k, corr_dim,corr_alpha)
         # 图注意力层
-        self.feature_gat = FeatureAttentionLayer(n_features, window_size, dropout, alpha, feat_gat_embed_dim, use_gatv2)
+        self.feature_gat = FeatureAttentionLayer(n_features, window_size, dropout, alpha, feat_gat_embed_dim, use_gatv2,attention_sparse,attention_top_k)
         self.temporal_gat = TemporalAttentionLayer(n_features, window_size, dropout, alpha, time_gat_embed_dim,
                                                    use_gatv2)
         d_model = 3 * n_features

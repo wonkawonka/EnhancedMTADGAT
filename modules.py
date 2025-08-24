@@ -104,7 +104,7 @@ class FeatureAttentionLayer(nn.Module):
     :param use_bias: whether to include a bias term in the attention layer
     """
 
-    def __init__(self, n_features, window_size, dropout, alpha, embed_dim=None, use_gatv2=True, use_bias=True):
+    def __init__(self, n_features, window_size, dropout, alpha, embed_dim=None, use_gatv2=True, use_bias=True,attention_sparse=True,attention_top_k=10):
         super(FeatureAttentionLayer, self).__init__()
         self.n_features = n_features
         self.window_size = window_size
@@ -113,6 +113,9 @@ class FeatureAttentionLayer(nn.Module):
         self.use_gatv2 = use_gatv2
         self.num_nodes = n_features
         self.use_bias = use_bias
+        self.attention_sparse = attention_sparse
+        self.attention_top_k = attention_top_k
+
 
         # Because linear transformation is done after concatenation in GATv2
         if self.use_gatv2:
@@ -158,6 +161,15 @@ class FeatureAttentionLayer(nn.Module):
 
         if self.use_bias:
             e += self.bias
+
+        if self.attention_sparse:
+            # TODO 创新点1-随机稀疏化代替物理拓扑稀疏化，稀疏化注意力权重
+            # 只保留每个节点最重要的top-k个连接
+            top_k = min(self.attention_top_k, self.n_features)  # 保留每个节点的top-k连接
+            # e是注意力分数张量，形状为(batch_size, n_features, n_features)
+            topk_values, topk_indices = torch.topk(e, top_k, dim=2)
+            sparse_e = torch.full_like(e, float('-inf'))
+            sparse_e.scatter_(2, topk_indices, topk_values)
 
         # 相关性邻接矩阵作为边权重
         if adj_matrix is not None:
