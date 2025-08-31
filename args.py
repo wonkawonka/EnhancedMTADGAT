@@ -14,17 +14,12 @@ def str2bool(v):
 
 def get_parser():
     parser = argparse.ArgumentParser()
-    # -- Enhanced params ---
+    # -- enhanced params ---
     parser.add_argument("--correlation_aware", type=str2bool, default=False)
     parser.add_argument("--use_transformer", type=str2bool, default=False,help="目前是在gru前加transformer encoder")
     parser.add_argument("--attention_sparse", type=str2bool, default=False,help="是否使用稀疏注意力矩阵")
-    parser.add_argument('--multi_scale_stacked', type=str2bool, default=False, help='是否采用多尺度堆叠注意力机制')
-    # -- Multi-scale params ---
-    parser.add_argument('--attention_top_k', type=int, default=10, help='特征图注意力top_k连接')
-    parser.add_argument('--window_sizes', type=list[int], default=[25, 50, 100], help='时间多尺度')
-    parser.add_argument('--num_attention_stacks', type=int, default=3, help='注意力堆叠层数')
-    # -- Correlation params ---
     parser.add_argument('--top_k', type=int, default=15, help='相关性矩阵的top_k')
+    parser.add_argument('--attention_top_k', type=int, default=10, help='特征图注意力top_k连接')
     parser.add_argument('--corr_dim', type=int, default=256, help='相关性嵌入维度')
     parser.add_argument('--corr_alpha', type=int, default=20, help='相关性缩放因子')
     # -- Data params ---

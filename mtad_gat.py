@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from modules import (
     ConvLayer,
@@ -9,7 +8,6 @@ from modules import (
     GRULayer,
     Forecasting_Model,
     ReconstructionModel, PositionalEncoding, CorrelationLayer,
-    MultiScaleStackedAttentionLayer
 )
 
 
@@ -61,10 +59,6 @@ class Enhanced_MTADGAT(nn.Module):
             attention_sparse=True,
             corr_dim=40,
             corr_alpha=3,
-            # 新增参数
-            multi_scale_stacked=True,
-            window_sizes=None,
-            num_attention_stacks=2
     ):
         super(Enhanced_MTADGAT, self).__init__()
 
@@ -73,22 +67,9 @@ class Enhanced_MTADGAT(nn.Module):
         self.correlation_aware = correlation_aware
         if correlation_aware:
             self.corr_adj = CorrelationLayer(n_features, top_k, corr_dim,corr_alpha)
-
-        self.multi_scale_stacked = multi_scale_stacked
-        # 根据配置选择不同的注意力机制
-        if multi_scale_stacked:
-            # 多尺度堆叠注意力
-            window_sizes = window_sizes if window_sizes is not None else [window_size // 4, window_size // 2,
-                                                                          window_size]
-            self.multi_scale_attn = MultiScaleStackedAttentionLayer(
-                n_features, window_sizes, dropout, alpha, feat_gat_embed_dim, time_gat_embed_dim,
-                use_gatv2, num_attention_stacks, attention_sparse,attention_top_k
-            )
-        else:
-            #图注意力层
-            self.feature_gat = FeatureAttentionLayer(n_features, window_size, dropout, alpha, feat_gat_embed_dim, use_gatv2,
-                                                     attention_sparse=attention_sparse,attention_top_k=attention_top_k)
-            self.temporal_gat = TemporalAttentionLayer(n_features, window_size, dropout, alpha, time_gat_embed_dim,
+        # 图注意力层
+        self.feature_gat = FeatureAttentionLayer(n_features, window_size, dropout, alpha, feat_gat_embed_dim, use_gatv2,attention_sparse,attention_top_k)
+        self.temporal_gat = TemporalAttentionLayer(n_features, window_size, dropout, alpha, time_gat_embed_dim,
                                                    use_gatv2)
         d_model = 3 * n_features
         # 是否在GRU前加transformer encoder
@@ -115,28 +96,8 @@ class Enhanced_MTADGAT(nn.Module):
             adj_matrix = self.corr_adj(x)
         else:
             adj_matrix = None
-
-        if self.multi_scale_stacked:
-            # 多尺度堆叠注意力处理
-            # 创建不同尺度的输入
-            scales = [max(1, x.size(1) // 4), max(1, x.size(1) // 2), x.size(1)]
-            x_list = []
-
-            for scale in scales:
-                if scale == x.size(1):
-                    x_scaled = x
-                else:
-                    # 使用自适应平均池化调整时间维度
-                    x_scaled = F.adaptive_avg_pool1d(x.transpose(1, 2), scale).transpose(1, 2)
-                x_list.append(x_scaled)
-
-            h_combined = self.multi_scale_attn(x_list, adj_matrix)
-            h_feat = h_combined
-            h_temp = h_combined
-        else:
-            # 原始注意力机制
-            h_feat = self.feature_gat(x,adj_matrix)
-            h_temp = self.temporal_gat(x)
+        h_feat = self.feature_gat(x,adj_matrix)
+        h_temp = self.temporal_gat(x)
 
         h_cat = torch.cat([x, h_feat, h_temp], dim=2)  # (b, n, 3k)
 

@@ -123,9 +123,6 @@ if __name__ == "__main__":
         attention_top_k=model_args.attention_top_k,
         corr_dim=model_args.corr_dim,
         corr_alpha=model_args.corr_alpha,
-        multi_scale_stacked=args.multi_scale_stacked,
-        window_sizes=args.window_sizes,
-        num_attention_stacks=args.num_attention_stacks
     )
 
     device = "cuda" if args.use_cuda and torch.cuda.is_available() else "cpu"
