@@ -1,8 +1,13 @@
+import os
 from ast import literal_eval
 from csv import reader
 from os import listdir, makedirs, path
 from pickle import dump
+
+import h5py
 import numpy as np
+import pandas as pd
+from scipy.io import loadmat
 
 from args import get_parser
 
@@ -88,6 +93,63 @@ def load_data(dataset):
         for c in ["train", "test"]:
             concatenate_and_save(c)
 
+    # TODO 自己数据集
+    elif dataset == "BMS" :
+        dataset_folder = "datasets/BMS"
+        output_folder = "datasets/BMS/processed"
+        makedirs(output_folder, exist_ok=True)
+
+        for filename in listdir(path.join(dataset_folder, "train")):
+            if filename.endswith(".csv"):
+                load_and_save(
+                    "train",
+                    filename,
+                    filename.strip(".csv"),
+                    dataset_folder,
+                    output_folder,
+                )
+                load_and_save(
+                    "test_label",
+                    filename,
+                    filename.strip(".csv"),
+                    dataset_folder,
+                    output_folder,
+                )
+    elif dataset == "NASA":
+        dataset_folder = "datasets/NASA/"
+        output_folder = "datasets/NASA/processed"
+        makedirs(output_folder, exist_ok=True)
+        
+        # 获取所有MAT文件
+        mat_files = [f for f in os.listdir(dataset_folder) if f.endswith(".mat")]
+        
+        for filename in mat_files:
+            # 提取电池编号
+            battery_id = filename.split("_")[0]
+            
+            # 加载数据
+            try:
+                # 尝试使用h5py读取MAT文件
+                with h5py.File(os.path.join(dataset_folder, filename), 'r') as f:
+                    data = np.array(list(f.values())[0])
+            except Exception as e:
+                print(f"使用h5py读取失败: {e}")
+                # 如果失败，尝试使用scipy.io.loadmat
+                try:
+                    data = loadmat(os.path.join(dataset_folder, filename))
+                    key_name = list(data.keys())[-1]
+                    data = data[key_name]   
+                except Exception as e:
+                    raise Exception(f"无法读取文件: {e}")
+            
+            # 转换为DataFrame
+            df = pd.DataFrame(data)
+            
+            # 保存处理后的数据
+            output_path = os.path.join(output_folder, f"{battery_id}.pkl")
+            df.to_pickle(output_path)
+            
+            print(f"Saved {battery_id}.pkl")
 
 if __name__ == "__main__":
     parser = get_parser()
