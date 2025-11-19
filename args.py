@@ -28,7 +28,7 @@ def get_parser():
     parser.add_argument('--corr_dim', type=int, default=256, help='相关性嵌入维度')
     parser.add_argument('--corr_alpha', type=int, default=20, help='相关性缩放因子')
     # -- Data params ---
-    parser.add_argument("--dataset", type=str.upper, default="SMD")
+    parser.add_argument('--dataset', type=str.upper, default='NASA',choices=['SMD', 'SMAP', 'MSL', 'NASA'],help='dataset name')
     parser.add_argument("--group", type=str, default="1-1", help="指定SMD数据集中具体机器编号. <group_index>-<index>")
     parser.add_argument("--lookback", type=int, default=100,help="窗口大小（window size），即模型输入的时间步数")
     parser.add_argument("--normalize", type=str2bool, default=True)
