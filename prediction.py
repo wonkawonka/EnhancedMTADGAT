@@ -93,7 +93,7 @@ class Predictor:
 
         return df
 
-    def predict_anomalies(self, train, test, true_anomalies, load_scores=False, save_output=True,
+    def predict_anomalies(self, train, test, true_anomalies=None, load_scores=False, save_output=True,
                           scale_scores=False):
         """ Predicts anomalies
 
@@ -184,8 +184,9 @@ class Predictor:
 
         # Save anomaly predictions made using epsilon method (could be changed to pot or bf-method)
         if save_output:
-            global_epsilon = e_eval["threshold"]
-            test_pred_df["A_True_Global"] = true_anomalies
+            global_epsilon = e_eval["threshold"] if "threshold" in e_eval else np.percentile(train_anomaly_scores, 95)
+            if true_anomalies is not None:
+                test_pred_df["A_True_Global"] = true_anomalies
             train_pred_df["Thresh_Global"] = global_epsilon
             test_pred_df["Thresh_Global"] = global_epsilon
             train_pred_df[f"A_Pred_Global"] = (train_anomaly_scores >= global_epsilon).astype(int)

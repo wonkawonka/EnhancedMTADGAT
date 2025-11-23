@@ -136,7 +136,9 @@ if __name__ == "__main__":
         "SMD-1": (0.9950, 0.001),
         "SMD-2": (0.9925, 0.001),
         "SMD-3": (0.9999, 0.001),
-        "NASA": (0.99, 0.001)
+        "NASA": (0.99, 0.001),
+        "CALCE": (0.99, 0.001),
+        "CALCE2": (0.99, 0.001)
     }
     key = "SMD-" + args.group[0] if args.dataset == "SMD" else args.dataset
     level, q = level_q_dict[key]
@@ -146,7 +148,7 @@ if __name__ == "__main__":
         q = args.q
 
     # Some suggestions for Epsilon args
-    reg_level_dict = {"SMAP": 0, "MSL": 0, "SMD-1": 1, "SMD-2": 1, "SMD-3": 1, "NASA": 0}
+    reg_level_dict = {"SMAP": 0, "MSL": 0, "SMD-1": 1, "SMD-2": 1, "SMD-3": 1, "NASA": 0, "CALCE": 0, "CALCE2": 0}
     key = "SMD-" + args.group[0] if dataset == "SMD" else dataset
     reg_level = reg_level_dict[key]
 

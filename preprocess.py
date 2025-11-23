@@ -118,6 +118,7 @@ def load_data(dataset):
                     output_folder,
                 )
     elif dataset == "NASA":
+        # TODO 找连续的数据集
         dataset_folder = "datasets/NASA/"
         output_folder = "datasets/NASA/processed"
         makedirs(output_folder, exist_ok=True)
@@ -197,7 +198,7 @@ def load_data(dataset):
             # 选择关键特征用于时间序列分析
             selected_features = ['capacity', 'voltage_measured', 'current_measured',
                                  'temperature_measured', 'current_charge', 'voltage_charge']
-
+            
             # 提取特征数据（保持原始时间序列格式，不进行滑动窗口处理）
             raw_data = df[selected_features].values.astype(np.float32)
 
@@ -263,6 +264,207 @@ def load_data(dataset):
 
             print(f"Combined NASA dataset - Train shape: {combined_train.shape}, Test shape: {combined_test.shape}")
 
+    elif dataset == "CALCE":
+        # 处理CALCE数据集
+        dataset_folder = "datasets/CALCE/Dataset1"
+        output_folder = "datasets/CALCE/processed"
+        makedirs(output_folder, exist_ok=True)
+        
+        # 定义文件路径
+        qualified_path = path.join(dataset_folder, 'Qualified lots.xlsx')
+        subsequent_path = path.join(dataset_folder, 'Subsequent lots for ongoing reliability testing.xlsx')
+        
+        print("检查文件是否存在:")
+        print(f"Qualified lots 文件: {os.path.exists(qualified_path)}")
+        print(f"Subsequent lots 文件: {os.path.exists(subsequent_path)}")
+        
+        # 存储所有实体名称
+        entity_names = []
+        
+        # 处理Qualified lots (用于训练)
+        if os.path.exists(qualified_path):
+            print("\n读取 Qualified lots 数据:")
+            try:
+                df_qualified = pd.read_excel(qualified_path)
+                print("形状:", df_qualified.shape)
+                print("列名:", df_qualified.columns.tolist())
+                print("前几行数据:")
+                print(df_qualified.head())
+                
+                # 处理每个实体（每列代表一个实体）
+                for col in df_qualified.columns:
+                    if 'Unnamed' not in str(col) and str(col).strip() != '' and col is not None:  
+                        # 获取实体数据并去除NaN值
+                        entity_data = df_qualified[col].dropna()
+                        if len(entity_data) > 0:  # 确保有数据
+                            entity_values = entity_data.values.astype(np.float32)
+                            entity_names.append(col)
+                            
+                            # 将一维数据转换为二维格式（时间步，特征数）
+                            # 对于单特征时间序列，我们将其reshape为(-1, 1)
+                            train_data = entity_values.reshape(-1, 1)
+                            
+                            print(f"实体 '{col}' 训练数据形状: {train_data.shape}")
+                            
+                            # 保存训练数据
+                            with open(path.join(output_folder, f"CALCE_{col}_train.pkl"), "wb") as file:
+                                dump(train_data, file)
+                            print(f"已保存实体 '{col}' 的训练数据")
+                        
+            except Exception as e:
+                print(f"读取Qualified lots失败: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # 处理Subsequent lots (用于测试)
+        if os.path.exists(subsequent_path):
+            print("\n读取 Subsequent lots 数据:")
+            try:
+                df_subsequent = pd.read_excel(subsequent_path)
+                print("形状:", df_subsequent.shape)
+                print("列名:", df_subsequent.columns.tolist())
+                print("前几行数据:")
+                print(df_subsequent.head())
+                
+                # 处理每个实体（每列代表一个实体）
+                for col in df_subsequent.columns:
+                    if 'Unnamed' not in str(col) and str(col).strip() != '' and col is not None:
+                        # 获取实体数据并去除NaN值
+                        entity_data = df_subsequent[col].dropna()
+                        if len(entity_data) > 0:  # 确保有数据
+                            entity_values = entity_data.values.astype(np.float32)
+                            
+                            # 将一维数据转换为二维格式
+                            test_data = entity_values.reshape(-1, 1)
+                            
+                            print(f"实体 '{col}' 测试数据形状: {test_data.shape}")
+                            
+                            # 保存测试数据
+                            with open(path.join(output_folder, f"CALCE_{col}_test.pkl"), "wb") as file:
+                                dump(test_data, file)
+                            print(f"已保存实体 '{col}' 的测试数据")
+                            
+                            # 对于健康数据，不生成标签或者生成全0标签（表示无异常）
+                            labels = np.zeros(len(test_data), dtype=np.int32)
+                            
+                            # 保存测试标签
+                            with open(path.join(output_folder, f"CALCE_{col}_test_label.pkl"), "wb") as file:
+                                dump(labels, file)
+                            print(f"已保存实体 '{col}' 的测试标签（全为0，表示健康数据）")
+                        
+            except Exception as e:
+                print(f"读取Subsequent lots失败: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        print(f"\n处理完成！共处理了 {len(entity_names)} 个实体:")
+        for name in entity_names:
+            print(f"  - {name}")
+
+    elif dataset == "CALCE2":
+        # 处理CALCE Dataset2数据集
+        dataset_folder = "datasets/CALCE/Dataset2"
+        output_folder = "datasets/CALCE/processed"
+        makedirs(output_folder, exist_ok=True)
+        
+        # 定义文件路径
+        dataset2_path = path.join(dataset_folder, 'Dataset2.mat')
+        
+        print("检查文件是否存在:")
+        print(f"Dataset2.mat 文件: {os.path.exists(dataset2_path)}")
+        
+        # 处理Dataset2.mat文件
+        if os.path.exists(dataset2_path):
+            print("\n读取 Dataset2 数据:")
+            try:
+                # 使用scipy.io.loadmat读取matlab文件
+                mat_data = loadmat(dataset2_path)
+                print("MAT文件中的键:", list(mat_data.keys()))
+                
+                # 通常MATLAB文件会有一个主键包含实际数据
+                # 我们需要找到正确的键来访问数据
+                data_key = None
+                for key in mat_data.keys():
+                    if not key.startswith('__') and isinstance(mat_data[key], np.ndarray):
+                        data_key = key
+                        break
+                
+                if data_key:
+                    raw_data = mat_data[data_key]
+                    print(f"原始数据形状: {raw_data.shape}")
+                    
+                    # 根据Notes.txt描述：
+                    # 前14个样本来自合格批次（单元格1-14）
+                    # 后9个样本来自不同的后续批次（单元格15-23）
+                    
+                    # 假设数据是一个矩阵，每一行或每一列代表一个单元格
+                    # 我们需要根据具体的数据结构来处理
+                    
+                    # 如果数据是二维的，且行数为23（14+9），则每行代表一个单元格
+                    if raw_data.shape[0] == 23:
+                        # 前14个单元格作为训练数据
+                        train_cells = raw_data[:14]
+                        # 后9个单元格作为测试数据
+                        test_cells = raw_data[14:]
+                        
+                        print(f"训练数据形状: {train_cells.shape}")
+                        print(f"测试数据形状: {test_cells.shape}")
+                        
+                        # 为每个单元格创建单独的训练和测试文件
+                        for i in range(14):
+                            # 检查单元格数据类型并适当处理
+                            cell_raw = train_cells[i, 0]
+                            if isinstance(cell_raw, np.ndarray):
+                                # 确保数据是二维的（时间步，特征数）
+                                # 第二个维度是特征，第一个维度是时间步
+                                if cell_raw.ndim == 1:
+                                    cell_data = cell_raw.reshape(-1, 1).astype(np.float32)
+                                else:
+                                    # 如果已经是二维的，我们只取第二列作为特征值
+                                    cell_data = cell_raw[:, 1:2].astype(np.float32) if cell_raw.shape[1] > 1 else cell_raw.astype(np.float32)
+                            else:
+                                # 如果是标量，创建包含单个值的数组
+                                cell_data = np.array([[float(cell_raw)]], dtype=np.float32)
+                            with open(path.join(output_folder, f"CALCE2_Cell{i+1}_train.pkl"), "wb") as file:
+                                dump(cell_data, file)
+                            print(f"已保存单元格 {i+1} 的训练数据，形状: {cell_data.shape}")
+                        
+                        for i in range(9):
+                            # 检查单元格数据类型并适当处理
+                            cell_raw = test_cells[i, 0]
+                            if isinstance(cell_raw, np.ndarray):
+                                # 确保数据是二维的（时间步，特征数）
+                                # 第二个维度是特征，第一个维度是时间步
+                                if cell_raw.ndim == 1:
+                                    cell_data = cell_raw.reshape(-1, 1).astype(np.float32)
+                                else:
+                                    # 如果已经是二维的，我们只取第二列作为特征值
+                                    cell_data = cell_raw[:, 1:2].astype(np.float32) if cell_raw.shape[1] > 1 else cell_raw.astype(np.float32)
+                            else:
+                                # 如果是标量，创建包含单个值的数组
+                                cell_data = np.array([[float(cell_raw)]], dtype=np.float32)
+                            with open(path.join(output_folder, f"CALCE2_Cell{i+15}_test.pkl"), "wb") as file:
+                                dump(cell_data, file)
+                            
+                            # 为测试数据生成标签（假设是健康数据，标签为0）
+                            labels = np.zeros(len(cell_data), dtype=np.int32)
+                            with open(path.join(output_folder, f"CALCE2_Cell{i+15}_test_label.pkl"), "wb") as file:
+                                dump(labels, file)
+                            print(f"已保存单元格 {i+15} 的测试数据和标签，形状: {cell_data.shape}")
+                            
+                    # 如果数据维度不同，我们需要进一步探索其结构
+                    else:
+                        print("数据结构不符合预期，请手动检查数据内容")
+                        print("数据详情:")
+                        print(raw_data)
+                        
+                else:
+                    print("未找到有效的数据键")
+                    
+            except Exception as e:
+                print(f"读取Dataset2.mat失败: {e}")
+                import traceback
+                traceback.print_exc()
 
 if __name__ == "__main__":
     parser = get_parser()
