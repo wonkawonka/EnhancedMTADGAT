@@ -281,7 +281,7 @@ def load_data(dataset):
         # 存储所有实体名称
         entity_names = []
         
-        # 处理Qualified lots (用于训练)
+        # 处理Qualified lots (前6列作为训练集)
         if os.path.exists(qualified_path):
             print("\n读取 Qualified lots 数据:")
             try:
@@ -291,32 +291,39 @@ def load_data(dataset):
                 print("前几行数据:")
                 print(df_qualified.head())
                 
-                # 处理每个实体（每列代表一个实体）
-                for col in df_qualified.columns:
-                    if 'Unnamed' not in str(col) and str(col).strip() != '' and col is not None:  
-                        # 获取实体数据并去除NaN值
-                        entity_data = df_qualified[col].dropna()
-                        if len(entity_data) > 0:  # 确保有数据
-                            entity_values = entity_data.values.astype(np.float32)
-                            entity_names.append(col)
-                            
-                            # 将一维数据转换为二维格式（时间步，特征数）
-                            # 对于单特征时间序列，我们将其reshape为(-1, 1)
-                            train_data = entity_values.reshape(-1, 1)
-                            
-                            print(f"实体 '{col}' 训练数据形状: {train_data.shape}")
-                            
-                            # 保存训练数据
-                            with open(path.join(output_folder, f"CALCE_{col}_train.pkl"), "wb") as file:
-                                dump(train_data, file)
-                            print(f"已保存实体 '{col}' 的训练数据")
+                # 获取有效的列名
+                valid_cols = [col for col in df_qualified.columns 
+                             if 'Unnamed' not in str(col) and str(col).strip() != '' and col is not None]
+                
+                # 只取前6列作为训练集实体 (实体1-6)
+                train_cols = valid_cols[:6] if len(valid_cols) >= 6 else valid_cols
+                
+                # 处理训练实体 (实体1-6)
+                for i, col in enumerate(train_cols):
+                    # 获取实体数据并去除NaN值
+                    entity_data = df_qualified[col].dropna()
+                    if len(entity_data) > 0:  # 确保有数据
+                        entity_values = entity_data.values.astype(np.float32)
+                        entity_name = str(i + 1)  # 实体名称为1-6
+                        entity_names.append(entity_name)
                         
+                        # 将一维数据转换为二维格式（时间步，特征数）
+                        # 对于单特征时间序列，我们将其reshape为(-1, 1)
+                        train_data = entity_values.reshape(-1, 1)
+                        
+                        print(f"实体 '{entity_name}' 训练数据形状: {train_data.shape}")
+                        
+                        # 保存训练数据，命名为1-6
+                        with open(path.join(output_folder, f"CALCE_{entity_name}_train.pkl"), "wb") as file:
+                            dump(train_data, file)
+                        print(f"已保存实体 '{entity_name}' 的训练数据")
+                    
             except Exception as e:
                 print(f"读取Qualified lots失败: {e}")
                 import traceback
                 traceback.print_exc()
         
-        # 处理Subsequent lots (用于测试)
+        # 处理Subsequent lots (后6列作为测试集)
         if os.path.exists(subsequent_path):
             print("\n读取 Subsequent lots 数据:")
             try:
@@ -326,32 +333,40 @@ def load_data(dataset):
                 print("前几行数据:")
                 print(df_subsequent.head())
                 
-                # 处理每个实体（每列代表一个实体）
-                for col in df_subsequent.columns:
-                    if 'Unnamed' not in str(col) and str(col).strip() != '' and col is not None:
-                        # 获取实体数据并去除NaN值
-                        entity_data = df_subsequent[col].dropna()
-                        if len(entity_data) > 0:  # 确保有数据
-                            entity_values = entity_data.values.astype(np.float32)
-                            
-                            # 将一维数据转换为二维格式
-                            test_data = entity_values.reshape(-1, 1)
-                            
-                            print(f"实体 '{col}' 测试数据形状: {test_data.shape}")
-                            
-                            # 保存测试数据
-                            with open(path.join(output_folder, f"CALCE_{col}_test.pkl"), "wb") as file:
-                                dump(test_data, file)
-                            print(f"已保存实体 '{col}' 的测试数据")
-                            
-                            # 对于健康数据，不生成标签或者生成全0标签（表示无异常）
-                            labels = np.zeros(len(test_data), dtype=np.int32)
-                            
-                            # 保存测试标签
-                            with open(path.join(output_folder, f"CALCE_{col}_test_label.pkl"), "wb") as file:
-                                dump(labels, file)
-                            print(f"已保存实体 '{col}' 的测试标签（全为0，表示健康数据）")
+                # 获取有效的列名
+                valid_cols = [col for col in df_subsequent.columns 
+                             if 'Unnamed' not in str(col) and str(col).strip() != '' and col is not None]
+                
+                # 只取前6列作为测试集实体 (实体7-12)
+                test_cols = valid_cols[:6] if len(valid_cols) >= 6 else valid_cols
+                
+                # 处理测试实体 (实体7-12)
+                for i, col in enumerate(test_cols):
+                    # 获取实体数据并去除NaN值
+                    entity_data = df_subsequent[col].dropna()
+                    if len(entity_data) > 0:  # 确保有数据
+                        entity_values = entity_data.values.astype(np.float32)
+                        entity_name = str(i + 7)  # 实体名称为7-12
+                        entity_names.append(entity_name)
                         
+                        # 将一维数据转换为二维格式
+                        test_data = entity_values.reshape(-1, 1)
+                        
+                        print(f"实体 '{entity_name}' 测试数据形状: {test_data.shape}")
+                        
+                        # 保存测试数据，命名为7-12
+                        with open(path.join(output_folder, f"CALCE_{entity_name}_test.pkl"), "wb") as file:
+                            dump(test_data, file)
+                        print(f"已保存实体 '{entity_name}' 的测试数据")
+                        
+                        # 对于健康数据，生成全0标签（表示无异常）
+                        labels = np.zeros(len(test_data), dtype=np.int32)
+                        
+                        # 保存测试标签
+                        with open(path.join(output_folder, f"CALCE_{entity_name}_test_label.pkl"), "wb") as file:
+                            dump(labels, file)
+                        print(f"已保存实体 '{entity_name}' 的测试标签（全为0，表示健康数据）")
+                    
             except Exception as e:
                 print(f"读取Subsequent lots失败: {e}")
                 import traceback
@@ -394,8 +409,8 @@ def load_data(dataset):
                     print(f"原始数据形状: {raw_data.shape}")
                     
                     # 根据Notes.txt描述：
-                    # 前14个样本来自合格批次（单元格1-14）
-                    # 后9个样本来自不同的后续批次（单元格15-23）
+                    # 前14个样本来自合格批次（单元格1-14）作为训练集
+                    # 后9个样本来自不同的后续批次（单元格15-23）作为测试集
                     
                     # 假设数据是一个矩阵，每一行或每一列代表一个单元格
                     # 我们需要根据具体的数据结构来处理
@@ -410,7 +425,7 @@ def load_data(dataset):
                         print(f"训练数据形状: {train_cells.shape}")
                         print(f"测试数据形状: {test_cells.shape}")
                         
-                        # 为每个单元格创建单独的训练和测试文件
+                        # 为每个训练单元格创建单独的训练文件 (实体1-14)
                         for i in range(14):
                             # 检查单元格数据类型并适当处理
                             cell_raw = train_cells[i, 0]
@@ -425,10 +440,12 @@ def load_data(dataset):
                             else:
                                 # 如果是标量，创建包含单个值的数组
                                 cell_data = np.array([[float(cell_raw)]], dtype=np.float32)
-                            with open(path.join(output_folder, f"CALCE2_Cell{i+1}_train.pkl"), "wb") as file:
+                            entity_name = str(i + 1)  # 实体名称为1-14
+                            with open(path.join(output_folder, f"CALCE2_Cell{entity_name}_train.pkl"), "wb") as file:
                                 dump(cell_data, file)
-                            print(f"已保存单元格 {i+1} 的训练数据，形状: {cell_data.shape}")
+                            print(f"已保存单元格 {entity_name} 的训练数据，形状: {cell_data.shape}")
                         
+                        # 为每个测试单元格创建单独的测试文件 (实体15-23)
                         for i in range(9):
                             # 检查单元格数据类型并适当处理
                             cell_raw = test_cells[i, 0]
@@ -443,14 +460,15 @@ def load_data(dataset):
                             else:
                                 # 如果是标量，创建包含单个值的数组
                                 cell_data = np.array([[float(cell_raw)]], dtype=np.float32)
-                            with open(path.join(output_folder, f"CALCE2_Cell{i+15}_test.pkl"), "wb") as file:
+                            entity_name = str(i + 15)  # 实体名称为15-23
+                            with open(path.join(output_folder, f"CALCE2_Cell{entity_name}_test.pkl"), "wb") as file:
                                 dump(cell_data, file)
                             
                             # 为测试数据生成标签（假设是健康数据，标签为0）
                             labels = np.zeros(len(cell_data), dtype=np.int32)
-                            with open(path.join(output_folder, f"CALCE2_Cell{i+15}_test_label.pkl"), "wb") as file:
+                            with open(path.join(output_folder, f"CALCE2_Cell{entity_name}_test_label.pkl"), "wb") as file:
                                 dump(labels, file)
-                            print(f"已保存单元格 {i+15} 的测试数据和标签，形状: {cell_data.shape}")
+                            print(f"已保存单元格 {entity_name} 的测试数据和标签，形状: {cell_data.shape}")
                             
                     # 如果数据维度不同，我们需要进一步探索其结构
                     else:

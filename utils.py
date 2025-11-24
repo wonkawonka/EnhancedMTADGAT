@@ -51,11 +51,8 @@ def get_data_dim(dataset):
         # NASA电池数据集的特征维度
         return 6  # capacity, voltage_measured, current_measured, 
                  # temperature_measured, current_charge, voltage_charge
-    elif dataset == "CALCE":
+    elif dataset in ["CALCE", "CALCE2"]:
         # CALCE数据集是单特征时间序列
-        return 1
-    elif dataset == "CALCE2":
-        # CALCE2数据集是单特征时间序列
         return 1
     else:
         raise ValueError("unknown dataset " + str(dataset))
@@ -76,11 +73,8 @@ def get_target_dims(dataset):
     elif dataset == "NASA":
         # 对于NASA电池数据集，我们关注所有特征
         return None
-    elif dataset == "CALCE":
+    elif dataset in ["CALCE", "CALCE2"]:
         # 对于CALCE数据集，我们关注单个特征
-        return [0]
-    elif dataset == "CALCE2":
-        # 对于CALCE2数据集，我们关注单个特征
         return [0]
     else:
         raise ValueError("unknown dataset " + str(dataset))
@@ -122,6 +116,7 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
 
     return shape: (([train_size, x_dim], [train_size] or None), ([test_size, x_dim], [test_size]))
     Method from OmniAnomaly (https://github.com/NetManAIOps/OmniAnomaly)
+    用于传统的训练流程（一个模型对应一个实体）
     """
     prefix = "datasets"
     if str(dataset).startswith("machine"):
@@ -130,9 +125,7 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
         prefix += "/data/processed"
     elif dataset == "NASA":
         prefix += "/NASA/processed"
-    elif dataset == "CALCE":
-        prefix += "/CALCE/processed"
-    elif dataset == "CALCE2":
+    elif dataset in ["CALCE", "CALCE2"]:
         prefix += "/CALCE/processed"
     if max_train_size is None:
         train_end = None
@@ -195,116 +188,71 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
                 f = open(battery_file, "rb")
                 test_label = pickle.load(f)
                 f.close()
-    elif dataset == "CALCE":
-        # 对于CALCE数据集，加载处理后的pkl文件
-        import glob
-        # 加载所有实体的训练数据
-        train_pkl_files = glob.glob(os.path.join(prefix, "CALCE_*_train.pkl"))
-        if not train_pkl_files:
-            raise FileNotFoundError(f"No processed CALCE training data found in {prefix}")
+    elif dataset in ["CALCE", "CALCE2"]:
+        # 统一处理CALCE和CALCE2数据集
+        # 使用训练/测试划分方式加载数据
         
-        # 为了简单起见，我们只使用第一个实体的数据
-        entity_file = train_pkl_files[0]
-        f = open(entity_file, "rb")
-        train_data = pickle.load(f)
-        f.close()
-        print(f"Using entity data from: {os.path.basename(entity_file)}")
+        if dataset == "CALCE":
+            # 对于CALCE数据集，前6个实体作为训练集，后6个实体作为测试集
+            train_entities, test_entities = get_calce_train_test_splits()
+        else:  # CALCE2
+            # 对于CALCE2数据集，前14个单元作为训练集，后9个单元作为测试集
+            train_entities, test_entities = get_calce2_train_test_splits()
         
-        # 加载对应的测试数据
-        entity_name = os.path.basename(entity_file).replace("_train.pkl", "")
-        test_file = os.path.join(prefix, f"{entity_name}_test.pkl")
-        test_label_file = os.path.join(prefix, f"{entity_name}_test_label.pkl")
-        
-        try:
-            f = open(test_file, "rb")
-            test_data = pickle.load(f)
-            f.close()
-        except (KeyError, FileNotFoundError):
-            test_data = None
-        
-        try:
-            f = open(test_label_file, "rb")
-            test_label = pickle.load(f)
-            f.close()
-        except (KeyError, FileNotFoundError):
-            # 如果没有标签文件，创建全0标签（表示无异常）
-            if test_data is not None:
-                test_label = np.zeros(len(test_data), dtype=np.int32)
-            else:
-                test_label = None
-    elif dataset == "CALCE2":
-        # 对于CALCE2数据集，加载处理后的pkl文件
-        import glob
-        # 根据CALCE2数据集的结构，前14个单元（Cell1-14）是训练数据
-        # 我们选择第一个单元作为训练数据
-        train_pkl_files = glob.glob(os.path.join(prefix, "CALCE2_Cell[1-9]_train.pkl")) + \
-                          glob.glob(os.path.join(prefix, "CALCE2_Cell1[0-4]_train.pkl"))
-        
-        if not train_pkl_files:
-            raise FileNotFoundError(f"No processed CALCE2 training data found in {prefix}")
-        
-        # 按照单元编号排序，确保顺序一致，并选择第一个
-        train_pkl_files.sort(key=lambda x: int(x.split('_')[1].replace('Cell', '')))
-        
-        # 只加载第一个训练文件
-        train_file = train_pkl_files[0]
-        f = open(train_file, "rb")
-        train_data = pickle.load(f)
-        f.close()
-        print(f"Loaded training data from {os.path.basename(train_file)}, type: {type(train_data)}")
-        
-        # 确保训练数据是二维数组
-        if np.isscalar(train_data):
-            print("Converting scalar to 2D array")
-            train_data = np.array([[train_data]], dtype=np.float32)
-        elif hasattr(train_data, 'ndim') and train_data.ndim == 0:
-            print("Converting 0D array to 2D")
-            train_data = np.array([[train_data.item()]], dtype=np.float32)
-        elif train_data.ndim == 1:
-            print("Reshaping 1D array to 2D")
-            train_data = train_data.reshape(-1, 1)
+        # 加载训练数据
+        train_data_list = []
+        for entity_name in train_entities:
+            if dataset == "CALCE":
+                (x_train, _), (_, _) = load_calce_entity_data(entity_name)
+            else:  # CALCE2
+                (x_train, _), (_, _) = load_calce2_entity_data(entity_name)
             
-        print(f"Final training data shape: {train_data.shape}")
+            if x_train is not None:
+                # 确保数据是二维数组
+                if np.isscalar(x_train):
+                    x_train = np.array([[x_train]], dtype=np.float32)
+                elif hasattr(x_train, 'ndim') and x_train.ndim == 0:
+                    x_train = np.array([[x_train.item()]], dtype=np.float32)
+                elif x_train.ndim == 1:
+                    x_train = x_train.reshape(-1, 1)
+                train_data_list.append(x_train)
         
-        # 对于测试数据，选择第一个测试单元（Cell15）
-        test_pkl_files = glob.glob(os.path.join(prefix, "CALCE2_Cell1[5-9]_test.pkl")) + \
-                         glob.glob(os.path.join(prefix, "CALCE2_Cell2[0-3]_test.pkl"))
-        
-        if not test_pkl_files:
-            raise FileNotFoundError(f"No processed CALCE2 test data found in {prefix}")
-            
-        # 按照单元编号排序，选择第一个作为测试数据
-        test_pkl_files.sort(key=lambda x: int(x.split('_')[1].replace('Cell', '')))
-        
-        # 只加载第一个测试文件
-        test_file = test_pkl_files[0]
-        f = open(test_file, "rb")
-        test_data = pickle.load(f)
-        f.close()
-        print(f"Loaded test data from {os.path.basename(test_file)}, type: {type(test_data)}")
-        
-        # 确保测试数据是二维数组
-        if np.isscalar(test_data):
-            print("Converting scalar to 2D array")
-            test_data = np.array([[test_data]], dtype=np.float32)
-        elif hasattr(test_data, 'ndim') and test_data.ndim == 0:
-            print("Converting 0D array to 2D")
-            test_data = np.array([[test_data.item()]], dtype=np.float32)
-        elif test_data.ndim == 1:
-            print("Reshaping 1D array to 2D")
-            test_data = test_data.reshape(-1, 1)
-            
-        print(f"Final test data shape: {test_data.shape}")
-        
-        # 加载对应的测试标签
-        label_file = test_file.replace('_test.pkl', '_test_label.pkl')
-        if os.path.exists(label_file):
-            f = open(label_file, "rb")
-            test_label = pickle.load(f)
-            f.close()
+        if train_data_list:
+            train_data = np.concatenate(train_data_list, axis=0)
         else:
-            # 如果没有标签文件，创建全0标签（表示无异常）
-            test_label = np.zeros(len(test_data), dtype=np.int32)
+            raise ValueError("No training data loaded from any entity")
+        
+        # 加载测试数据（在预测阶段使用）
+        test_data_list = []
+        test_label_list = []
+        for entity_name in test_entities:
+            if dataset == "CALCE":
+                (_, _), (x_test, y_test) = load_calce_entity_data(entity_name)
+            else:  # CALCE2
+                (_, _), (x_test, y_test) = load_calce2_entity_data(entity_name)
+            
+            if x_test is not None:
+                # 确保数据是二维数组
+                if np.isscalar(x_test):
+                    x_test = np.array([[x_test]], dtype=np.float32)
+                elif hasattr(x_test, 'ndim') and x_test.ndim == 0:
+                    x_test = np.array([[x_test.item()]], dtype=np.float32)
+                elif x_test.ndim == 1:
+                    x_test = x_test.reshape(-1, 1)
+                test_data_list.append(x_test)
+                
+                # 处理标签
+                if y_test is not None:
+                    test_label_list.append(y_test)
+                else:
+                    # 对于标签，我们创建全0标签（因为测试数据应该是无标签的正常数据）
+                    test_label_list.append(np.zeros(len(x_test), dtype=np.int32))
+        
+        if test_data_list:
+            test_data = np.concatenate(test_data_list, axis=0)
+            test_label = np.concatenate(test_label_list, axis=0)
+        else:
+            test_data, test_label = None, None
     else:
         f = open(os.path.join(prefix, dataset + "_train.pkl"), "rb")
         train_data = pickle.load(f).reshape((-1, x_dim))[train_start:train_end, :]
@@ -324,10 +272,11 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
 
     if normalize:
         train_data, scaler = normalize_data(train_data, scaler=None)
-        test_data, _ = normalize_data(test_data, scaler=scaler)
+        if test_data is not None:
+            test_data, _ = normalize_data(test_data, scaler=scaler)
 
     print("train set shape: ", train_data.shape)
-    print("test set shape: ", test_data.shape)
+    print("test set shape: ", test_data.shape if test_data is not None else "None")
     print("test set label shape: ", None if test_label is None else test_label.shape)
     return (train_data, None), (test_data, test_label)
 
@@ -416,6 +365,21 @@ def load(model, PATH, device="cpu"):
     """
     model.load_state_dict(torch.load(PATH, map_location=device))
 
+def get_y_height(y):
+    if np.average(y) >= 0.95:
+        return 1.5
+    elif np.average(y) == 0.0:
+        return 0.1
+    else:
+        return max(y) + 0.1
+
+def get_series_color(y):
+    if np.average(y) >= 0.95:
+        return "black"
+    elif np.average(y) == 0.0:
+        return "black"
+    else:
+        return "black"
 
 def get_all_calce_entities():
     """
@@ -426,33 +390,35 @@ def get_all_calce_entities():
     train_pkl_files = glob.glob(os.path.join(prefix, "CALCE_*_train.pkl"))
     entity_names = []
     for file in train_pkl_files:
-        entity_name = os.path.basename(file).replace("_train.pkl", "")
+        # 从文件名中提取实体名称 (例如: CALCE_1_train.pkl -> 1)
+        entity_name = os.path.basename(file).replace("CALCE_", "").replace("_train.pkl", "")
         entity_names.append(entity_name)
-    return entity_names
+    return sorted(entity_names, key=lambda x: int(x))
 
 
 def load_calce_entity_data(entity_name):
     """
     加载特定CALCE实体的数据
+    用于通用模型训练（一个模型对应多个实体）
     """
     prefix = "datasets/CALCE/processed"
     # 加载训练数据
     try:
-        with open(os.path.join(prefix, f"{entity_name}_train.pkl"), "rb") as f:
+        with open(os.path.join(prefix, f"CALCE_{entity_name}_train.pkl"), "rb") as f:
             train_data = pickle.load(f)
     except FileNotFoundError:
         train_data = None
     
     # 加载测试数据
     try:
-        with open(os.path.join(prefix, f"{entity_name}_test.pkl"), "rb") as f:
+        with open(os.path.join(prefix, f"CALCE_{entity_name}_test.pkl"), "rb") as f:
             test_data = pickle.load(f)
     except FileNotFoundError:
         test_data = None
     
     # 加载测试标签
     try:
-        with open(os.path.join(prefix, f"{entity_name}_test_label.pkl"), "rb") as f:
+        with open(os.path.join(prefix, f"CALCE_{entity_name}_test_label.pkl"), "rb") as f:
             test_label = pickle.load(f)
     except FileNotFoundError:
         # 如果没有标签文件，创建全0标签（表示无异常）
@@ -473,9 +439,11 @@ def get_all_calce2_entities():
     train_pkl_files = glob.glob(os.path.join(prefix, "CALCE2_*_train.pkl"))
     entity_names = []
     for file in train_pkl_files:
-        entity_name = os.path.basename(file).replace("_train.pkl", "")
+        # 从文件名中提取实体名称 (例如: CALCE2_Cell1_train.pkl -> Cell1)
+        entity_name = os.path.basename(file).replace("CALCE2_", "").replace("_train.pkl", "")
         entity_names.append(entity_name)
-    return entity_names
+    # 按数字排序
+    return sorted(entity_names, key=lambda x: int(x.replace('Cell', '')))
 
 
 def load_calce2_entity_data(entity_name):
@@ -485,21 +453,21 @@ def load_calce2_entity_data(entity_name):
     prefix = "datasets/CALCE/processed"
     # 加载训练数据
     try:
-        with open(os.path.join(prefix, f"{entity_name}_train.pkl"), "rb") as f:
+        with open(os.path.join(prefix, f"CALCE2_{entity_name}_train.pkl"), "rb") as f:
             train_data = pickle.load(f)
     except FileNotFoundError:
         train_data = None
     
     # 加载测试数据
     try:
-        with open(os.path.join(prefix, f"{entity_name}_test.pkl"), "rb") as f:
+        with open(os.path.join(prefix, f"CALCE2_{entity_name}_test.pkl"), "rb") as f:
             test_data = pickle.load(f)
     except FileNotFoundError:
         test_data = None
     
     # 加载测试标签
     try:
-        with open(os.path.join(prefix, f"{entity_name}_test_label.pkl"), "rb") as f:
+        with open(os.path.join(prefix, f"CALCE2_{entity_name}_test_label.pkl"), "rb") as f:
             test_label = pickle.load(f)
     except FileNotFoundError:
         # 如果没有标签文件，创建全0标签（表示无异常）
@@ -509,6 +477,28 @@ def load_calce2_entity_data(entity_name):
             test_label = None
     
     return (train_data, None), (test_data, test_label)
+
+
+def get_calce_train_test_splits():
+    """
+    获取CALCE数据集的训练/测试实体划分
+    前6个实体作为训练集，后6个实体作为测试集
+    """
+    # CALCE实体编号为1-12，其中1-6为训练集，7-12为测试集
+    train_entities = [str(i) for i in range(1, 7)]  # 实体1-6
+    test_entities = [str(i) for i in range(7, 13)]  # 实体7-12
+    return train_entities, test_entities
+
+
+def get_calce2_train_test_splits():
+    """
+    获取CALCE2数据集的训练/测试实体划分
+    前14个单元作为训练集，后9个单元作为测试集
+    """
+    # CALCE2实体编号为Cell1-Cell23，其中Cell1-Cell14为训练集，Cell15-Cell23为测试集
+    train_entities = [f"Cell{i}" for i in range(1, 15)]  # 实体Cell1-Cell14
+    test_entities = [f"Cell{i}" for i in range(15, 24)]  # 实体Cell15-Cell23
+    return train_entities, test_entities
 
 
 def evaluate_without_labels(anomaly_scores, threshold_percentile=95):

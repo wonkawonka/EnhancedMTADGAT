@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 
+from utils import *
+
 
 class Trainer:
     """Trainer class for MTAD-GAT model.
@@ -232,11 +234,10 @@ class Trainer:
         Pickles the model parameters to be retrieved later
         :param file_name: the filename to be saved as,`dload` serves as the download directory
         """
-        PATH = self.dload + "/" + file_name
-        if os.path.exists(self.dload):
-            pass
-        else:
-            os.mkdir(self.dload)
+        # 确保目录存在
+        if not os.path.exists(self.dload):
+            os.makedirs(self.dload)
+        PATH = os.path.join(self.dload, file_name)
         torch.save(self.model.state_dict(), PATH)
 
     def load(self, PATH):
@@ -250,3 +251,137 @@ class Trainer:
         for key, value in self.losses.items():
             if len(value) != 0:
                 self.writer.add_scalar(key, value[-1], epoch)
+
+    def fit_round_robin(self, train_entity_data, window_size, target_dims, val_split, shuffle_dataset):
+        """
+        实现轮流训练，每个epoch使用不同实体的数据进行训练
+        
+        :param train_entity_data: List of tuples (entity_name, entity_tensor_data)
+        :param window_size: Length of the input sequence
+        :param target_dims: dimension of input features to forecast and reconstruct
+        :param val_split: 分割验证集的比例
+        :param shuffle_dataset: 是否打乱数据集
+        """
+        print(f"Starting round-robin training with {len(train_entity_data)} entities")
+        
+        # 初始化损失记录
+        self.losses = {
+            "train_total": [],
+            "train_forecast": [],
+            "train_recon": [],
+            "val_total": [],
+            "val_forecast": [],
+            "val_recon": [],
+        }
+
+        # 计算所有实体的初始训练损失
+        init_train_losses = []
+        for entity_name, entity_data in train_entity_data:
+            entity_dataset = SlidingWindowDataset(entity_data, window_size, target_dims)
+            entity_loader = DataLoader(entity_dataset, batch_size=self.batch_size, shuffle=shuffle_dataset)
+            init_loss = self.evaluate(entity_loader)
+            init_train_losses.append(init_loss)
+            print(f"Init total train loss for {entity_name}: {init_loss[2]:.5f}")
+
+        print(f"Training model for {self.n_epochs} epochs using round-robin approach..")
+        train_start = time.time()
+        
+        # 轮流训练
+        for epoch in range(self.n_epochs):
+            epoch_start = time.time()
+            print(f"[Epoch {epoch + 1}] Starting round-robin training")
+            
+            # 在每个epoch选择一个实体进行训练
+            entity_idx = epoch % len(train_entity_data)
+            entity_name, entity_data = train_entity_data[entity_idx]
+            print(f"[Epoch {epoch + 1}] Training on entity: {entity_name}")
+            
+            # 创建训练和验证数据集
+            entity_dataset = SlidingWindowDataset(entity_data, window_size, target_dims)
+            train_loader, val_loader, _ = create_data_loaders(
+                entity_dataset, self.batch_size, val_split, shuffle_dataset, test_dataset=None
+            )
+            
+            # 训练阶段
+            self.model.train()
+            forecast_b_losses = []
+            recon_b_losses = []
+            
+            for x, y in train_loader:
+                x = x.to(self.device)
+                y = y.to(self.device)
+                self.optimizer.zero_grad()
+                preds, recons = self.model(x)
+
+                if self.target_dims is not None:
+                    x = x[:, :, self.target_dims]
+                    y = y[:, :, self.target_dims].squeeze(-1)
+
+                if preds.ndim == 3:
+                    preds = preds.squeeze(1)
+                if y.ndim == 3:
+                    y = y.squeeze(1)
+
+                forecast_loss = torch.sqrt(self.forecast_criterion(y, preds))
+                recon_loss = torch.sqrt(self.recon_criterion(x, recons))
+                loss = forecast_loss + recon_loss
+
+                loss.backward()
+                self.optimizer.step()
+
+                forecast_b_losses.append(forecast_loss.item())
+                recon_b_losses.append(recon_loss.item())
+
+            forecast_b_losses = np.array(forecast_b_losses)
+            recon_b_losses = np.array(recon_b_losses)
+
+            forecast_epoch_loss = np.sqrt((forecast_b_losses ** 2).mean())
+            recon_epoch_loss = np.sqrt((recon_b_losses ** 2).mean())
+
+            total_epoch_loss = forecast_epoch_loss + recon_epoch_loss
+
+            self.losses["train_forecast"].append(forecast_epoch_loss)
+            self.losses["train_recon"].append(recon_epoch_loss)
+            self.losses["train_total"].append(total_epoch_loss)
+
+            # 验证阶段
+            forecast_val_loss, recon_val_loss, total_val_loss = "NA", "NA", "NA"
+            if val_loader is not None:
+                forecast_val_loss, recon_val_loss, total_val_loss = self.evaluate(val_loader)
+                self.losses["val_forecast"].append(forecast_val_loss)
+                self.losses["val_recon"].append(recon_val_loss)
+                self.losses["val_total"].append(total_val_loss)
+
+                # 如果是最好的模型则保存
+                if len(self.losses["val_total"]) == 1 or total_val_loss <= min(self.losses["val_total"]):
+                    self.save(f"model.pt")
+                    print(f"[Epoch {epoch + 1}] New best model saved with val loss: {total_val_loss}")
+
+            if self.log_tensorboard:
+                self.write_loss(epoch)
+
+            epoch_time = time.time() - epoch_start
+            self.epoch_times.append(epoch_time)
+
+            if epoch % self.print_every == 0:
+                s = (
+                    f"[Epoch {epoch + 1}] Entity: {entity_name} | "
+                    f"forecast_loss = {forecast_epoch_loss:.5f}, "
+                    f"recon_loss = {recon_epoch_loss:.5f}, "
+                    f"total_loss = {total_epoch_loss:.5f}"
+                )
+
+                if val_loader is not None:
+                    s += (
+                        f" ---- val_forecast_loss = {forecast_val_loss:.5f}, "
+                        f"val_recon_loss = {recon_val_loss:.5f}, "
+                        f"val_total_loss = {total_val_loss:.5f}"
+                    )
+
+                s += f" [{epoch_time:.1f}s]"
+                print(s)
+
+        train_time = int(time.time() - train_start)
+        if self.log_tensorboard:
+            self.writer.add_text("total_train_time", str(train_time))
+        print(f"-- Round-robin training done in {train_time}s.")

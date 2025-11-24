@@ -41,24 +41,132 @@ class Plotter:
             self.pred_cols = [f"feat_{i}" for i in range(get_data_dim("machine"))]
         elif "SMAP" in self.result_path or "MSL" in self.result_path:
             self.pred_cols = ["feat_1"]
+        elif "CALCE" in self.result_path:
+            self.pred_cols = ["capacity"]
 
     def _load_results(self):
         if self.model_id.startswith('-'):
-            dir_content = os.listdir(self.result_path)
-            datetimes = [datetime.strptime(subf, '%d%m%Y_%H%M%S') for subf in dir_content if os.path.isdir(f"{self.result_path}/{subf}")
-                          and subf not in ['logs']]
-            datetimes.sort()
-            model_id = datetimes[int(self.model_id)].strftime('%d%m%Y_%H%M%S')
-            self.result_path = f'{self.result_path}/{model_id}'
+            # Handle universal model path structure
+            if 'universal_model' in self.result_path:
+                # For universal models, look for datetime directories inside the universal_model folder
+                universal_path = f"{self.result_path}"
+                dir_content = os.listdir(universal_path)
+                datetimes = []
+                for subf in dir_content:
+                    # Skip non-datetime directories like 'logs'
+                    if os.path.isdir(f"{universal_path}/{subf}") and subf not in ['logs']:
+                        try:
+                            dt = datetime.strptime(subf, '%d%m%Y_%H%M%S')
+                            datetimes.append(dt)
+                        except ValueError:
+                            # Skip directories that don't match the datetime format
+                            continue
+                
+                if not datetimes:
+                    # If we still can't find datetime directories, check if we're already in a datetime directory
+                    # This can happen when the path already points to a specific model run
+                    parent_dir = os.path.dirname(self.result_path.rstrip('/\\'))
+                    if 'universal_model' in parent_dir:
+                        # We're already in a datetime directory under universal_model
+                        pass  # self.result_path is already correct
+                    else:
+                        raise ValueError(f"No valid datetime directories found in {universal_path}")
+                else:
+                    datetimes.sort()
+                    model_id = datetimes[int(self.model_id)].strftime('%d%m%Y_%H%M%S')
+                    self.result_path = f'{universal_path}/{model_id}'
+            else:
+                # Handle regular path structure
+                dir_content = os.listdir(self.result_path)
+                datetimes = []
+                for subf in dir_content:
+                    # Skip non-datetime directories like 'universal_model' or 'logs'
+                    if os.path.isdir(f"{self.result_path}/{subf}") and subf not in ['logs']:
+                        try:
+                            dt = datetime.strptime(subf, '%d%m%Y_%H%M%S')
+                            datetimes.append(dt)
+                        except ValueError:
+                            # Skip directories that don't match the datetime format
+                            continue
+                
+                if not datetimes:
+                    # Check if we're already in a datetime directory
+                    path_leaf = os.path.basename(self.result_path.rstrip('/\\'))
+                    # Only try to parse as datetime if the path_leaf looks like a datetime string
+                    if '_' in path_leaf and path_leaf.replace('_', '').isdigit():
+                        try:
+                            datetime.strptime(path_leaf, '%d%m%Y_%H%M%S')
+                            # We're already in a datetime directory, so no need to change self.result_path
+                        except ValueError:
+                            # Check if we're in a dataset directory that contains universal_model
+                            if os.path.exists(os.path.join(self.result_path, 'universal_model')):
+                                # Redirect to universal_model directory
+                                self.result_path = os.path.join(self.result_path, 'universal_model')
+                                # Restart the function logic with the new path
+                                self._load_results()
+                                return
+                            else:
+                                raise ValueError(f"No valid datetime directories found in {self.result_path}")
+                    else:
+                        # Check if we're in a dataset directory that contains universal_model
+                        if os.path.exists(os.path.join(self.result_path, 'universal_model')):
+                            # Redirect to universal_model directory
+                            self.result_path = os.path.join(self.result_path, 'universal_model')
+                            # Restart the function logic with the new path
+                            self._load_results()
+                            return
+                        else:
+                            raise ValueError(f"No valid datetime directories found in {self.result_path}")
+                else:
+                    datetimes.sort()
+                    model_id = datetimes[int(self.model_id)].strftime('%d%m%Y_%H%M%S')
+                    self.result_path = f'{self.result_path}/{model_id}'
 
         print(f"Loading results of {self.result_path}")
-        train_output = pd.read_pickle(f"{self.result_path}/train_output.pkl")
-        train_output.to_pickle(f"{self.result_path}/train_output.pkl")
+        
+        # Handle universal model entity-specific results
+        if 'universal_model' in self.result_path and not self.model_id.startswith('-'):
+            # For universal models with specific entity results
+            entity_dirs = [d for d in os.listdir(self.result_path) 
+                          if os.path.isdir(os.path.join(self.result_path, d)) and d.isdigit()]
+            if entity_dirs:
+                # Load results from the first entity directory
+                first_entity = sorted(entity_dirs, key=int)[0]
+                result_dir = os.path.join(self.result_path, first_entity)
+                print(f"Loading results from entity {first_entity} directory: {result_dir}")
+            else:
+                result_dir = self.result_path
+        # Handle case where we're directly in a universal model datetime directory
+        elif 'universal_model' in self.result_path and self.model_id.startswith('-'):
+            # Check if there are entity directories
+            entity_dirs = [d for d in os.listdir(self.result_path) 
+                          if os.path.isdir(os.path.join(self.result_path, d)) and d.isdigit()]
+            if entity_dirs:
+                # Load results from the first entity directory
+                first_entity = sorted(entity_dirs, key=int)[0]
+                result_dir = os.path.join(self.result_path, first_entity)
+                print(f"Loading results from entity {first_entity} directory: {result_dir}")
+            else:
+                result_dir = self.result_path
+        else:
+            result_dir = self.result_path
+
+        train_output = pd.read_pickle(f"{result_dir}/train_output.pkl")
+        train_output.to_pickle(f"{result_dir}/train_output.pkl")
         train_output["A_True_Global"] = 0
-        test_output = pd.read_pickle(f"{self.result_path}/test_output.pkl")
+        test_output = pd.read_pickle(f"{result_dir}/test_output.pkl")
 
         # Because for SMAP and MSL only one feature is predicted
         if 'SMAP' in self.result_path or 'MSL' in self.result_path:
+            train_output[f'A_Pred_0'] = train_output['A_Pred_Global']
+            train_output[f'A_Score_0'] = train_output['A_Score_Global']
+            train_output[f'Thresh_0'] = train_output['Thresh_Global']
+
+            test_output[f'A_Pred_0'] = test_output['A_Pred_Global']
+            test_output[f'A_Score_0'] = test_output['A_Score_Global']
+            test_output[f'Thresh_0'] = test_output['Thresh_Global']
+        # Handle CALCE and CALCE2 datasets
+        elif 'CALCE' in self.result_path:
             train_output[f'A_Pred_0'] = train_output['A_Pred_Global']
             train_output[f'A_Score_0'] = train_output['A_Score_Global']
             train_output[f'Thresh_0'] = train_output['Thresh_Global']
@@ -71,7 +179,26 @@ class Plotter:
         self.test_output = test_output
 
     def result_summary(self):
-        path = f"{self.result_path}/summary.txt"
+        # For universal models, the summary file is in the entity subdirectory
+        if 'universal_model' in self.result_path:
+            # Check if we're already in an entity directory
+            path_leaf = os.path.basename(self.result_path.rstrip('/\\'))
+            if path_leaf.isdigit():
+                # We're already in an entity directory
+                path = f"{self.result_path}/summary.txt"
+            else:
+                # We need to find the entity directory
+                entity_dirs = [d for d in os.listdir(self.result_path) 
+                              if os.path.isdir(os.path.join(self.result_path, d)) and d.isdigit()]
+                if entity_dirs:
+                    # Use the first entity directory
+                    first_entity = sorted(entity_dirs, key=int)[0]
+                    path = f"{self.result_path}/{first_entity}/summary.txt"
+                else:
+                    path = f"{self.result_path}/summary.txt"
+        else:
+            path = f"{self.result_path}/summary.txt"
+            
         if not os.path.exists(path):
             print(f"Folder {self.result_path} do not have a summary.txt file")
             return

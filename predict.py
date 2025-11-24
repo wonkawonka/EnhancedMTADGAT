@@ -21,11 +21,28 @@ if __name__ == "__main__":
     if args.model_id is None:
         if dataset == 'SMD':
             dir_path = f"./output/{dataset}/{args.group}"
+        elif dataset in ['CALCE', 'CALCE2']:
+            # For CALCE datasets, check if universal_model directory exists
+            base_path = f"./output/{dataset}"
+            if os.path.exists(f"{base_path}/universal_model"):
+                dir_path = f"{base_path}/universal_model"
+            else:
+                dir_path = base_path
         else:
             dir_path = f"./output/{dataset}"
         dir_content = os.listdir(dir_path)
         subfolders = [subf for subf in dir_content if os.path.isdir(f"{dir_path}/{subf}") and subf != "logs"]
-        date_times = [datetime.datetime.strptime(subf, '%d%m%Y_%H%M%S') for subf in subfolders]
+        # Filter out non-datetime directories like 'universal_model'
+        date_times = []
+        for subf in subfolders:
+            try:
+                dt = datetime.datetime.strptime(subf, '%d%m%Y_%H%M%S')
+                date_times.append(dt)
+            except ValueError:
+                # Skip directories that don't match the datetime format
+                continue
+        if not date_times:
+            raise Exception(f"No valid datetime directories found in {dir_path}")
         date_times.sort()
         model_datetime = date_times[-1]
         model_id = model_datetime.strftime('%d%m%Y_%H%M%S')
@@ -37,6 +54,13 @@ if __name__ == "__main__":
         model_path = f"./output/{dataset}/{args.group}/{model_id}"
     elif dataset in ['MSL', 'SMAP', 'NASA']:
         model_path = f"./output/{dataset}/{model_id}"
+    elif dataset in ['CALCE', 'CALCE2']:
+        # For CALCE datasets, check if universal_model directory exists
+        base_path = f"./output/{dataset}"
+        if os.path.exists(f"{base_path}/universal_model"):
+            model_path = f"{base_path}/universal_model/{model_id}"
+        else:
+            model_path = f"{base_path}/{model_id}"
     else:
         raise Exception(f'Dataset "{dataset}" not available.')
 
@@ -48,8 +72,9 @@ if __name__ == "__main__":
     print(f'Using model from {model_path}')
     model_parser = argparse.ArgumentParser()
     model_args, unknown = model_parser.parse_known_args()
+    
+    # For CALCE datasets, config is in the main model directory
     model_args_path = f"{model_path}/config.txt"
-
     with open(model_args_path, "r") as f:
         model_args.__dict__ = json.load(f)
     window_size = model_args.lookback
@@ -152,6 +177,17 @@ if __name__ == "__main__":
     key = "SMD-" + args.group[0] if dataset == "SMD" else dataset
     reg_level = reg_level_dict[key]
 
+    # For CALCE datasets, we need to determine the test entity to create appropriate save path
+    save_path = model_path
+    if dataset in ['CALCE', 'CALCE2']:
+        # Check if there are entity directories
+        entity_dirs = [d for d in os.listdir(model_path) 
+                      if os.path.isdir(os.path.join(model_path, d)) and d.isdigit()]
+        if entity_dirs:
+            # Use the first entity directory for saving results (in predict mode)
+            first_entity = sorted(entity_dirs, key=int)[0]
+            save_path = os.path.join(model_path, first_entity)
+
     prediction_args = {
         'dataset': dataset,
         "target_dims": target_dims,
@@ -162,12 +198,12 @@ if __name__ == "__main__":
         "use_mov_av": args.use_mov_av,
         "gamma": args.gamma,
         "reg_level": reg_level,
-        "save_path": f"{model_path}",
+        "save_path": save_path,
     }
 
     # Creating a new summary-file each time when new prediction are made with a pre-trained model
     count = 0
-    for filename in os.listdir(model_path):
+    for filename in os.listdir(save_path):
         if filename.startswith("summary"):
             count += 1
     if count == 0:

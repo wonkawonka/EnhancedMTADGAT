@@ -97,9 +97,9 @@ class Predictor:
                           scale_scores=False):
         """ Predicts anomalies
 
-        :param train: 2D array of train multivariate time series data
-        :param test: 2D array of test multivariate time series data
-        :param true_anomalies: true anomalies of test set, None if not available
+        :param train: 2D array of train multivariate time series data (normal data used to establish baseline)
+        :param test: 2D array of test multivariate time series data (data to be evaluated for anomalies)
+        :param true_anomalies: true anomalies of test set, None if not available (for unsupervised setting)
         :param save_scores: Whether to save anomaly scores of train and test
         :param load_scores: Whether to load anomaly scores instead of calculating them
         :param save_output: Whether to save output dataframe
@@ -157,15 +157,22 @@ class Predictor:
         # These predictions are used to evaluate performance, as true anomalies are labeled at entity-level
         # Evaluate using different threshold methods: brute-force, epsilon and peaks-over-treshold
         e_eval = epsilon_eval(train_anomaly_scores, test_anomaly_scores, true_anomalies, reg_level=self.reg_level)
-        p_eval = pot_eval(train_anomaly_scores, test_anomaly_scores, true_anomalies,
-                          q=self.q, level=self.level, dynamic=self.dynamic_pot)
+        # 只在有真实标签时才运行POT方法，避免在无标签数据上出现数值问题
+        if true_anomalies is not None:
+            p_eval = pot_eval(train_anomaly_scores, test_anomaly_scores, true_anomalies,
+                              q=self.q, level=self.level, dynamic=self.dynamic_pot)
+        else:
+            # 在无监督设置中，只使用epsilon方法
+            p_eval = {"threshold": np.percentile(train_anomaly_scores, self.level * 100) if self.level else 95}
+        
         if true_anomalies is not None:
             bf_eval = bf_search(test_anomaly_scores, true_anomalies, start=0.01, end=2, step_num=100, verbose=False)
         else:
             bf_eval = {}
 
         print(f"Results using epsilon method:\n {e_eval}")
-        print(f"Results using peak-over-threshold method:\n {p_eval}")
+        if true_anomalies is not None:
+            print(f"Results using peak-over-threshold method:\n {p_eval}")
         print(f"Results using best f1 score search:\n {bf_eval}")
 
         for k, v in e_eval.items():
