@@ -12,6 +12,7 @@ import pandas as pd
 from scipy.io import loadmat
 
 from args import get_parser
+from spectral_residual import apply_spectral_residual_cleaning
 
 
 def load_and_save(category, filename, dataset, dataset_folder, output_folder):
@@ -311,11 +312,16 @@ def load_data(dataset):
                         # 对于单特征时间序列，我们将其reshape为(-1, 1)
                         train_data = entity_values.reshape(-1, 1)
                         
-                        print(f"实体 '{entity_name}' 训练数据形状: {train_data.shape}")
+                        # 应用谱残差异常检测和清洗 (只处理训练集)
+                        print(f"对实体 '{entity_name}' 应用谱残差异常检测和清洗...")
+                        train_data_cleaned = apply_spectral_residual_cleaning(train_data, threshold=3.0)
+                        print(f"清洗完成，清洗前形状: {train_data.shape}, 清洗后形状: {train_data_cleaned.shape}")
+                        
+                        print(f"实体 '{entity_name}' 训练数据形状: {train_data_cleaned.shape}")
                         
                         # 保存训练数据，命名为1-6
                         with open(path.join(output_folder, f"CALCE_{entity_name}_train.pkl"), "wb") as file:
-                            dump(train_data, file)
+                            dump(train_data_cleaned, file)
                         print(f"已保存实体 '{entity_name}' 的训练数据")
                     
             except Exception as e:
@@ -352,6 +358,7 @@ def load_data(dataset):
                         # 将一维数据转换为二维格式
                         test_data = entity_values.reshape(-1, 1)
                         
+                        # 不对测试集应用异常检测和清洗，直接保存原始数据
                         print(f"实体 '{entity_name}' 测试数据形状: {test_data.shape}")
                         
                         # 保存测试数据，命名为7-12
@@ -441,9 +448,15 @@ def load_data(dataset):
                                 # 如果是标量，创建包含单个值的数组
                                 cell_data = np.array([[float(cell_raw)]], dtype=np.float32)
                             entity_name = str(i + 1)  # 实体名称为1-14
+                            
+                            # 应用谱残差异常检测和清洗（仅训练数据）
+                            print(f"对单元格 {entity_name} 应用谱残差异常检测和清洗...")
+                            cell_data_cleaned = apply_spectral_residual_cleaning(cell_data, threshold=3.0)
+                            print(f"清洗完成，清洗前形状: {cell_data.shape}, 清洗后形状: {cell_data_cleaned.shape}")
+                            
                             with open(path.join(output_folder, f"CALCE2_Cell{entity_name}_train.pkl"), "wb") as file:
-                                dump(cell_data, file)
-                            print(f"已保存单元格 {entity_name} 的训练数据，形状: {cell_data.shape}")
+                                dump(cell_data_cleaned, file)
+                            print(f"已保存单元格 {entity_name} 的训练数据，形状: {cell_data_cleaned.shape}")
                         
                         # 为每个测试单元格创建单独的测试文件 (实体15-23)
                         for i in range(9):
@@ -461,6 +474,8 @@ def load_data(dataset):
                                 # 如果是标量，创建包含单个值的数组
                                 cell_data = np.array([[float(cell_raw)]], dtype=np.float32)
                             entity_name = str(i + 15)  # 实体名称为15-23
+                            
+                            # 不对测试集应用异常检测和清洗，直接保存原始数据
                             with open(path.join(output_folder, f"CALCE2_Cell{entity_name}_test.pkl"), "wb") as file:
                                 dump(cell_data, file)
                             

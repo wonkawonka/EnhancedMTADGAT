@@ -17,6 +17,7 @@ Our implementation of MTAD-GAT: Multivariate Time-series Anomaly Detection (MTAD
   - thresholding method proposed by [Hundman et. al.](https://arxiv.org/abs/1802.04431)
   - brute-force method that searches through "all" possible thresholds and picks the one that gives highest F1 score 
   - All methods are applied, and their respective results are outputted together for comparison.
+- For CALCE and CALCE2 datasets, we apply Spectral Residual (SR) anomaly detection to identify and replace irregular instances in training data, using a threshold of 3.0 for anomaly detection.
 - Parts of our code should be credited to the following:
   - [OmniAnomaly](https://github.com/NetManAIOps/OmniAnomaly) for preprocessing and evaluation methods and an implementation of POT
   - [TelemAnom](https://github.com/khundman/telemanom) for plotting methods and thresholding method
