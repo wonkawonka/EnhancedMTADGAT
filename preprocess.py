@@ -119,7 +119,6 @@ def load_data(dataset):
                     output_folder,
                 )
     elif dataset == "NASA":
-        # TODO 找连续的数据集
         dataset_folder = "datasets/NASA/"
         output_folder = "datasets/NASA/processed"
         makedirs(output_folder, exist_ok=True)
@@ -127,16 +126,16 @@ def load_data(dataset):
         # 获取所有MAT文件
         mat_files = [f for f in os.listdir(dataset_folder) if f.endswith(".mat")]
 
-        # 收集所有电池的数据
-        all_train_data = []
-        all_test_data = []
-        all_test_labels = []
-
+        # 为每个电池创建单独的目录
         for filename in mat_files:
             # 提取电池编号
-            battery_id = filename.split(".mat")[0]  # 更准确地提取电池编号
+            battery_id = filename.split(".mat")[0]
 
             print(f"Processing {filename}...")
+
+            # 为每个电池创建单独的目录
+            battery_output_folder = path.join(output_folder, battery_id)
+            makedirs(battery_output_folder, exist_ok=True)
 
             # 加载数据
             try:
@@ -171,18 +170,36 @@ def load_data(dataset):
                                                   int(row['time'][0][4])) + datetime.timedelta(
                         seconds=int(row['time'][0][5]))
                     data = row['data']
-                    capacity = data[0][0]['Capacity'][0][0]
-                    for j in range(len(data[0][0]['Voltage_measured'][0])):
-                        voltage_measured = data[0][0]['Voltage_measured'][0][j]
-                        current_measured = data[0][0]['Current_measured'][0][j]
-                        temperature_measured = data[0][0]['Temperature_measured'][0][j]
-                        current_load = data[0][0]['Current_load'][0][j]
-                        voltage_load = data[0][0]['Voltage_load'][0][j]
-                        time = data[0][0]['Time'][0][j]
-                        processed_data.append([counter + 1, ambient_temperature, date_time, capacity,
-                                               voltage_measured, current_measured,
-                                               temperature_measured, current_load,
-                                               voltage_load, time])
+                    
+                    # 检查数据结构，确保Capacity字段存在且可访问
+                    try:
+                        capacity = data[0][0]['Capacity'][0][0]
+                    except (IndexError, KeyError):
+                        print(f"Warning: Could not access Capacity data for cycle {i}. Skipping this cycle.")
+                        continue
+                    
+                    # 检查电压测量值字段是否存在
+                    try:
+                        voltage_data = data[0][0]['Voltage_measured'][0]
+                    except (IndexError, KeyError):
+                        print(f"Warning: Could not access Voltage_measured data for cycle {i}. Skipping this cycle.")
+                        continue
+                        
+                    for j in range(len(voltage_data)):
+                        try:
+                            voltage_measured = data[0][0]['Voltage_measured'][0][j]
+                            current_measured = data[0][0]['Current_measured'][0][j]
+                            temperature_measured = data[0][0]['Temperature_measured'][0][j]
+                            current_load = data[0][0]['Current_load'][0][j]
+                            voltage_load = data[0][0]['Voltage_load'][0][j]
+                            time = data[0][0]['Time'][0][j]
+                            processed_data.append([counter + 1, ambient_temperature, date_time, capacity,
+                                                   voltage_measured, current_measured,
+                                                   temperature_measured, current_load,
+                                                   voltage_load, time])
+                        except (IndexError, KeyError) as e:
+                            print(f"Warning: Error accessing data at index {j} in cycle {i}: {e}")
+                            continue
 
                     counter = counter + 1
 
@@ -230,41 +247,19 @@ def load_data(dataset):
             print(f"Train labels shape: {train_labels.shape}")
             print(f"Test labels shape: {test_labels.shape}")
 
-            # 保存单个电池的数据
-            with open(path.join(output_folder, f"NASA_{battery_id}_train.pkl"), "wb") as file:
+            # 保存单个电池的数据到单独的目录中
+            with open(path.join(battery_output_folder, f"train.pkl"), "wb") as file:
                 dump(train_data, file)
 
-            with open(path.join(output_folder, f"NASA_{battery_id}_test.pkl"), "wb") as file:
+            with open(path.join(battery_output_folder, f"test.pkl"), "wb") as file:
                 dump(test_data, file)
 
-            with open(path.join(output_folder, f"NASA_{battery_id}_test_label.pkl"), "wb") as file:
+            with open(path.join(battery_output_folder, f"test_label.pkl"), "wb") as file:
                 dump(test_labels, file)
-
-            # 添加到整体数据集中
-            all_train_data.append(train_data)
-            all_test_data.append(test_data)
-            all_test_labels.extend(test_labels)
 
             print(f"Saved {battery_id} data with shape: {train_data.shape}")
 
-        # 合并所有电池数据作为整体数据集
-        if all_train_data:
-            combined_train = np.vstack(all_train_data)
-            combined_test = np.vstack(all_test_data)
-            combined_labels = np.array(all_test_labels)
-
-            # 保存合并后的数据
-            with open(path.join(output_folder, "NASA_train.pkl"), "wb") as file:
-                dump(combined_train, file)
-
-            with open(path.join(output_folder, "NASA_test.pkl"), "wb") as file:
-                dump(combined_test, file)
-
-            with open(path.join(output_folder, "NASA_test_label.pkl"), "wb") as file:
-                dump(combined_labels, file)
-
-            print(f"Combined NASA dataset - Train shape: {combined_train.shape}, Test shape: {combined_test.shape}")
-
+    # TODO 异常标签按曲率计算
     elif dataset == "CALCE":
         # 处理CALCE数据集
         dataset_folder = "datasets/CALCE/Dataset1"
@@ -296,16 +291,16 @@ def load_data(dataset):
                 valid_cols = [col for col in df_qualified.columns 
                              if 'Unnamed' not in str(col) and str(col).strip() != '' and col is not None]
                 
-                # 只取前6列作为训练集实体 (实体1-6)
+                # 只取前6列作为训练集实体 (实体Cell1-Cell6)
                 train_cols = valid_cols[:6] if len(valid_cols) >= 6 else valid_cols
                 
-                # 处理训练实体 (实体1-6)
+                # 处理训练实体 (实体Cell1-Cell6)
                 for i, col in enumerate(train_cols):
                     # 获取实体数据并去除NaN值
                     entity_data = df_qualified[col].dropna()
                     if len(entity_data) > 0:  # 确保有数据
                         entity_values = entity_data.values.astype(np.float32)
-                        entity_name = str(i + 1)  # 实体名称为1-6
+                        entity_name = f"Cell{str(i + 1)}"  # 实体名称为Cell1-Cell6
                         entity_names.append(entity_name)
                         
                         # 将一维数据转换为二维格式（时间步，特征数）
@@ -319,10 +314,16 @@ def load_data(dataset):
                         
                         print(f"实体 '{entity_name}' 训练数据形状: {train_data_cleaned.shape}")
                         
-                        # 保存训练数据，命名为1-6
+                        # 保存训练数据，命名为Cell1-Cell6
                         with open(path.join(output_folder, f"CALCE_{entity_name}_train.pkl"), "wb") as file:
                             dump(train_data_cleaned, file)
                         print(f"已保存实体 '{entity_name}' 的训练数据")
+                        
+                        # 为训练数据生成全0标签（表示正常数据）
+                        train_labels = np.zeros(len(train_data_cleaned), dtype=np.int32)
+                        with open(path.join(output_folder, f"CALCE_{entity_name}_train_label.pkl"), "wb") as file:
+                            dump(train_labels, file)
+                        print(f"已保存实体 '{entity_name}' 的训练标签（全为0，表示正常数据）")
                     
             except Exception as e:
                 print(f"读取Qualified lots失败: {e}")
@@ -343,16 +344,16 @@ def load_data(dataset):
                 valid_cols = [col for col in df_subsequent.columns 
                              if 'Unnamed' not in str(col) and str(col).strip() != '' and col is not None]
                 
-                # 只取前6列作为测试集实体 (实体7-12)
+                # 只取前6列作为测试集实体 (实体Cell7-Cell12)
                 test_cols = valid_cols[:6] if len(valid_cols) >= 6 else valid_cols
                 
-                # 处理测试实体 (实体7-12)
+                # 处理测试实体 (实体Cell7-Cell12)
                 for i, col in enumerate(test_cols):
                     # 获取实体数据并去除NaN值
                     entity_data = df_subsequent[col].dropna()
                     if len(entity_data) > 0:  # 确保有数据
                         entity_values = entity_data.values.astype(np.float32)
-                        entity_name = str(i + 7)  # 实体名称为7-12
+                        entity_name = f"Cell{str(i + 7)}"  # 实体名称为Cell7-Cell12
                         entity_names.append(entity_name)
                         
                         # 将一维数据转换为二维格式
@@ -361,18 +362,18 @@ def load_data(dataset):
                         # 不对测试集应用异常检测和清洗，直接保存原始数据
                         print(f"实体 '{entity_name}' 测试数据形状: {test_data.shape}")
                         
-                        # 保存测试数据，命名为7-12
+                        # 保存测试数据，命名为Cell7-Cell12
                         with open(path.join(output_folder, f"CALCE_{entity_name}_test.pkl"), "wb") as file:
                             dump(test_data, file)
                         print(f"已保存实体 '{entity_name}' 的测试数据")
                         
-                        # 对于健康数据，生成全0标签（表示无异常）
-                        labels = np.zeros(len(test_data), dtype=np.int32)
+                        # 为测试数据生成全1标签（表示异常数据）
+                        labels = np.ones(len(test_data), dtype=np.int32)
                         
                         # 保存测试标签
                         with open(path.join(output_folder, f"CALCE_{entity_name}_test_label.pkl"), "wb") as file:
                             dump(labels, file)
-                        print(f"已保存实体 '{entity_name}' 的测试标签（全为0，表示健康数据）")
+                        print(f"已保存实体 '{entity_name}' 的测试标签（全为1，表示异常数据）")
                     
             except Exception as e:
                 print(f"读取Subsequent lots失败: {e}")
@@ -432,7 +433,7 @@ def load_data(dataset):
                         print(f"训练数据形状: {train_cells.shape}")
                         print(f"测试数据形状: {test_cells.shape}")
                         
-                        # 为每个训练单元格创建单独的训练文件 (实体1-14)
+                        # 为每个训练单元格创建单独的训练文件 (实体Cell1-Cell14)
                         for i in range(14):
                             # 检查单元格数据类型并适当处理
                             cell_raw = train_cells[i, 0]
@@ -447,18 +448,24 @@ def load_data(dataset):
                             else:
                                 # 如果是标量，创建包含单个值的数组
                                 cell_data = np.array([[float(cell_raw)]], dtype=np.float32)
-                            entity_name = str(i + 1)  # 实体名称为1-14
+                            entity_name = f"Cell{str(i + 1)}"  # 实体名称为Cell1-Cell14
                             
                             # 应用谱残差异常检测和清洗（仅训练数据）
                             print(f"对单元格 {entity_name} 应用谱残差异常检测和清洗...")
                             cell_data_cleaned = apply_spectral_residual_cleaning(cell_data, threshold=3.0)
                             print(f"清洗完成，清洗前形状: {cell_data.shape}, 清洗后形状: {cell_data_cleaned.shape}")
                             
-                            with open(path.join(output_folder, f"CALCE2_Cell{entity_name}_train.pkl"), "wb") as file:
+                            with open(path.join(output_folder, f"CALCE2_{entity_name}_train.pkl"), "wb") as file:
                                 dump(cell_data_cleaned, file)
                             print(f"已保存单元格 {entity_name} 的训练数据，形状: {cell_data_cleaned.shape}")
+                            
+                            # 为训练数据生成全0标签（表示正常数据）
+                            train_labels = np.zeros(len(cell_data_cleaned), dtype=np.int32)
+                            with open(path.join(output_folder, f"CALCE2_{entity_name}_train_label.pkl"), "wb") as file:
+                                dump(train_labels, file)
+                            print(f"已保存单元格 {entity_name} 的训练标签（全为0，表示正常数据）")
                         
-                        # 为每个测试单元格创建单独的测试文件 (实体15-23)
+                        # 为每个测试单元格创建单独的测试文件 (实体Cell15-Cell23)
                         for i in range(9):
                             # 检查单元格数据类型并适当处理
                             cell_raw = test_cells[i, 0]
@@ -473,15 +480,15 @@ def load_data(dataset):
                             else:
                                 # 如果是标量，创建包含单个值的数组
                                 cell_data = np.array([[float(cell_raw)]], dtype=np.float32)
-                            entity_name = str(i + 15)  # 实体名称为15-23
+                            entity_name = f"Cell{str(i + 15)}"  # 实体名称为Cell15-Cell23
                             
                             # 不对测试集应用异常检测和清洗，直接保存原始数据
-                            with open(path.join(output_folder, f"CALCE2_Cell{entity_name}_test.pkl"), "wb") as file:
+                            with open(path.join(output_folder, f"CALCE2_{entity_name}_test.pkl"), "wb") as file:
                                 dump(cell_data, file)
                             
-                            # 为测试数据生成标签（假设是健康数据，标签为0）
-                            labels = np.zeros(len(cell_data), dtype=np.int32)
-                            with open(path.join(output_folder, f"CALCE2_Cell{entity_name}_test_label.pkl"), "wb") as file:
+                            # 为测试数据生成全1标签（表示异常数据）
+                            labels = np.ones(len(cell_data), dtype=np.int32)
+                            with open(path.join(output_folder, f"CALCE2_{entity_name}_test_label.pkl"), "wb") as file:
                                 dump(labels, file)
                             print(f"已保存单元格 {entity_name} 的测试数据和标签，形状: {cell_data.shape}")
                             

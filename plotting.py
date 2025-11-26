@@ -128,10 +128,15 @@ class Plotter:
         if 'universal_model' in self.result_path and not self.model_id.startswith('-'):
             # For universal models with specific entity results
             entity_dirs = [d for d in os.listdir(self.result_path) 
-                          if os.path.isdir(os.path.join(self.result_path, d)) and d.isdigit()]
+                          if os.path.isdir(os.path.join(self.result_path, d)) and (d.isdigit() or d.startswith('Cell'))]
             if entity_dirs:
                 # Load results from the first entity directory
-                first_entity = sorted(entity_dirs, key=int)[0]
+                # Sort entities numerically
+                if all(d.isdigit() for d in entity_dirs):
+                    first_entity = sorted(entity_dirs, key=int)[0]
+                else:
+                    # For Cell-prefixed entities, sort by the numeric part
+                    first_entity = sorted(entity_dirs, key=lambda x: int(x.replace('Cell', '')) if x.startswith('Cell') else int(x))[0]
                 result_dir = os.path.join(self.result_path, first_entity)
                 print(f"Loading results from entity {first_entity} directory: {result_dir}")
             else:
@@ -140,10 +145,15 @@ class Plotter:
         elif 'universal_model' in self.result_path and self.model_id.startswith('-'):
             # Check if there are entity directories
             entity_dirs = [d for d in os.listdir(self.result_path) 
-                          if os.path.isdir(os.path.join(self.result_path, d)) and d.isdigit()]
+                          if os.path.isdir(os.path.join(self.result_path, d)) and (d.isdigit() or d.startswith('Cell'))]
             if entity_dirs:
                 # Load results from the first entity directory
-                first_entity = sorted(entity_dirs, key=int)[0]
+                # Sort entities numerically
+                if all(d.isdigit() for d in entity_dirs):
+                    first_entity = sorted(entity_dirs, key=int)[0]
+                else:
+                    # For Cell-prefixed entities, sort by the numeric part
+                    first_entity = sorted(entity_dirs, key=lambda x: int(x.replace('Cell', '')) if x.startswith('Cell') else int(x))[0]
                 result_dir = os.path.join(self.result_path, first_entity)
                 print(f"Loading results from entity {first_entity} directory: {result_dir}")
             else:

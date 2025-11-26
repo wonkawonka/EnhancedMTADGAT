@@ -1,11 +1,11 @@
 Data Description:
-A set of four Li-ion batteries (# 5, 6, 7 and 18) were run through 3 different operational profiles (charge, discharge and impedance) at room temperature. Charging was carried out in a constant current (CC) mode at 1.5A until the battery voltage reached 4.2V and then continued in a constant voltage (CV) mode until the charge current dropped to 20mA. Discharge was carried out at a constant current (CC) level of 2A until the battery voltage fell to 2.7V, 2.5V, 2.2V and 2.5V for batteries 5 6 7 and 18 respectively. Impedance measurement was carried out through an electrochemical impedance spectroscopy (EIS) frequency sweep from 0.1Hz to 5kHz. Repeated charge and discharge cycles result in accelerated aging of the batteries while impedance measurements provide insight into the internal battery parameters that change as aging progresses. The experiments were stopped when the batteries reached end-of-life (EOL) criteria, which was a 30% fade in rated capacity (from 2Ahr to 1.4Ahr). This dataset can be used for the prediction of both remaining charge (for a given discharge cycle) and remaining useful life (RUL).
+A set of four Li-ion batteries (# 49 - 52) were run through 3 different operational profiles (charge, discharge and impedance) at an ambient temperature of 4 deg C. Charging was carried out in a constant current (CC) mode at 1.5A until the battery voltage reached 4.2V and then continued in a constant voltage (CV) mode until the charge current dropped to 20mA. Fixed load current level of 2A was used and the discharge runs were stopped at 2V, 2.2V, 2.5V and 2.7V for batteries 49, 50, 51 and 52 respectively. Impedance measurement was carried out through an electrochemical impedance spectroscopy (EIS) frequency sweep from 0.1Hz to 5kHz. The experiments were carried out until the experiment control software crashed.  Note that there are several discharge runs where the capacity as well as voltage levels were very low. Reasons for this have not been fully analyzed.
 
 Files:
-B0005.mat	Data for Battery #5
-B0006.mat	Data for Battery #6
-B0007.mat	Data for Battery #7
-B0018.mat	Data for Battery #18
+B0049.mat	Data for Battery #49
+B0050.mat	Data for Battery #50
+B0051.mat	Data for Battery #51
+B0052.mat	Data for Battery #52
 
 Data Structure:
 cycle:	top level structure array containing the charge, discharge and impedance operations

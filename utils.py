@@ -390,10 +390,11 @@ def get_all_calce_entities():
     train_pkl_files = glob.glob(os.path.join(prefix, "CALCE_*_train.pkl"))
     entity_names = []
     for file in train_pkl_files:
-        # 从文件名中提取实体名称 (例如: CALCE_1_train.pkl -> 1)
+        # 从文件名中提取实体名称 (例如: CALCE_Cell1_train.pkl -> Cell1)
         entity_name = os.path.basename(file).replace("CALCE_", "").replace("_train.pkl", "")
         entity_names.append(entity_name)
-    return sorted(entity_names, key=lambda x: int(x))
+    # 按数字排序
+    return sorted(entity_names, key=lambda x: int(x.replace('Cell', '')))
 
 
 def load_calce_entity_data(entity_name):
@@ -484,9 +485,9 @@ def get_calce_train_test_splits():
     获取CALCE数据集的训练/测试实体划分
     前6个实体作为训练集，后6个实体作为测试集
     """
-    # CALCE实体编号为1-12，其中1-6为训练集，7-12为测试集
-    train_entities = [str(i) for i in range(1, 7)]  # 实体1-6
-    test_entities = [str(i) for i in range(7, 13)]  # 实体7-12
+    # CALCE实体编号为Cell1-Cell12，其中Cell1-Cell6为训练集，Cell7-Cell12为测试集
+    train_entities = [f"Cell{i}" for i in range(1, 7)]  # 实体Cell1-Cell6
+    test_entities = [f"Cell{i}" for i in range(7, 13)]  # 实体Cell7-Cell12
     return train_entities, test_entities
 
 
