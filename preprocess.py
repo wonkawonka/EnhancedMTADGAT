@@ -125,17 +125,13 @@ def load_data(dataset):
 
         # 获取所有MAT文件
         mat_files = [f for f in os.listdir(dataset_folder) if f.endswith(".mat")]
-
-        # 为每个电池创建单独的目录
+        
+        # 处理每个电池文件
         for filename in mat_files:
             # 提取电池编号
             battery_id = filename.split(".mat")[0]
 
             print(f"Processing {filename}...")
-
-            # 为每个电池创建单独的目录
-            battery_output_folder = path.join(output_folder, battery_id)
-            makedirs(battery_output_folder, exist_ok=True)
 
             # 加载数据
             try:
@@ -161,7 +157,8 @@ def load_data(dataset):
             # 遍历所有cycles
             for i in range(num_cycles):
                 row = battery_data['cycle'][0, i]
-                if row['type'][0] == 'discharge':
+                # 同时处理充电和放电数据
+                if row['type'][0] in ['discharge', 'charge']:
                     ambient_temperature = row['ambient_temperature'][0][0]
                     date_time = datetime.datetime(int(row['time'][0][0]),
                                                   int(row['time'][0][1]),
@@ -174,10 +171,10 @@ def load_data(dataset):
                     # 检查数据结构，确保Capacity字段存在且可访问
                     try:
                         capacity = data[0][0]['Capacity'][0][0]
-                    except (IndexError, KeyError):
+                    except (IndexError, KeyError,ValueError):
                         print(f"Warning: Could not access Capacity data for cycle {i}. Skipping this cycle.")
                         continue
-                    
+
                     # 检查电压测量值字段是否存在
                     try:
                         voltage_data = data[0][0]['Voltage_measured'][0]
@@ -242,22 +239,22 @@ def load_data(dataset):
             train_labels = labels[:split_index]
             test_labels = labels[split_index:]
 
-            print(f"Train data shape: {train_data.shape}")
-            print(f"Test data shape: {test_data.shape}")
-            print(f"Train labels shape: {train_labels.shape}")
-            print(f"Test labels shape: {test_labels.shape}")
+            print(f"{battery_id} Train data shape: {train_data.shape}")
+            print(f"{battery_id} Test data shape: {test_data.shape}")
+            print(f"{battery_id} Train labels shape: {train_labels.shape}")
+            print(f"{battery_id} Test labels shape: {test_labels.shape}")
 
-            # 保存单个电池的数据到单独的目录中
-            with open(path.join(battery_output_folder, f"train.pkl"), "wb") as file:
+            # 直接保存在output_folder中，文件名包含电池ID
+            with open(path.join(output_folder, f"{battery_id}_train.pkl"), "wb") as file:
                 dump(train_data, file)
 
-            with open(path.join(battery_output_folder, f"test.pkl"), "wb") as file:
+            with open(path.join(output_folder, f"{battery_id}_test.pkl"), "wb") as file:
                 dump(test_data, file)
 
-            with open(path.join(battery_output_folder, f"test_label.pkl"), "wb") as file:
+            with open(path.join(output_folder, f"{battery_id}_test_label.pkl"), "wb") as file:
                 dump(test_labels, file)
 
-            print(f"Saved {battery_id} data with shape: {train_data.shape}")
+            print(f"Saved {battery_id} data with shape: {train_data.shape} in unified folder")
 
     # TODO 异常标签按曲率计算
     elif dataset == "CALCE":
