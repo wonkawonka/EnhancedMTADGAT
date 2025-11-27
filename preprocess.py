@@ -118,6 +118,7 @@ def load_data(dataset):
                     dataset_folder,
                     output_folder,
                 )
+    # TODO 主要还是预测容量的异常，但是其他数据可以作为特征
     elif dataset == "NASA":
         dataset_folder = "datasets/NASA/"
         output_folder = "datasets/NASA/processed"
@@ -158,7 +159,7 @@ def load_data(dataset):
             for i in range(num_cycles):
                 row = battery_data['cycle'][0, i]
                 # 同时处理充电和放电数据
-                if row['type'][0] in ['discharge', 'charge']:
+                if row['type'][0] in ['discharge']:
                     ambient_temperature = row['ambient_temperature'][0][0]
                     date_time = datetime.datetime(int(row['time'][0][0]),
                                                   int(row['time'][0][1]),
@@ -211,7 +212,7 @@ def load_data(dataset):
             print(df.describe())
 
             # 选择关键特征用于时间序列分析
-            selected_features = ['capacity', 'voltage_measured', 'current_measured',
+            selected_features = ['time','capacity', 'voltage_measured', 'current_measured',
                                  'temperature_measured', 'current_charge', 'voltage_charge']
             
             # 提取特征数据（保持原始时间序列格式，不进行滑动窗口处理）
