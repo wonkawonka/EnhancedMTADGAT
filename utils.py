@@ -54,6 +54,9 @@ def get_data_dim(dataset):
     elif dataset in ["CALCE", "CALCE2"]:
         # CALCE数据集是单特征时间序列
         return 1
+    elif dataset == "BMS":
+        # BMS数据集特征维度
+        return 5  # SYS_Vol, SYS_I, SYS_DSOC, SYS_SOH, SYS_Vmax
     else:
         raise ValueError("unknown dataset " + str(dataset))
 
@@ -76,6 +79,9 @@ def get_target_dims(dataset):
     elif dataset in ["CALCE", "CALCE2"]:
         # 对于CALCE数据集，我们关注单个特征
         return [0]
+    elif dataset == "BMS":
+        # 对于BMS数据集，我们关注所有特征
+        return None
     else:
         raise ValueError("unknown dataset " + str(dataset))
 
@@ -127,6 +133,8 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
         prefix += "/NASA/processed"
     elif dataset in ["CALCE", "CALCE2"]:
         prefix += "/CALCE/processed"
+    elif dataset == "BMS":
+        prefix += "/BMS/processed"
     if max_train_size is None:
         train_end = None
     else:
@@ -253,6 +261,54 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
             test_label = np.concatenate(test_label_list, axis=0)
         else:
             test_data, test_label = None, None
+    elif dataset == "BMS":
+        # 对于BMS数据集，加载处理后的pkl文件
+        import glob
+        # 尝试加载合并后的数据
+        try:
+            f = open(os.path.join(prefix, dataset + "_train.pkl"), "rb")
+            train_data = pickle.load(f)
+            f.close()
+        except (KeyError, FileNotFoundError):
+            # 如果没有合并后的数据，则加载单个电池的数据
+            pkl_files = glob.glob(os.path.join(prefix, "BMS_*_train.pkl"))
+            if not pkl_files:
+                raise FileNotFoundError(f"No processed BMS battery data found in {prefix}")
+            
+            # 为了简单起见，我们只使用第一个电池的数据
+            battery_file = pkl_files[0]
+            f = open(battery_file, "rb")
+            train_data = pickle.load(f)
+            f.close()
+            print(f"Using battery data from: {os.path.basename(battery_file)}")
+        
+        try:
+            f = open(os.path.join(prefix, dataset + "_test.pkl"), "rb")
+            test_data = pickle.load(f)
+            f.close()
+        except (KeyError, FileNotFoundError):
+            pkl_files = glob.glob(os.path.join(prefix, "BMS_*_test.pkl"))
+            if not pkl_files:
+                test_data = None
+            else:
+                battery_file = pkl_files[0]
+                f = open(battery_file, "rb")
+                test_data = pickle.load(f)
+                f.close()
+        
+        try:
+            f = open(os.path.join(prefix, dataset + "_test_label.pkl"), "rb")
+            test_label = pickle.load(f)
+            f.close()
+        except (KeyError, FileNotFoundError):
+            pkl_files = glob.glob(os.path.join(prefix, "BMS_*_test_label.pkl"))
+            if not pkl_files:
+                test_label = None
+            else:
+                battery_file = pkl_files[0]
+                f = open(battery_file, "rb")
+                test_label = pickle.load(f)
+                f.close()
     else:
         f = open(os.path.join(prefix, dataset + "_train.pkl"), "rb")
         train_data = pickle.load(f).reshape((-1, x_dim))[train_start:train_end, :]

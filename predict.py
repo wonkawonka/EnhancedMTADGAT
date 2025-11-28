@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     if dataset == "SMD":
         model_path = f"./output/{dataset}/{args.group}/{model_id}"
-    elif dataset in ['MSL', 'SMAP', 'NASA']:
+    elif dataset in ['MSL', 'SMAP', 'NASA', 'BMS']:
         model_path = f"./output/{dataset}/{model_id}"
     elif dataset in ['CALCE', 'CALCE2']:
         # For CALCE datasets, check if universal_model directory exists
@@ -163,7 +163,8 @@ if __name__ == "__main__":
         "SMD-3": (0.9999, 0.001),
         "NASA": (0.99, 0.001),
         "CALCE": (0.99, 0.001),
-        "CALCE2": (0.99, 0.001)
+        "CALCE2": (0.99, 0.001),
+        "BMS": (0.99, 0.001)
     }
     key = "SMD-" + args.group[0] if args.dataset == "SMD" else args.dataset
     level, q = level_q_dict[key]
@@ -173,7 +174,7 @@ if __name__ == "__main__":
         q = args.q
 
     # Some suggestions for Epsilon args
-    reg_level_dict = {"SMAP": 0, "MSL": 0, "SMD-1": 1, "SMD-2": 1, "SMD-3": 1, "NASA": 0, "CALCE": 0, "CALCE2": 0}
+    reg_level_dict = {"SMAP": 0, "MSL": 0, "SMD-1": 1, "SMD-2": 1, "SMD-3": 1, "NASA": 0, "CALCE": 0, "CALCE2": 0, "BMS": 0}
     key = "SMD-" + args.group[0] if dataset == "SMD" else dataset
     reg_level = reg_level_dict[key]
 

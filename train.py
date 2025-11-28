@@ -439,6 +439,9 @@ if __name__ == "__main__":
         elif dataset in ['CALCE', 'CALCE2']:
             output_path = f'output/{dataset}'
             (x_train, _), (x_test, y_test) = get_data(dataset, normalize=normalize)
+        elif dataset == 'BMS':
+            output_path = f'output/{dataset}'
+            (x_train, _), (x_test, y_test) = get_data(dataset, normalize=normalize)
         else:
             raise Exception(f'Dataset "{dataset}" not available.')
 
@@ -538,7 +541,8 @@ if __name__ == "__main__":
             "SMD-3": (0.9999, 0.001),
             "NASA": (0.99, 0.001),
             "CALCE": (0.95, 0.01),   # 为CALCE调整参数以适应无监督设置
-            "CALCE2": (0.90, 0.01)   # 为CALCE2调整参数以适应无监督设置
+            "CALCE2": (0.90, 0.01),   # 为CALCE2调整参数以适应无监督设置
+            "BMS": (0.99, 0.001)      # BMS数据集参数
         }
         key = "SMD-" + args.group[0] if args.dataset == "SMD" else args.dataset
         level, q = level_q_dict[key]
@@ -548,7 +552,7 @@ if __name__ == "__main__":
             q = args.q
 
         # Some suggestions for Epsilon args
-        reg_level_dict = {"SMAP": 0, "MSL": 0, "SMD-1": 1, "SMD-2": 1, "SMD-3": 1, "NASA": 0, "CALCE": 0}
+        reg_level_dict = {"SMAP": 0, "MSL": 0, "SMD-1": 1, "SMD-2": 1, "SMD-3": 1, "NASA": 0, "CALCE": 0, "BMS": 0}
         key = "SMD-" + args.group[0] if dataset == "SMD" else dataset
         reg_level = reg_level_dict[key]
 

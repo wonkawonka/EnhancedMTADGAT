@@ -102,22 +102,56 @@ def load_data(dataset):
         output_folder = "datasets/BMS/processed"
         makedirs(output_folder, exist_ok=True)
 
-        for filename in listdir(path.join(dataset_folder, "train")):
-            if filename.endswith(".csv"):
-                load_and_save(
-                    "train",
-                    filename,
-                    filename.strip(".csv"),
-                    dataset_folder,
-                    output_folder,
-                )
-                load_and_save(
-                    "test_label",
-                    filename,
-                    filename.strip(".csv"),
-                    dataset_folder,
-                    output_folder,
-                )
+        # 查找数据文件
+        data_files = [f for f in listdir(dataset_folder) if f.endswith((".xls", ".xlsx"))]
+        
+        for filename in data_files:
+            print(f"Processing {filename}...")
+            # 读取Excel文件
+            file_path = path.join(dataset_folder, filename)
+            df = pd.read_excel(file_path)
+            
+            # 选择指定列（去除Date列）
+            required_columns = ['SYS_Vol', 'SYS_I', 'SYS_DSOC', 'SYS_SOH', 'SYS_Vmax']
+            # 检查这些列是否存在
+            available_columns = [col for col in required_columns if col in df.columns]
+            print(f"Available columns: {available_columns}")
+            
+            # 提取所需数据
+            selected_data = df[available_columns].values.astype(np.float32)
+            
+            # 生成标签（这里简单地将所有标签设为0，表示正常数据）
+            labels = np.zeros(len(selected_data), dtype=np.int32)
+            
+            # 按时间顺序划分训练集和测试集（80%训练，20%测试）
+            split_ratio = 0.8
+            split_index = int(len(selected_data) * split_ratio)
+            
+            # 划分训练集和测试集数据
+            train_data = selected_data[:split_index]
+            test_data = selected_data[split_index:]
+            
+            # 划分对应的标签
+            train_labels = labels[:split_index]
+            test_labels = labels[split_index:]
+            
+            print(f"Train data shape: {train_data.shape}")
+            print(f"Test data shape: {test_data.shape}")
+            print(f"Train labels shape: {train_labels.shape}")
+            print(f"Test labels shape: {test_labels.shape}")
+            
+            # 保存数据
+            battery_name = filename.split('.')[0]  # 使用文件名作为电池名称
+            with open(path.join(output_folder, f"BMS_{battery_name}_train.pkl"), "wb") as file:
+                dump(train_data, file)
+            
+            with open(path.join(output_folder, f"BMS_{battery_name}_test.pkl"), "wb") as file:
+                dump(test_data, file)
+            
+            with open(path.join(output_folder, f"BMS_{battery_name}_test_label.pkl"), "wb") as file:
+                dump(test_labels, file)
+            
+            print(f"Saved {battery_name} data")
     # TODO 主要还是预测容量的异常，但是其他数据可以作为特征
     elif dataset == "NASA":
         dataset_folder = "datasets/NASA/"
@@ -246,13 +280,13 @@ def load_data(dataset):
             print(f"{battery_id} Test labels shape: {test_labels.shape}")
 
             # 直接保存在output_folder中，文件名包含电池ID
-            with open(path.join(output_folder, f"{battery_id}_train.pkl"), "wb") as file:
+            with open(path.join(output_folder, f"NASA_{battery_id}_train.pkl"), "wb") as file:
                 dump(train_data, file)
 
-            with open(path.join(output_folder, f"{battery_id}_test.pkl"), "wb") as file:
+            with open(path.join(output_folder, f"NASA_{battery_id}_test.pkl"), "wb") as file:
                 dump(test_data, file)
 
-            with open(path.join(output_folder, f"{battery_id}_test_label.pkl"), "wb") as file:
+            with open(path.join(output_folder, f"NASA_{battery_id}_test_label.pkl"), "wb") as file:
                 dump(test_labels, file)
 
             print(f"Saved {battery_id} data with shape: {train_data.shape} in unified folder")

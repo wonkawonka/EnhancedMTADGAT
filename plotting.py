@@ -43,6 +43,8 @@ class Plotter:
             self.pred_cols = ["feat_1"]
         elif "CALCE" in self.result_path:
             self.pred_cols = ["capacity"]
+        elif "BMS" in self.result_path:
+            self.pred_cols = ["SYS_Vol", "SYS_I", "SYS_DSOC", "SYS_SOH", "SYS_Vmax"]
 
     def _load_results(self):
         if self.model_id.startswith('-'):
@@ -184,6 +186,17 @@ class Plotter:
             test_output[f'A_Pred_0'] = test_output['A_Pred_Global']
             test_output[f'A_Score_0'] = test_output['A_Score_Global']
             test_output[f'Thresh_0'] = test_output['Thresh_Global']
+        # Handle BMS dataset
+        elif 'BMS' in self.result_path:
+            # For BMS, we have multiple features, so we copy the global predictions to all features
+            for i in range(get_data_dim("BMS")):  # BMS now has 5 features
+                train_output[f'A_Pred_{i}'] = train_output['A_Pred_Global']
+                train_output[f'A_Score_{i}'] = train_output['A_Score_Global']
+                train_output[f'Thresh_{i}'] = train_output['Thresh_Global']
+                
+                test_output[f'A_Pred_{i}'] = test_output['A_Pred_Global']
+                test_output[f'A_Score_{i}'] = test_output['A_Score_Global']
+                test_output[f'Thresh_{i}'] = test_output['Thresh_Global']
 
         self.train_output = train_output
         self.test_output = test_output
