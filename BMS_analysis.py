@@ -152,7 +152,7 @@ plt.show()
 
 ## 7. 结果分析（如果已有训练结果）
 # 检查是否存在训练结果
-output_path = '../../output/BMS'
+output_path = 'output/BMS'
 if os.path.exists(output_path):
     print("检测到 BMS 训练结果，正在加载...")
     try:
