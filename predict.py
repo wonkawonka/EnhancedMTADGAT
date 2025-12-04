@@ -148,6 +148,7 @@ if __name__ == "__main__":
         attention_top_k=model_args.attention_top_k,
         corr_dim=model_args.corr_dim,
         corr_alpha=model_args.corr_alpha,
+        feature_att_trans=model_args.feature_att_trans if hasattr(model_args, 'feature_att_trans') else False,  # Add the new parameter with default
     )
 
     device = "cuda" if args.use_cuda and torch.cuda.is_available() else "cpu"

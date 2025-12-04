@@ -229,7 +229,42 @@ for battery_name in battery_names:
     except Exception as e:
         print(f"处理 {battery_name} 时出错: {e}")
 
-## 8. 结果分析（如果已有训练结果）
+## 8. 每个电池单元的所有特征趋势可视化
+# 为每个电池单元创建一个图表，显示所有特征的变化趋势，每个特征用不同颜色表示
+if battery_names:
+    print("\n正在生成每个电池单元的所有特征趋势可视化...")
+    for battery_name in battery_names:
+        try:
+            with open(os.path.join(prefix, f"NASA_{battery_name}_train.pkl"), "rb") as f:
+                battery_train_data = pickle.load(f)
+            
+            # 创建图表显示所有特征
+            plt.figure(figsize=(15, 8))
+            
+            # 为每个特征生成不同颜色
+            colors = plt.cm.Set1(np.linspace(0, 1, len(feature_names)))
+            
+            # 绘制每个特征
+            for i, (feature_name, color) in enumerate(zip(feature_names, colors)):
+                # 对数据进行下采样以避免图表过于密集
+                sample_rate = max(1, len(battery_train_data) // 1000)
+                y_sampled = battery_train_data[::sample_rate, i]
+                time_points = np.arange(0, len(y_sampled)) * sample_rate
+                
+                plt.plot(time_points, y_sampled, color=color, linewidth=1, label=feature_name)
+            
+            plt.title(f'{battery_name} 所有特征趋势')
+            plt.xlabel('时间点')
+            plt.ylabel('特征值')
+            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+            
+        except Exception as e:
+            print(f"处理 {battery_name} 的所有特征可视化时出错: {e}")
+
+## 9. 结果分析（如果已有训练结果）
 # 检查是否存在训练结果
 output_path = 'output/NASA'
 if os.path.exists(output_path):

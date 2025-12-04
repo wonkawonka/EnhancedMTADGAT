@@ -279,6 +279,7 @@ def train_universal_model(args):
         attention_top_k=args.attention_top_k,
         corr_dim=args.corr_dim,
         corr_alpha=args.corr_alpha,
+        feature_att_trans=args.feature_att_trans,  # Add the new parameter
     )
     
     # 设置优化器和损失函数
@@ -496,6 +497,7 @@ if __name__ == "__main__":
             attention_top_k=args.attention_top_k,
             corr_dim=args.corr_dim,
             corr_alpha=args.corr_alpha,
+            feature_att_trans=args.feature_att_trans,  # Add the new parameter
         )
 
         optimizer = torch.optim.Adam(model.parameters(), lr=args.init_lr)

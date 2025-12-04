@@ -41,6 +41,8 @@ def get_parser():
     # GRU layer
     parser.add_argument("--gru_n_layers", type=int, default=1,help="GRU 的层数")
     parser.add_argument("--gru_hid_dim", type=int, default=150,help="GRU 隐藏层的维度")
+    # Simplified model option - only feature attention + transformer
+    parser.add_argument("--feature_att_trans", type=str2bool, default=False, help="仅使用特征注意力和Transformer，跳过时间注意力和GRU")
     # Forecasting Model
     parser.add_argument("--fc_n_layers", type=int, default=3)
     parser.add_argument("--fc_hid_dim", type=int, default=150)
