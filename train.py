@@ -277,6 +277,7 @@ def train_universal_model(args):
         use_transformer=args.use_transformer,
         top_k=args.top_k,
         attention_top_k=args.attention_top_k,
+        attention_sparse=args.attention_sparse,  # Add the missing parameter
         corr_dim=args.corr_dim,
         corr_alpha=args.corr_alpha,
         feature_att_trans=args.feature_att_trans,  # Add the new parameter
@@ -495,6 +496,7 @@ if __name__ == "__main__":
             use_transformer=args.use_transformer,
             top_k=args.top_k,
             attention_top_k=args.attention_top_k,
+            attention_sparse=args.attention_sparse,  # Add the missing parameter
             corr_dim=args.corr_dim,
             corr_alpha=args.corr_alpha,
             feature_att_trans=args.feature_att_trans,  # Add the new parameter

@@ -22,6 +22,11 @@ def get_parser():
     parser.add_argument('--attention_top_k', type=int, default=10, help='特征图注意力top_k连接')
     parser.add_argument('--corr_dim', type=int, default=256, help='相关性嵌入维度')
     parser.add_argument('--corr_alpha', type=int, default=20, help='相关性缩放因子')
+    # Simplified model option - only feature attention + transformer
+    parser.add_argument("--feature_att_trans", type=str2bool, default=True,
+                        help="仅使用特征注意力和Transformer，跳过时间注意力和GRU")
+    # Transformer layers
+    parser.add_argument("--trans_enc_layers", type=int, default=2, help="Transformer encoder的层数（这里是第一次改的gru前的transformer）")
     # -- Data params ---
     parser.add_argument('--dataset', type=str.upper, default='NASA',choices=['SMD', 'SMAP', 'MSL', 'NASA', 'CALCE','CALCE2', 'BMS'],help='dataset name')
     parser.add_argument("--group", type=str, default="1-1", help="指定SMD数据集中具体机器编号. <group_index>-<index>")
@@ -36,13 +41,11 @@ def get_parser():
     parser.add_argument("--use_gatv2", type=str2bool, default=True)
     parser.add_argument("--feat_gat_embed_dim", type=int, default=None,help="节点特征嵌入维度（GAT 层）")
     parser.add_argument("--time_gat_embed_dim", type=int, default=None,help="时间序列嵌入维度（GAT 层）")
-    # Transformer layers
-    parser.add_argument("--trans_enc_layers", type=int, default=2,help="Transformer encoder的层数")
+
     # GRU layer
     parser.add_argument("--gru_n_layers", type=int, default=1,help="GRU 的层数")
     parser.add_argument("--gru_hid_dim", type=int, default=150,help="GRU 隐藏层的维度")
-    # Simplified model option - only feature attention + transformer
-    parser.add_argument("--feature_att_trans", type=str2bool, default=False, help="仅使用特征注意力和Transformer，跳过时间注意力和GRU")
+
     # Forecasting Model
     parser.add_argument("--fc_n_layers", type=int, default=3)
     parser.add_argument("--fc_hid_dim", type=int, default=150)

@@ -56,7 +56,7 @@ class Enhanced_MTADGAT(nn.Module):
             trans_enc_layers=2,
             top_k=20,
             attention_top_k=10,
-            attention_sparse=True,
+            attention_sparse=False,  # 将默认值改为False以匹配args.py中的默认值
             corr_dim=40,
             corr_alpha=3,
             feature_att_trans=False  # 新参数用于简化模型
@@ -71,7 +71,7 @@ class Enhanced_MTADGAT(nn.Module):
         if correlation_aware:
             self.corr_adj = CorrelationLayer(n_features, top_k, corr_dim,corr_alpha)
         # 图注意力层
-        self.feature_gat = FeatureAttentionLayer(n_features, window_size, dropout, alpha, feat_gat_embed_dim, use_gatv2,attention_sparse,attention_top_k)
+        self.feature_gat = FeatureAttentionLayer(n_features, window_size, dropout, alpha, feat_gat_embed_dim, use_gatv2, attention_sparse, attention_top_k)
         
         # 仅在不使用简化模型时包含时间注意力层
         if not feature_att_trans:
