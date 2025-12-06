@@ -30,9 +30,9 @@ try:
     print(f"测试标签形状: {test_labels.shape}")
     
     # NASA 特征名称 (根据实际数据结构调整)
-    # 数据有6列（已经去除了时间戳），所以我们需要6个特征名
-    feature_names = ['capacity', 'voltage_measured', 'current_measured', 
-                     'temperature_measured', 'current_charge', 'voltage_charge']
+    # 数据有7列：[周期编号, 测量电压, 测量电流, 测量温度, 负载电流, 负载电压, 容量]
+    feature_names = ['cycle_number', 'voltage_measured', 'current_measured', 
+                     'temperature_measured', 'current_load', 'voltage_load', 'capacity']
     print(f"特征名称: {feature_names}")
 except FileNotFoundError as e:
     print(f"数据文件未找到: {e}")
@@ -60,12 +60,11 @@ if battery_names:  # 只有当存在电池单元时才绘图
             with open(os.path.join(prefix, f"NASA_{battery_name}_train.pkl"), "rb") as f:
                 battery_train_data = pickle.load(f)
             
-            # 为了避免图过于密集，我们可能需要对数据进行下采样
-            sample_rate = max(1, len(battery_train_data) // 1000)  # 最多显示1000个点
-            x_sampled = battery_train_data[::sample_rate, 1]  # 只显示容量数据 (索引1)
-            time_points = np.arange(0, len(x_sampled)) * sample_rate
+            # 不再进行下采样，显示全部数据点
+            x_data = battery_train_data[:, -1]  # 只显示容量数据 (索引-1或6)
+            time_points = np.arange(0, len(x_data))
             
-            plt.plot(time_points, x_sampled, color=color, linewidth=1, label=battery_name)
+            plt.plot(time_points, x_data, color=color, linewidth=1, label=battery_name)
         except Exception as e:
             print(f"处理 {battery_name} 时出错: {e}")
 
@@ -88,12 +87,11 @@ if battery_names:  # 只有当存在电池单元时才绘图
             with open(os.path.join(prefix, f"NASA_{battery_name}_test.pkl"), "rb") as f:
                 battery_test_data = pickle.load(f)
             
-            # 为了避免图过于密集，我们可能需要对数据进行下采样
-            sample_rate = max(1, len(battery_test_data) // 1000)  # 最多显示1000个点
-            x_sampled = battery_test_data[::sample_rate, 1]  # 只显示容量数据 (索引1)
-            time_points = np.arange(0, len(x_sampled)) * sample_rate
+            # 不再进行下采样，显示全部数据点
+            x_data = battery_test_data[:, -1]  # 只显示容量数据 (索引-1或6)
+            time_points = np.arange(0, len(x_data))
             
-            plt.plot(time_points, x_sampled, color=color, linewidth=1, label=battery_name)
+            plt.plot(time_points, x_data, color=color, linewidth=1, label=battery_name)
         except Exception as e:
             print(f"处理 {battery_name} 时出错: {e}")
 
@@ -147,20 +145,16 @@ if battery_names:  # 只有当存在电池单元时才绘图
             anomaly_points = np.where(battery_test_labels == 1)[0]
             normal_indices = np.where(battery_test_labels == 0)[0]
             
-            # 为了避免图过于密集，我们可能需要对数据进行下采样
-            sample_rate = max(1, len(battery_test_data) // 1000)  # 最多显示1000个点
-            x_sampled = battery_test_data[::sample_rate, 1]  # 只显示容量数据 (索引1)
-            time_points = np.arange(0, len(x_sampled)) * sample_rate
+            # 不再进行下采样，显示全部数据点
+            x_data = battery_test_data[:, -1]  # 只显示容量数据 (索引-1或6)
+            time_points = np.arange(0, len(x_data))
             
             # 绘制正常点
-            plt.scatter(time_points[normal_indices[::sample_rate]], 
-                       x_sampled[normal_indices[::sample_rate]], 
-                       c=[color], s=1, alpha=0.5, label=f'{battery_name} 正常点')
+            plt.scatter(time_points, x_data, c=[color], s=1, alpha=0.5, label=f'{battery_name} 正常点')
             
             # 绘制异常点
             if len(anomaly_points) > 0:
-                plt.scatter(time_points[anomaly_points[::sample_rate]], 
-                           x_sampled[anomaly_points[::sample_rate]], 
+                plt.scatter(anomaly_points, x_data[anomaly_points], 
                            c=[color], s=5, alpha=0.8, marker='x', label=f'{battery_name} 异常点')
         except Exception as e:
             print(f"处理 {battery_name} 时出错: {e}")
@@ -208,9 +202,25 @@ for battery_name in battery_names:
         print(f"  训练集形状: {battery_train_data.shape}")
         print(f"  测试集形状: {battery_test_data.shape}")
         
+        # 检查容量数据的有效性
+        train_capacities = battery_train_data[:, -1]
+        test_capacities = battery_test_data[:, -1]
+        
+        print(f"  训练集容量范围: [{np.min(train_capacities):.4f}, {np.max(train_capacities):.4f}]")
+        print(f"  测试集容量范围: [{np.min(test_capacities):.4f}, {np.max(test_capacities):.4f}]")
+        
+        # 检查是否存在非正值的容量
+        train_negative_capacities = np.sum(train_capacities <= 0)
+        test_negative_capacities = np.sum(test_capacities <= 0)
+        
+        if train_negative_capacities > 0:
+            print(f"  警告: 训练集中发现 {train_negative_capacities} 个非正值容量")
+        if test_negative_capacities > 0:
+            print(f"  警告: 测试集中发现 {test_negative_capacities} 个非正值容量")
+        
         # 绘制该电池单元的训练集容量曲线
         plt.figure(figsize=(10, 4))
-        plt.plot(battery_train_data[:, 1], linewidth=1)  # 容量数据在索引1
+        plt.plot(train_capacities, linewidth=1)  # 容量数据在索引-1（最后一列）
         plt.title(f'{battery_name} 训练集容量变化趋势')
         plt.xlabel('时间点')
         plt.ylabel('容量')
@@ -219,7 +229,7 @@ for battery_name in battery_names:
         
         # 绘制该电池单元的测试集容量曲线
         plt.figure(figsize=(10, 4))
-        plt.plot(battery_test_data[:, 1], linewidth=1)  # 容量数据在索引1
+        plt.plot(test_capacities, linewidth=1)  # 容量数据在索引-1（最后一列）
         plt.title(f'{battery_name} 测试集容量变化趋势')
         plt.xlabel('时间点')
         plt.ylabel('容量')
@@ -246,12 +256,11 @@ if battery_names:
             
             # 绘制每个特征
             for i, (feature_name, color) in enumerate(zip(feature_names, colors)):
-                # 对数据进行下采样以避免图表过于密集
-                sample_rate = max(1, len(battery_train_data) // 1000)
-                y_sampled = battery_train_data[::sample_rate, i]
-                time_points = np.arange(0, len(y_sampled)) * sample_rate
+                # 不再进行下采样，显示全部数据点
+                y_data = battery_train_data[:, i]
+                time_points = np.arange(0, len(y_data))
                 
-                plt.plot(time_points, y_sampled, color=color, linewidth=1, label=feature_name)
+                plt.plot(time_points, y_data, color=color, linewidth=1, label=feature_name)
             
             plt.title(f'{battery_name} 所有特征趋势')
             plt.xlabel('时间点')
@@ -276,16 +285,24 @@ if os.path.exists(output_path):
         # 显示全局预测结果
         plotter.plot_global_predictions(type="test")
 
-        # 显示各特征的预测结果
-        for i in range(get_data_dim("NASA")):
-            plotter.plot_feature(
-                feature=i,
-                plot_train=True,
-                plot_errors=True,
-                plot_feature_anom=True,
-                start=0,
-                end=min(2000, len(plotter.test_output))
-            )
+        # 显示各特征的预测结果 (修复索引错误)
+        data_dim = get_data_dim("NASA")
+        if data_dim is not None:
+            for i in range(data_dim):
+                try:
+                    plotter.plot_feature(
+                        feature=i,
+                        plot_train=True,
+                        plot_errors=True,
+                        plot_feature_anom=True,
+                        start=0,
+                        end=min(2000, len(plotter.test_output))
+                    )
+                except Exception as e:
+                    print(f"绘制特征 {i} 时出错: {e}")
+                    continue
+        else:
+            print("无法获取NASA数据维度信息")
     except Exception as e:
         print(f"加载结果时出错: {e}")
 else:

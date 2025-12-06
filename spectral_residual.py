@@ -120,11 +120,22 @@ def apply_spectral_residual_cleaning(data, threshold=3.0):
         
         # 替换异常点
         if len(anomaly_indices) > 0:
+            # 打印异常值处理前后的对比
+            print(f"  特征 {feature_idx}: 检测到 {len(anomaly_indices)} 个异常点")
+            # 选取前几个异常点进行详细对比
+            sample_count = min(3, len(anomaly_indices))
+            for i in range(sample_count):
+                idx = anomaly_indices[i]
+                print(f"    异常点 {idx}: 原始值={feature_series[idx]:.6f}")
+            
             cleaned_feature = replace_anomalies_with_neighbors(feature_series, anomaly_indices)
             cleaned_data[:, feature_idx] = cleaned_feature
             
-            # 打印处理信息
-            print(f"  特征 {feature_idx}: 检测到 {len(anomaly_indices)} 个异常点并已完成替换")
+            # 再次打印处理后的值进行对比
+            print(f"  特征 {feature_idx}: 已完成异常点替换")
+            for i in range(sample_count):
+                idx = anomaly_indices[i]
+                print(f"    异常点 {idx}: 原始值={feature_series[idx]:.6f} -> 替换后={cleaned_feature[idx]:.6f}")
         else:
             print(f"  特征 {feature_idx}: 未检测到异常点")
             

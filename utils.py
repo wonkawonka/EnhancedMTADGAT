@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import torch
+from scipy.interpolate import interp1d
 from sklearn.preprocessing import MinMaxScaler, RobustScaler
+from sklearn.metrics import roc_curve, auc
 from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler
 
 
@@ -49,8 +51,8 @@ def get_data_dim(dataset):
         return 38
     elif dataset == "NASA":
         # NASA电池数据集的特征维度 (不包括时间戳)
-        return 6  # capacity, voltage_measured, current_measured, 
-                 # temperature_measured, current_charge, voltage_charge
+        return 7  # cycle_number, voltage_measured, current_measured, 
+                  # temperature_measured, current_charge, voltage_charge, capacity
     elif dataset in ["CALCE", "CALCE2"]:
         # CALCE数据集是单特征时间序列
         return 1
@@ -74,8 +76,8 @@ def get_target_dims(dataset):
     elif dataset == "SMD":
         return None
     elif dataset == "NASA":
-        # 对于NASA电池数据集，我们主要关注容量预测（索引0）
-        return [0]  # capacity是最重要的特征，用于预测电池退化趋势
+        # 对于NASA电池数据集，我们主要关注容量预测（索引6，最后一列）
+        return [6]  # capacity是最重要的特征，用于预测电池退化趋势
     elif dataset in ["CALCE", "CALCE2"]:
         # 对于CALCE数据集，我们关注单个特征
         return [0]
@@ -207,6 +209,21 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
         if test_data is not None and test_data.ndim == 3:
             num_cycles, max_len, features = test_data.shape
             test_data = test_data.reshape(num_cycles * max_len, features)
+            
+        # 加载容量信息用于评估
+        try:
+            f = open(os.path.join(prefix, dataset + "_capacities.pkl"), "rb")
+            capacities = pickle.load(f)
+            f.close()
+        except (KeyError, FileNotFoundError):
+            pkl_files = glob.glob(os.path.join(prefix, "NASA_*_capacities.pkl"))
+            if not pkl_files:
+                capacities = None
+            else:
+                battery_file = pkl_files[0]
+                f = open(battery_file, "rb")
+                capacities = pickle.load(f)
+                f.close()
     elif dataset in ["CALCE", "CALCE2"]:
         # 统一处理CALCE和CALCE2数据集
         # 使用训练/测试划分方式加载数据
@@ -337,6 +354,8 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
         except (KeyError, FileNotFoundError):
             test_label = None
 
+    # 4. 基于训练集统计量进行归一化，并同步应用到测试集
+    scaler = None
     if normalize:
         train_data, scaler = normalize_data(train_data, scaler=None)
         if test_data is not None:
@@ -583,3 +602,122 @@ def evaluate_without_labels(anomaly_scores, threshold_percentile=95):
     anomalies = np.where(anomaly_scores >= threshold)[0]
     
     return anomalies, threshold
+
+
+def evaluate_with_capacities(anomaly_scores, capacities, threshold=0.2):
+    """
+    使用容量信息评估异常检测结果
+    :param anomaly_scores: 异常分数
+    :param capacities: 容量值数组
+    :param threshold: 容量下降阈值（默认0.2，即20%）
+    :return: ROC曲线数据和AUC值
+    """
+    if len(anomaly_scores) != len(capacities):
+        raise ValueError("异常分数和容量数组长度必须相同")
+    
+    # 基于容量衰减创建标签
+    initial_capacity = capacities[0]
+    capacity_decay_rate = (initial_capacity - capacities) / initial_capacity
+    labels = (capacity_decay_rate > threshold).astype(int)
+    
+    # 计算ROC曲线
+    fpr, tpr, thresholds = roc_curve(labels, anomaly_scores)
+    roc_auc = auc(fpr, tpr)
+    
+    return fpr, tpr, thresholds, roc_auc, labels
+
+
+def plot_roc_curve(fpr, tpr, roc_auc, save_path=""):
+    """
+    绘制ROC曲线
+    :param fpr: 假正率
+    :param tpr: 真正率
+    :param roc_auc: AUC值
+    :param save_path: 保存路径
+    """
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic')
+    plt.legend(loc="lower right")
+    if save_path:
+        plt.savefig(f"{save_path}/roc_curve.png", bbox_inches="tight")
+    plt.show()
+    plt.close()
+
+
+def plot_anomaly_score_vs_capacity(anomaly_scores, capacities, save_path=""):
+    """
+    绘制异常分数与容量的关系图
+    :param anomaly_scores: 异常分数
+    :param capacities: 容量值
+    :param save_path: 保存路径
+    """
+    plt.figure(figsize=(12, 6))
+    plt.plot(capacities, label='Capacity', color='blue')
+    plt.ylabel('Capacity')
+    plt.twinx().plot(anomaly_scores, label='Anomaly Score', color='red')
+    plt.ylabel('Anomaly Score')
+    plt.xlabel('Time')
+    plt.title('Anomaly Score vs Capacity')
+    plt.legend()
+    if save_path:
+        plt.savefig(f"{save_path}/anomaly_score_vs_capacity.png", bbox_inches="tight")
+    plt.show()
+    plt.close()
+
+
+def interpolate_capacity_to_timesteps(cycle_capacities, cycle_lengths, cycle_types):
+    """
+    将周期级的容量值插值到每个时间步（仅对充电周期进行插值）
+    :param cycle_capacities: 每个周期的容量值数组
+    :param cycle_lengths: 每个周期的时间步数
+    :param cycle_types: 每个周期的类型（charge/discharge）
+    :return: 插值后的每个时间步的容量值
+    """
+    total_steps = sum(cycle_lengths)
+    interpolated_capacities = np.zeros(total_steps, dtype=np.float32)
+    
+    step_idx = 0
+    charge_cycle_points = []  # 充电周期的中心点和容量值
+    charge_cycle_indices = []  # 充电周期在数组中的索引
+    
+    # 遍历所有周期，记录充电周期信息
+    for i, (capacity, length, cycle_type) in enumerate(zip(cycle_capacities, cycle_lengths, cycle_types)):
+        if cycle_type == 'charge':
+            # 记录充电周期的中心点和容量值
+            center_point = step_idx + length // 2
+            # 只有当容量值有效时才添加到插值点中
+            if not np.isnan(capacity) and capacity > 0:
+                charge_cycle_points.append((center_point, capacity))
+                charge_cycle_indices.append(i)
+        
+        # 对于所有周期，先填入周期平均容量值
+        interpolated_capacities[step_idx:step_idx+length] = capacity if not np.isnan(capacity) else 0
+        step_idx += length
+    
+    # 对充电周期进行插值处理
+    if len(charge_cycle_points) > 1:
+        # 提取充电周期的中心点和容量值
+        centers = [point[0] for point in charge_cycle_points]
+        capacities = [point[1] for point in charge_cycle_points]
+        
+        # 创建插值函数
+        f = interp1d(centers, capacities, kind='linear', fill_value='extrapolate')
+        
+        # 对充电周期覆盖的区域进行插值
+        for i in range(len(charge_cycle_indices)):
+            cycle_idx = charge_cycle_indices[i]
+            start_step = sum(cycle_lengths[:cycle_idx])
+            end_step = start_step + cycle_lengths[cycle_idx]
+            
+            # 在充电周期范围内进行插值
+            cycle_steps = np.arange(start_step, end_step)
+            interpolated_values = f(cycle_steps)
+            interpolated_capacities[start_step:end_step] = interpolated_values
+    
+    return interpolated_capacities
