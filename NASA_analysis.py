@@ -20,6 +20,10 @@ sys.path.insert(0, '')
 from utils import get_data, get_data_dim
 from plotting import Plotter
 
+# 创建保存路径
+save_path = "output/NASA/analysis"
+os.makedirs(save_path, exist_ok=True)
+
 ## 1. 加载 NASA 数据集
 # 加载 NASA 数据集 (以 B0049 为例)
 try:
@@ -74,6 +78,7 @@ if battery_names:  # 只有当存在电池单元时才绘图
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
+    plt.savefig(f"{save_path}/训练集数据趋势对比.png", bbox_inches="tight", dpi=300)
     plt.show()
 
 ## 3. 测试集数据趋势可视化
@@ -101,6 +106,7 @@ if battery_names:  # 只有当存在电池单元时才绘图
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
+    plt.savefig(f"{save_path}/测试集数据趋势对比.png", bbox_inches="tight", dpi=300)
     plt.show()
 
 ## 4. 训练集与测试集数据分布对比
@@ -125,6 +131,7 @@ for i, (ax, feature_name) in enumerate(zip(axes[1], feature_names)):
     ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
+plt.savefig(f"{save_path}/训练集与测试集数据分布对比.png", bbox_inches="tight", dpi=300)
 plt.show()
 
 ## 5. 异常点详细分析
@@ -165,6 +172,7 @@ if battery_names:  # 只有当存在电池单元时才绘图
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
+    plt.savefig(f"{save_path}/测试集异常点分布.png", bbox_inches="tight", dpi=300)
     plt.show()
 
 ## 6. 特征间相关性分析
@@ -176,6 +184,7 @@ plt.figure(figsize=(14, 12))
 sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0,
             square=True, linewidths=0.5)
 plt.title('NASA 训练集特征相关性热力图')
+plt.savefig(f"{save_path}/训练集特征相关性热力图.png", bbox_inches="tight", dpi=300)
 plt.show()
 
 # 分析测试集特征间的相关性
@@ -186,11 +195,15 @@ plt.figure(figsize=(14, 12))
 sns.heatmap(correlation_matrix_test, annot=True, cmap='coolwarm', center=0,
             square=True, linewidths=0.5)
 plt.title('NASA 测试集特征相关性热力图')
+plt.savefig(f"{save_path}/测试集特征相关性热力图.png", bbox_inches="tight", dpi=300)
 plt.show()
 
 ## 7. 各个电池单元数据概览
 # 逐个显示各个电池单元的数据
 for battery_name in battery_names:
+    battery_save_path = f"{save_path}/{battery_name}"
+    os.makedirs(battery_save_path, exist_ok=True)
+    
     try:
         with open(os.path.join(prefix, f"NASA_{battery_name}_train.pkl"), "rb") as f:
             battery_train_data = pickle.load(f)
@@ -225,6 +238,7 @@ for battery_name in battery_names:
         plt.xlabel('时间点')
         plt.ylabel('容量')
         plt.grid(True, alpha=0.3)
+        plt.savefig(f"{battery_save_path}/训练集容量变化趋势.png", bbox_inches="tight", dpi=300)
         plt.show()
         
         # 绘制该电池单元的测试集容量曲线
@@ -234,6 +248,7 @@ for battery_name in battery_names:
         plt.xlabel('时间点')
         plt.ylabel('容量')
         plt.grid(True, alpha=0.3)
+        plt.savefig(f"{battery_save_path}/测试集容量变化趋势.png", bbox_inches="tight", dpi=300)
         plt.show()
         
     except Exception as e:
@@ -244,6 +259,9 @@ for battery_name in battery_names:
 if battery_names:
     print("\n正在生成每个电池单元的所有特征趋势可视化...")
     for battery_name in battery_names:
+        battery_save_path = f"{save_path}/{battery_name}"
+        os.makedirs(battery_save_path, exist_ok=True)
+        
         try:
             with open(os.path.join(prefix, f"NASA_{battery_name}_train.pkl"), "rb") as f:
                 battery_train_data = pickle.load(f)
@@ -268,6 +286,7 @@ if battery_names:
             plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
             plt.grid(True, alpha=0.3)
             plt.tight_layout()
+            plt.savefig(f"{battery_save_path}/所有特征趋势.png", bbox_inches="tight", dpi=300)
             plt.show()
             
         except Exception as e:

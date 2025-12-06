@@ -202,45 +202,50 @@ class Plotter:
         self.test_output = test_output
 
     def result_summary(self):
-        # For universal models, the summary file is in the entity subdirectory
-        if 'universal_model' in self.result_path:
-            # Check if we're already in an entity directory
-            path_leaf = os.path.basename(self.result_path.rstrip('/\\'))
-            if path_leaf.isdigit():
-                # We're already in an entity directory
-                path = f"{self.result_path}/summary.txt"
-            else:
-                # We need to find the entity directory
-                entity_dirs = [d for d in os.listdir(self.result_path) 
-                              if os.path.isdir(os.path.join(self.result_path, d)) and d.isdigit()]
-                if entity_dirs:
-                    # Use the first entity directory
-                    first_entity = sorted(entity_dirs, key=int)[0]
-                    path = f"{self.result_path}/{first_entity}/summary.txt"
+        if 'SMAP' in self.result_path or 'MSL' in self.result_path or 'SMD' in self.result_path:
+            # For server machine datasets
+            path = f"{self.result_path}/summary.txt"
+        elif 'CALCE' in self.result_path or 'BMS' in self.result_path or 'NASA' in self.result_path:
+            # For battery datasets, check if it's a universal model path
+            if 'universal_model' in self.result_path:
+                # For universal models, summary might be in the parent directory or in entity directories
+                parent_summary = f"{self.result_path}/summary.txt"
+                if os.path.exists(parent_summary):
+                    path = parent_summary
                 else:
-                    path = f"{self.result_path}/summary.txt"
+                    # Look for summary in entity directories
+                    entity_dirs = [d for d in os.listdir(self.result_path) 
+                                  if os.path.isdir(os.path.join(self.result_path, d)) and (d.isdigit() or d.startswith('Cell'))]
+                    if entity_dirs:
+                        # Use the first entity's summary
+                        if all(d.isdigit() for d in entity_dirs):
+                            first_entity = sorted(entity_dirs, key=int)[0]
+                        else:
+                            first_entity = sorted(entity_dirs, key=lambda x: int(x.replace('Cell', '')) if x.startswith('Cell') else int(x))[0]
+                        path = f"{self.result_path}/{first_entity}/summary.txt"
+                    else:
+                        path = parent_summary  # fallback
+            else:
+                path = f"{self.result_path}/summary.txt"
         else:
             path = f"{self.result_path}/summary.txt"
-            
-        if not os.path.exists(path):
-            print(f"Folder {self.result_path} do not have a summary.txt file")
-            return
-        try:
-            print("Result summary:")
-            with open(path) as f:
-                result_dict = json.load(f)
-                epsilon_result = result_dict["epsilon_result"]
-                pot_result = result_dict["pot_result"]
-                bf_results = result_dict["bf_result"]
-                print(f'Epsilon:')
-                print(f'\t\tprecision: {epsilon_result["precision"]:.2f}, recall: {epsilon_result["recall"]:.2f}, F1: {epsilon_result["f1"]:.2f}')
-                print(f'POT:')
-                print(f'\t\tprecision: {pot_result["precision"]:.2f}, recall: {pot_result["recall"]:.2f}, F1: {pot_result["f1"]:.2f}')
-                print(f'Brute-Force:')
-                print(f'\t\tprecision: {bf_results["precision"]:.2f}, recall: {bf_results["recall"]:.2f}, F1: {bf_results["f1"]:.2f}')
 
-        except FileNotFoundError as e:
-            print(e)
+        if not os.path.exists(path):
+            print(f"Summary file not found at {path}")
+            return
+
+        with open(path) as f:
+            summary = json.load(f)
+            
+        print("------------------------------------------")
+        print("------------ Evaluation Summary -----------")
+        print("------------------------------------------")
+
+        for key, value in summary.items():
+            print(f"{key}:")
+            for k, v in value.items():
+                print(f"\t{k}: {v}")
+            print()
 
     def create_shapes(self, ranges, sequence_type, _min, _max, plot_values, is_test=True, xref=None, yref=None):
         """
@@ -303,140 +308,331 @@ class Plotter:
 
         return a_seqs
 
-    def plot_feature(self, feature, plot_train=False, plot_errors=True, plot_feature_anom=False, start=None, end=None):
+    def plot_train_test_errors(self, plot_train=False):
         """
-        Plot forecasting, reconstruction, true value of a specific feature (feature),
-        along with the anomaly score for that feature
+        Plot train/test true/predicted values for all features. Plots are saved to result directory.
+        :param plot_train: If true, plot training data. If false, plot test data
         """
-
-        test_copy = self.test_output.copy()
-
-        if start is not None and end is not None:
-            assert start < end
-        if start is not None:
-            test_copy = test_copy.iloc[start:, :]
-        if end is not None:
-            start = 0 if start is None else start
-            test_copy = test_copy.iloc[: end - start, :]
-
-        plot_data = [test_copy]
 
         if plot_train:
-            train_copy = self.train_output.copy()
-            plot_data.append(train_copy)
+            output = self.train_output
+            title_prefix = "Train"
+        else:
+            output = self.test_output
+            title_prefix = "Test"
 
-        for nr, data_copy in enumerate(plot_data):
-            is_test = nr == 0
+        for p_col in self.pred_cols:
+            y_true = output[p_col]
+            y_pred = output[f'{p_col}|Pred']
 
-            if feature < 0 or f"Forecast_{feature}" not in data_copy.columns:
-                raise Exception(f"Channel {feature} not present in data.")
-
-            i = feature
-            plot_values = {
-                "timestamp": data_copy["timestamp"].values,
-                "y_forecast": data_copy[f"Forecast_{i}"].values,
-                "y_recon": data_copy[f"Recon_{i}"].values,
-                "y_true": data_copy[f"True_{i}"].values,
-                "errors": data_copy[f"A_Score_{i}"].values,
-                "threshold": data_copy[f"Thresh_{i}"]
-            }
-
-            anomaly_sequences = {
-                "pred": self.get_anomaly_sequences(data_copy[f"A_Pred_{i}"].values),
-                "true": self.get_anomaly_sequences(data_copy["A_True_Global"].values),
-            }
-
-            if is_test and start is not None:
-                anomaly_sequences['pred'] = [[s+start, e+start] for [s, e] in anomaly_sequences['pred']]
-                anomaly_sequences['true'] = [[s+start, e+start] for [s, e] in anomaly_sequences['true']]
-
-            y_min = 1.1 * plot_values["y_true"].min()
-            y_max = 1.1 * plot_values["y_true"].max()
-            e_max = 1.5 * plot_values["errors"].max()
-
-            y_shapes = self.create_shapes(anomaly_sequences["pred"], "predicted", y_min, y_max, plot_values, is_test=is_test)
-            e_shapes = self.create_shapes(anomaly_sequences["pred"], "predicted", 0, e_max, plot_values, is_test=is_test)
-            if self.labels_available and ('SMAP' in self.result_path or 'MSL' in self.result_path):
-                y_shapes += self.create_shapes(anomaly_sequences["true"], "true", y_min, y_max, plot_values, is_test=is_test)
-                e_shapes += self.create_shapes(anomaly_sequences["true"], "true", 0, e_max, plot_values, is_test=is_test)
-
-            y_df = pd.DataFrame(
-                {
-                    "timestamp": plot_values["timestamp"].reshape(-1,),
-                    "y_forecast": plot_values["y_forecast"].reshape(-1,),
-                    "y_recon": plot_values["y_recon"].reshape(-1,),
-                    "y_true": plot_values["y_true"].reshape(-1,)
-                }
+            trace_true = go.Scatter(
+                x=output["timestamp"],
+                y=y_true,
+                mode="lines",
+                name="True",
+                line=dict(color='blue')
             )
 
-            e_df = pd.DataFrame(
-                {
-                    "timestamp": plot_values["timestamp"],
-                    "e_s": plot_values["errors"].reshape(-1,),
-                    "threshold": plot_values["threshold"],
-                }
+            trace_pred = go.Scatter(
+                x=output["timestamp"],
+                y=y_pred,
+                mode="lines",
+                name="Predicted",
+                line=dict(color='red')
             )
 
-            data_type = "Test data" if is_test else "Train data"
-            y_layout = {
-                "title": f"{data_type} | Forecast & reconstruction vs true value for {self.pred_cols[i] if self.pred_cols is not None else ''} ",
-                "showlegend": True,
-                "height": 400,
-                "width": 1100,
-            }
+            layout = go.Layout(
+                title=f"{title_prefix} {p_col} Predictions",
+                xaxis=dict(title="Timestamp"),
+                yaxis=dict(title=p_col),
+                hovermode='closest',
+                showlegend=True
+            )
 
-            e_layout = {
-                "title": f"{data_type} | Error for {self.pred_cols[i] if self.pred_cols is not None else ''}",
-                #"yaxis": dict(range=[0, e_max]),
-                "height": 400,
-                "width": 1100,
-            }
+            fig = go.Figure(data=[trace_true, trace_pred], layout=layout)
+            
+            # Save the plot
+            save_path = f"{self.result_path}/{title_prefix.lower()}_{p_col}_predictions.html"
+            py.offline.plot(fig, filename=save_path, auto_open=False)
+            print(f"{title_prefix} {p_col} predictions plot saved to {save_path}")
 
-            if plot_feature_anom:
-                y_layout["shapes"] = y_shapes
-                e_layout["shapes"] = e_shapes
+    def plot_errors(self, plot_train=False):
+        """
+        Plot anomalies and anomaly scores for all features. Plots are saved to result directory.
+        :param plot_train: If true, plot training data. If false, plot test data
+        """
 
-            lines = [
+        if plot_train:
+            output = self.train_output
+            title_prefix = "Train"
+        else:
+            output = self.test_output
+            title_prefix = "Test"
+
+        for p_col in self.pred_cols:
+            # Plot anomaly scores
+            trace_score = go.Scatter(
+                x=output["timestamp"],
+                y=output[f"A_Score_{p_col.split('_')[1] if '_' in p_col else '0'}"],
+                mode="lines",
+                name="Anomaly Score",
+                line=dict(color='blue')
+            )
+
+            # Plot threshold
+            trace_thresh = go.Scatter(
+                x=output["timestamp"],
+                y=output[f"Thresh_{p_col.split('_')[1] if '_' in p_col else '0'}"],
+                mode="lines",
+                name="Threshold",
+                line=dict(color='red')
+            )
+
+            layout = go.Layout(
+                title=f"{title_prefix} {p_col} Anomaly Scores",
+                xaxis=dict(title="Timestamp"),
+                yaxis=dict(title="Score"),
+                hovermode='closest',
+                showlegend=True
+            )
+
+            fig = go.Figure(data=[trace_score, trace_thresh], layout=layout)
+            
+            # Save the plot
+            save_path = f"{self.result_path}/{title_prefix.lower()}_{p_col}_anomaly_scores.html"
+            py.offline.plot(fig, filename=save_path, auto_open=False)
+            print(f"{title_prefix} {p_col} anomaly scores plot saved to {save_path}")
+
+            # Plot predicted anomalies
+            trace_pred_anom = go.Scatter(
+                x=output["timestamp"],
+                y=output[f"A_Pred_{p_col.split('_')[1] if '_' in p_col else '0'}"],
+                mode="markers",
+                name="Predicted Anomalies",
+                marker=dict(color='red', size=8)
+            )
+
+            # Plot true anomalies if available
+            if self.labels_available:
+                trace_true_anom = go.Scatter(
+                    x=output["timestamp"],
+                    y=output[f"A_True_{p_col.split('_')[1] if '_' in p_col else '0'}"],
+                    mode="markers",
+                    name="True Anomalies",
+                    marker=dict(color='orange', size=8)
+                )
+                data = [trace_pred_anom, trace_true_anom]
+            else:
+                data = [trace_pred_anom]
+
+            layout = go.Layout(
+                title=f"{title_prefix} {p_col} Anomalies",
+                xaxis=dict(title="Timestamp"),
+                yaxis=dict(title="Anomaly"),
+                hovermode='closest',
+                showlegend=True
+            )
+
+            fig = go.Figure(data=data, layout=layout)
+            
+            # Save the plot
+            save_path = f"{self.result_path}/{title_prefix.lower()}_{p_col}_anomalies.html"
+            py.offline.plot(fig, filename=save_path, auto_open=False)
+            print(f"{title_prefix} {p_col} anomalies plot saved to {save_path}")
+
+    def plot_global_predictions(self, type="test"):
+        """
+        Plot global predictions, anomaly scores, and anomalies
+        :param type: "train" or "test"
+        """
+        if type == "train":
+            output = self.train_output
+            title_prefix = "Train"
+        else:
+            output = self.test_output
+            title_prefix = "Test"
+
+        # Plot global predictions
+        fig = make_subplots(rows=2, cols=1, subplot_titles=(f"{title_prefix} Global Predictions", f"{title_prefix} Global Anomaly Scores"))
+
+        # First subplot - Global Predictions
+        for p_col in self.pred_cols:
+            fig.add_trace(
                 go.Scatter(
-                    x=y_df["timestamp"],
-                    y=y_df["y_true"],
-                    line_color="rgb(0, 204, 150, 0.5)",
-                    name="y_true",
-                    line=dict(width=2)),
+                    x=output["timestamp"],
+                    y=output[p_col],
+                    mode="lines",
+                    name=f"{p_col} True",
+                    line=dict(color='blue')
+                ),
+                row=1, col=1
+            )
+            
+            fig.add_trace(
                 go.Scatter(
-                    x=y_df["timestamp"],
-                    y=y_df["y_forecast"],
-                    line_color="rgb(255, 127, 14, 1)",
-                    name="y_forecast",
-                    line=dict(width=2)),
+                    x=output["timestamp"],
+                    y=output[f'{p_col}|Pred'],
+                    mode="lines",
+                    name=f"{p_col} Predicted",
+                    line=dict(color='red')
+                ),
+                row=1, col=1
+            )
+
+        # Second subplot - Global Anomaly Scores
+        fig.add_trace(
+            go.Scatter(
+                x=output["timestamp"],
+                y=output["A_Score_Global"],
+                mode="lines",
+                name="Global Anomaly Score",
+                line=dict(color='blue')
+            ),
+            row=2, col=1
+        )
+        
+        fig.add_trace(
+            go.Scatter(
+                x=output["timestamp"],
+                y=output["Thresh_Global"],
+                mode="lines",
+                name="Threshold",
+                line=dict(color='red')
+            ),
+            row=2, col=1
+        )
+
+        fig.update_xaxes(title_text="Timestamp", row=1, col=1)
+        fig.update_xaxes(title_text="Timestamp", row=2, col=1)
+        fig.update_yaxes(title_text="Value", row=1, col=1)
+        fig.update_yaxes(title_text="Score", row=2, col=1)
+        fig.update_layout(height=800, title_text=f"{title_prefix} Global Results")
+
+        # Save the plot
+        save_path = f"{self.result_path}/{title_prefix.lower()}_global_results.html"
+        py.offline.plot(fig, filename=save_path, auto_open=False)
+        print(f"{title_prefix} global results plot saved to {save_path}")
+
+        # Plot anomalies separately
+        fig_anom = go.Figure()
+
+        # Plot predicted anomalies
+        fig_anom.add_trace(
+            go.Scatter(
+                x=output["timestamp"],
+                y=output["A_Pred_Global"],
+                mode="markers",
+                name="Predicted Anomalies",
+                marker=dict(color='red', size=8)
+            )
+        )
+
+        # Plot true anomalies if available
+        if self.labels_available:
+            fig_anom.add_trace(
                 go.Scatter(
-                    x=y_df["timestamp"],
-                    y=y_df["y_recon"],
-                    line_color="rgb(31, 119, 180, 1)",
-                    name="y_recon",
-                    line=dict(width=2)),
-            ]
+                    x=output["timestamp"],
+                    y=output["A_True_Global"],
+                    mode="markers",
+                    name="True Anomalies",
+                    marker=dict(color='orange', size=8)
+                )
+            )
 
-            fig = go.Figure(data=lines, layout=y_layout)
-            py.offline.iplot(fig)
+        fig_anom.update_layout(
+            title=f"{title_prefix} Global Anomalies",
+            xaxis=dict(title="Timestamp"),
+            yaxis=dict(title="Anomaly"),
+            hovermode='closest',
+            showlegend=True
+        )
 
-            e_lines = [
-                go.Scatter(
-                    x=e_df["timestamp"],
-                    y=e_df["e_s"],
-                    name="Error",
-                    line=dict(color="red", width=1))]
-            if plot_feature_anom:
-                e_lines.append(
-                    go.Scatter(
-                        x=e_df["timestamp"],
-                        y=e_df["threshold"],
-                        name="Threshold",
-                        line=dict(color="black", width=1, dash="dash")))
+        # Save the plot
+        save_path = f"{self.result_path}/{title_prefix.lower()}_global_anomalies.html"
+        py.offline.plot(fig_anom, filename=save_path, auto_open=False)
+        print(f"{title_prefix} global anomalies plot saved to {save_path}")
 
-            if plot_errors:
-                e_fig = go.Figure(data=e_lines, layout=e_layout)
-                py.offline.iplot(e_fig)
+    def plot_feature(self, feature=0, plot_train=False, plot_errors=False, plot_feature_anom=False, start=0, end=-1):
+        """
+        Plot a single feature
+        :param feature: feature index
+        :param plot_train: If true, plot training data. If false, plot test data
+        :param plot_errors: If true, plot anomaly scores
+        :param plot_feature_anom: If true, plot feature-level anomalies
+        :param start: start index
+        :param end: end index
+        """
+        if plot_train:
+            output = self.train_output
+            title_prefix = "Train"
+        else:
+            output = self.test_output
+            title_prefix = "Test"
+
+        if end == -1:
+            end = len(output)
+
+        output = output.iloc[start:end]
+
+        if 'SMAP' in self.result_path or 'MSL' in self.result_path:
+            p_col = "feat_1"
+        elif "SMD" in self.result_path:
+            p_col = f"feat_{feature}"
+        elif 'CALCE' in self.result_path:
+            p_col = "capacity"
+        elif 'BMS' in self.result_path:
+            # For BMS, we have 5 features: SYS_Vol, SYS_I, SYS_DSOC, SYS_SOH, SYS_Vmax
+            bms_features = ["SYS_Vol", "SYS_I", "SYS_DSOC", "SYS_SOH", "SYS_Vmax"]
+            p_col = bms_features[feature] if feature < len(bms_features) else bms_features[0]
+        else:  # Default case
+            p_col = f"feat_{feature}"
+
+        # Create figure with secondary y-axis for predictions
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+        # Add traces
+        fig.add_trace(
+            go.Scatter(x=output["timestamp"], y=output[p_col], name="True"),
+            secondary_y=False,
+        )
+
+        fig.add_trace(
+            go.Scatter(x=output["timestamp"], y=output[f'{p_col}|Pred'], name="Predicted"),
+            secondary_y=False,
+        )
+
+        if plot_errors:
+            fig.add_trace(
+                go.Scatter(x=output["timestamp"], y=output[f"A_Score_{feature}"], name="Anomaly Score"),
+                secondary_y=True,
+            )
+
+        if plot_feature_anom:
+            fig.add_trace(
+                go.Scatter(x=output["timestamp"], y=output[f"A_Pred_{feature}"], mode="markers", name="Predicted Anomaly"),
+                secondary_y=False,
+            )
+
+            if self.labels_available:
+                fig.add_trace(
+                    go.Scatter(x=output["timestamp"], y=output[f"A_True_{feature}"], mode="markers", name="True Anomaly"),
+                    secondary_y=False,
+                )
+
+        # Add figure title
+        fig.update_layout(title_text=f"{title_prefix} Feature {feature} ({p_col})")
+
+        # Set x-axis title
+        fig.update_xaxes(title_text="Timestamp")
+
+        # Set y-axes titles
+        fig.update_yaxes(title_text="Value", secondary_y=False)
+        fig.update_yaxes(title_text="Score", secondary_y=True)
+
+        # Save the plot
+        save_path = f"{self.result_path}/{title_prefix.lower()}_feature_{feature}.html"
+        py.offline.plot(fig, filename=save_path, auto_open=False)
+        print(f"{title_prefix} feature {feature} plot saved to {save_path}")
 
     def plot_all_features(self, start=None, end=None, type="test"):
         """
@@ -585,29 +781,6 @@ class Plotter:
         fig.update_yaxes(ticks="", showticklabels=False, showline=True, mirror=True)
         fig.update_xaxes(ticks="", showticklabels=False, showline=True, mirror=True)
         py.offline.iplot(fig)
-
-    def plot_global_predictions(self, type="test"):
-        if type == "test":
-            data_copy = self.test_output.copy()
-        else:
-            data_copy = self.train_output.copy()
-
-        fig, axs = plt.subplots(
-            3,
-            figsize=(30, 10),
-            sharex=True,
-        )
-        axs[0].plot(data_copy[f"A_Score_Global"], c="r", label="anomaly scores")
-        axs[0].plot(data_copy["Thresh_Global"], linestyle="dashed", c="black", label="threshold")
-        axs[1].plot(data_copy["A_Pred_Global"], label="predicted anomalies", c="orange")
-        if self.labels_available and type == "test":
-            axs[2].plot(
-                data_copy["A_True_Global"],
-                label="actual anomalies",
-            )
-        axs[0].set_ylim([0, 5 * np.mean(data_copy["Thresh_Global"].values)])
-        fig.legend(prop={"size": 20})
-        plt.show()
 
     def plotly_global_predictions(self, type="test"):
         is_test = True

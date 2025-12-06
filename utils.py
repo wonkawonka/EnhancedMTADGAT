@@ -616,7 +616,12 @@ def evaluate_with_capacities(anomaly_scores, capacities, threshold=0.2):
         raise ValueError("异常分数和容量数组长度必须相同")
     
     # 基于容量衰减创建标签
-    initial_capacity = capacities[0]
+    # 获取第一个非NaN容量值作为初始容量
+    valid_capacity_indices = ~np.isnan(capacities)
+    if not np.any(valid_capacity_indices):
+        raise ValueError("容量数据中没有有效的数值")
+    
+    initial_capacity = capacities[valid_capacity_indices][0]
     capacity_decay_rate = (initial_capacity - capacities) / initial_capacity
     labels = (capacity_decay_rate > threshold).astype(int)
     
@@ -645,7 +650,7 @@ def plot_roc_curve(fpr, tpr, roc_auc, save_path=""):
     plt.title('Receiver Operating Characteristic')
     plt.legend(loc="lower right")
     if save_path:
-        plt.savefig(f"{save_path}/roc_curve.png", bbox_inches="tight")
+        plt.savefig(f"{save_path}/roc_curve.png", bbox_inches="tight", dpi=300)
     plt.show()
     plt.close()
 
@@ -666,7 +671,7 @@ def plot_anomaly_score_vs_capacity(anomaly_scores, capacities, save_path=""):
     plt.title('Anomaly Score vs Capacity')
     plt.legend()
     if save_path:
-        plt.savefig(f"{save_path}/anomaly_score_vs_capacity.png", bbox_inches="tight")
+        plt.savefig(f"{save_path}/anomaly_score_vs_capacity.png", bbox_inches="tight", dpi=300)
     plt.show()
     plt.close()
 

@@ -401,11 +401,12 @@ def load_data(dataset, apply_sr_cleaning=False):
                         # 线性插值填充NaN值
                         nans = np.isnan(all_capacities_filled)
                         not_nans = ~nans
-                        all_capacities_filled[nans] = np.interp(
-                            np.where(nans)[0], 
-                            np.where(not_nans)[0], 
-                            all_capacities_filled[not_nans]
-                        )
+                        if np.any(not_nans):  # 确保有非NaN值可以用于插值
+                            all_capacities_filled[nans] = np.interp(
+                                np.where(nans)[0], 
+                                np.where(not_nans)[0], 
+                                all_capacities_filled[not_nans]
+                            )
                     
                     capacity_decay_rate = (initial_capacity - all_capacities_filled) / initial_capacity
 

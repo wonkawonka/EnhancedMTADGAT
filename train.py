@@ -483,58 +483,75 @@ if __name__ == "__main__":
                                   f"初始值={capacities_from_test_data[0]:.4f}")
                             
                             # 使用完整的容量数据计算初始容量（与预处理阶段保持一致）
-                            initial_capacity = all_capacities[0]  # 使用所有数据中的第一个周期作为初始容量
-                            capacity_decay_rate = (initial_capacity - capacities_from_test_data) / initial_capacity
-                            
-                            print(f"基于完整数据集初始容量({initial_capacity:.4f})的容量衰减率统计: "
-                                  f"最小值={np.min(capacity_decay_rate):.4f}, "
-                                  f"最大值={np.max(capacity_decay_rate):.4f}")
-                            
-                            # 检查是否有足够的衰减（超过阈值的数据点）
-                            threshold = 0.2  # 20%容量衰减阈值
-                            positive_samples = np.sum(capacity_decay_rate > threshold)
-                            print(f"超过{threshold*100}%容量衰减的数据点数量: {positive_samples}/{len(capacity_decay_rate)} "
-                                  f"({positive_samples/len(capacity_decay_rate)*100:.2f}%)")
-                            
-                            # 只有在有足够的正样本时才进行评估
-                            if positive_samples > 0:
-                                # 创建基于容量衰减的标签
-                                labels = (capacity_decay_rate > threshold).astype(int)
+                            # 获取第一个非NaN容量值作为初始容量
+                            valid_capacities = all_capacities[~np.isnan(all_capacities)]
+                            if len(valid_capacities) > 0:
+                                initial_capacity = valid_capacities[0]  # 使用所有数据中的第一个有效周期容量作为初始容量
+                                capacity_decay_rate = (initial_capacity - capacities_from_test_data) / initial_capacity
                                 
-                                # 计算ROC曲线
-                                fpr, tpr, thresholds = roc_curve(labels, anomaly_scores)
-                                roc_auc = auc(fpr, tpr)
+                                print(f"基于完整数据集初始容量({initial_capacity:.4f})的容量衰减率统计: "
+                                      f"最小值={np.min(capacity_decay_rate):.4f}, "
+                                      f"最大值={np.max(capacity_decay_rate):.4f}")
                                 
-                                # 绘制ROC曲线
-                                plot_roc_curve(fpr, tpr, roc_auc, save_path)
+                                # 检查是否有足够的衰减（超过阈值的数据点）
+                                threshold = 0.2  # 20%容量衰减阈值
+                                # 仅对非NaN值计算正样本数量
+                                valid_decay_rates = capacity_decay_rate[~np.isnan(capacity_decay_rate)]
+                                positive_samples = np.sum(valid_decay_rates > threshold) if len(valid_decay_rates) > 0 else 0
+                                total_valid_samples = len(valid_decay_rates)
                                 
-                                # 绘制异常分数与容量关系图
-                                plot_anomaly_score_vs_capacity(anomaly_scores, capacities_from_test_data, save_path)
-                                
-                                print(f"NASA容量特征评估完成，AUC值: {roc_auc:.4f}")
+                                if total_valid_samples > 0:
+                                    print(f"超过{threshold*100}%容量衰减的数据点数量: {positive_samples}/{total_valid_samples} "
+                                          f"({positive_samples/total_valid_samples*100:.2f}%)")
+                                    
+                                    # 只有在有足够的正样本时才进行评估
+                                    if positive_samples > 0:
+                                        # 创建基于容量衰减的标签（处理NaN值）
+                                        labels = (capacity_decay_rate > threshold).astype(int)
+                                        # 将NaN位置的标签设为0
+                                        labels[np.isnan(capacity_decay_rate)] = 0
+                                        
+                                        # 计算ROC曲线（过滤掉NaN值）
+                                        valid_indices = ~np.isnan(capacity_decay_rate) & ~np.isnan(anomaly_scores)
+                                        if np.sum(valid_indices) > 0:
+                                            fpr, tpr, thresholds = roc_curve(labels[valid_indices], anomaly_scores[valid_indices])
+                                            roc_auc = auc(fpr, tpr)
+                                            
+                                            # 绘制ROC曲线
+                                            plot_roc_curve(fpr, tpr, roc_auc, save_path)
+                                            
+                                            # 绘制异常分数与容量关系图
+                                            plot_anomaly_score_vs_capacity(anomaly_scores, capacities_from_test_data, save_path)
+                                            
+                                            print(f"NASA容量特征评估完成，AUC值: {roc_auc:.4f}")
+                                        else:
+                                            print("错误: 没有足够的有效数据进行评估")
+                                    else:
+                                        print("警告: 容量衰减不足，无法进行有意义的评估")
+                                        # 即使没有足够正样本，我们也绘制图表以供观察
+                                        plt.figure(figsize=(12, 6))
+                                        plt.subplot(2, 1, 1)
+                                        plt.plot(capacities_from_test_data, label='Capacity', color='blue')
+                                        plt.ylabel('Capacity')
+                                        plt.title('Capacity Curve')
+                                        plt.legend()
+                                        
+                                        plt.subplot(2, 1, 2)
+                                        plt.plot(anomaly_scores, label='Anomaly Score', color='red')
+                                        plt.ylabel('Anomaly Score')
+                                        plt.xlabel('Time')
+                                        plt.title('Anomaly Score Curve')
+                                        plt.legend()
+                                        
+                                        plt.tight_layout()
+                                        if save_path:
+                                            plt.savefig(f"{save_path}/anomaly_score_vs_capacity.png", bbox_inches="tight", dpi=300)
+                                        plt.show()
+                                        plt.close()
+                                else:
+                                    print("错误: 没有足够的有效容量数据进行评估")
                             else:
-                                print("警告: 容量衰减不足，无法进行有意义的评估")
-                                # 即使没有足够正样本，我们也绘制图表以供观察
-                                plt.figure(figsize=(12, 6))
-                                plt.subplot(2, 1, 1)
-                                plt.plot(capacities_from_test_data, label='Capacity', color='blue')
-                                plt.ylabel('Capacity')
-                                plt.title('Capacity Curve')
-                                plt.legend()
-                                
-                                plt.subplot(2, 1, 2)
-                                plt.plot(anomaly_scores, label='Anomaly Score', color='red')
-                                plt.ylabel('Anomaly Score')
-                                plt.xlabel('Time')
-                                plt.title('Anomaly Score Curve')
-                                plt.legend()
-                                
-                                plt.tight_layout()
-                                if save_path:
-                                    plt.savefig(f"{save_path}/anomaly_score_vs_capacity.png", bbox_inches="tight")
-                                plt.show()
-                                plt.close()
-                                
+                                print("错误: 没有找到有效的容量数据")
                         else:
                             print("测试数据列数不足，无法提取容量信息")
                     else:
