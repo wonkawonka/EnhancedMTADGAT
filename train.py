@@ -1,13 +1,26 @@
 import json
+import random
 from datetime import datetime
 
 import torch.nn as nn
+import numpy as np
+import torch
 
 from args import get_parser
 from mtad_gat import Enhanced_MTADGAT
 from prediction import Predictor
 from training import Trainer
 from utils import *
+
+def set_seed(seed=3407):
+    """设置随机种子以确保实验可重现"""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 def train_single_entity(entity_name, args):
     """
@@ -404,6 +417,10 @@ def train_universal_model(args):
 if __name__ == "__main__":
     parser = get_parser()
     args = parser.parse_args()
+    
+    # 设置随机种子以确保实验可重现性
+    set_seed(3407)
+    
     # 实现CALCE/CALCE2的通用模型训练
     if args.dataset in ['CALCE', 'CALCE2']:
         # 对于CALCE/CALCE2数据集，训练一个通用模型
