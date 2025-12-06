@@ -7,3 +7,4 @@ pre-commit
 tqdm
 tensorboard
 more_itertools
+plotly>=6.1.1

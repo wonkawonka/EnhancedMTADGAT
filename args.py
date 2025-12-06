@@ -25,6 +25,8 @@ def get_parser():
     # Simplified model option - only feature attention + transformer
     parser.add_argument("--feature_att_trans", type=str2bool, default=True,
                         help="仅使用特征注意力和Transformer，跳过时间注意力和GRU")
+    # Spectral Residual cleaning
+    parser.add_argument("--apply_sr_cleaning", type=str2bool, default=True,help="是否在预处理阶段应用谱残差异常检测和清洗（CALCE固定清洗）")
     # Transformer layers
     parser.add_argument("--trans_enc_layers", type=int, default=2, help="Transformer encoder的层数（这里是第一次改的gru前的transformer）")
     # -- Data params ---

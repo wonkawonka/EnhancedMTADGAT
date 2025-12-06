@@ -48,7 +48,7 @@ def get_data_dim(dataset):
     elif str(dataset).startswith("machine"):
         return 38
     elif dataset == "NASA":
-        # NASA电池数据集的特征维度
+        # NASA电池数据集的特征维度 (不包括时间戳)
         return 6  # capacity, voltage_measured, current_measured, 
                  # temperature_measured, current_charge, voltage_charge
     elif dataset in ["CALCE", "CALCE2"]:
@@ -74,8 +74,8 @@ def get_target_dims(dataset):
     elif dataset == "SMD":
         return None
     elif dataset == "NASA":
-        # 对于NASA电池数据集，我们关注所有特征
-        return None
+        # 对于NASA电池数据集，我们主要关注容量预测（索引0）
+        return [0]  # capacity是最重要的特征，用于预测电池退化趋势
     elif dataset in ["CALCE", "CALCE2"]:
         # 对于CALCE数据集，我们关注单个特征
         return [0]
@@ -196,6 +196,17 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
                 f = open(battery_file, "rb")
                 test_label = pickle.load(f)
                 f.close()
+        
+        # 对于NASA数据集，我们现在有了三维数据 (num_cycles, max_len, features)
+        # 但为了向后兼容，我们需要将其转换为二维数据 (num_cycles * max_len, features)
+        # 这样可以保持现有模型的接口不变
+        if train_data is not None and train_data.ndim == 3:
+            num_cycles, max_len, features = train_data.shape
+            train_data = train_data.reshape(num_cycles * max_len, features)
+            
+        if test_data is not None and test_data.ndim == 3:
+            num_cycles, max_len, features = test_data.shape
+            test_data = test_data.reshape(num_cycles * max_len, features)
     elif dataset in ["CALCE", "CALCE2"]:
         # 统一处理CALCE和CALCE2数据集
         # 使用训练/测试划分方式加载数据

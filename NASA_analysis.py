@@ -30,8 +30,8 @@ try:
     print(f"测试标签形状: {test_labels.shape}")
     
     # NASA 特征名称 (根据实际数据结构调整)
-    # 数据有7列，所以我们需要7个特征名
-    feature_names = ['cycle', 'capacity', 'voltage_measured', 'current_measured', 
+    # 数据有6列（已经去除了时间戳），所以我们需要6个特征名
+    feature_names = ['capacity', 'voltage_measured', 'current_measured', 
                      'temperature_measured', 'current_charge', 'voltage_charge']
     print(f"特征名称: {feature_names}")
 except FileNotFoundError as e:
