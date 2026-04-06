@@ -126,6 +126,14 @@ def train_universal_model(args):
         corr_alpha=args.corr_alpha,
         feature_att_trans=args.feature_att_trans,  # Add the new parameter
     )
+
+    # 尝试使用 torch.compile 加速 (PyTorch 2.0+)
+    if hasattr(torch, "compile"):
+        try:
+            print("Using torch.compile for model optimization...")
+            model = torch.compile(model)
+        except Exception as e:
+            print(f"torch.compile failed, falling back to eager mode: {e}")
     
     # 设置优化器和损失函数
     optimizer = torch.optim.Adam(model.parameters(), lr=args.init_lr)
@@ -458,8 +466,12 @@ if __name__ == "__main__":
                             all_capacities = pickle.load(f)
                         
                         # 读取测试结果
-                        test_pred_df = pd.read_pickle(f"{save_path}/test_output.pkl")
-                        anomaly_scores = test_pred_df['A_Score_Global'].values
+                        try:
+                            test_pred_df = pd.read_pickle(f"{save_path}/test_output.pkl")
+                            anomaly_scores = test_pred_df['A_Score_Global'].values
+                        except Exception as e:
+                            print(f"无法加载测试输出文件: {e}")
+                            raise e
                         
                         # 读取测试数据，其中已经包含了插值后的容量数据（在最后一列）
                         with open(test_file, 'rb') as f:
@@ -483,7 +495,7 @@ if __name__ == "__main__":
                                   f"初始值={capacities_from_test_data[0]:.4f}")
                             
                             # 使用完整的容量数据计算初始容量（与预处理阶段保持一致）
-                            # 获取第一个非NaN容量值作为初始容量
+                            # 获取第一个非NaN容量值作为初始容量，与预处理阶段保持一致
                             valid_capacities = all_capacities[~np.isnan(all_capacities)]
                             if len(valid_capacities) > 0:
                                 initial_capacity = valid_capacities[0]  # 使用所有数据中的第一个有效周期容量作为初始容量

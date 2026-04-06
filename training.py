@@ -65,6 +65,9 @@ class Trainer:
         self.print_every = print_every
         self.log_tensorboard = log_tensorboard
 
+        # 混合精度训练设置
+        self.scaler = torch.cuda.amp.GradScaler(enabled=(self.device == "cuda"))
+
         self.losses = {
             "train_total": [],
             "train_forecast": [],
@@ -109,23 +112,29 @@ class Trainer:
                 x = x.to(self.device)
                 y = y.to(self.device)
                 self.optimizer.zero_grad()
-                preds, recons = self.model(x)
 
-                if self.target_dims is not None:
-                    x = x[:, :, self.target_dims]
-                    y = y[:, :, self.target_dims].squeeze(-1)
+                with torch.cuda.amp.autocast(enabled=(self.device == "cuda")):
+                    preds, recons = self.model(x)
 
-                if preds.ndim == 3:
-                    preds = preds.squeeze(1)
-                if y.ndim == 3:
-                    y = y.squeeze(1)
+                    if self.target_dims is not None:
+                        x_target = x[:, :, self.target_dims]
+                        y_target = y[:, :, self.target_dims].squeeze(-1)
+                    else:
+                        x_target = x
+                        y_target = y
 
-                forecast_loss = torch.sqrt(self.forecast_criterion(y, preds))
-                recon_loss = torch.sqrt(self.recon_criterion(x, recons))
-                loss = forecast_loss + recon_loss
+                    if preds.ndim == 3:
+                        preds = preds.squeeze(1)
+                    if y_target.ndim == 3:
+                        y_target = y_target.squeeze(1)
 
-                loss.backward()
-                self.optimizer.step()
+                    forecast_loss = torch.sqrt(self.forecast_criterion(y_target, preds))
+                    recon_loss = torch.sqrt(self.recon_criterion(x_target, recons))
+                    loss = forecast_loss + recon_loss
+
+                self.scaler.scale(loss).backward()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
 
                 forecast_b_losses.append(forecast_loss.item())
                 recon_b_losses.append(recon_loss.item())
@@ -202,19 +211,23 @@ class Trainer:
                 x = x.to(self.device)
                 y = y.to(self.device)
 
-                preds, recons = self.model(x)
+                with torch.cuda.amp.autocast(enabled=(self.device == "cuda")):
+                    preds, recons = self.model(x)
 
-                if self.target_dims is not None:
-                    x = x[:, :, self.target_dims]
-                    y = y[:, :, self.target_dims].squeeze(-1)
+                    if self.target_dims is not None:
+                        x_target = x[:, :, self.target_dims]
+                        y_target = y[:, :, self.target_dims].squeeze(-1)
+                    else:
+                        x_target = x
+                        y_target = y
 
-                if preds.ndim == 3:
-                    preds = preds.squeeze(1)
-                if y.ndim == 3:
-                    y = y.squeeze(1)
+                    if preds.ndim == 3:
+                        preds = preds.squeeze(1)
+                    if y_target.ndim == 3:
+                        y_target = y_target.squeeze(1)
 
-                forecast_loss = torch.sqrt(self.forecast_criterion(y, preds))
-                recon_loss = torch.sqrt(self.recon_criterion(x, recons))
+                    forecast_loss = torch.sqrt(self.forecast_criterion(y_target, preds))
+                    recon_loss = torch.sqrt(self.recon_criterion(x_target, recons))
 
                 forecast_losses.append(forecast_loss.item())
                 recon_losses.append(recon_loss.item())
@@ -276,15 +289,31 @@ class Trainer:
 
         # 计算所有实体的初始训练损失
         init_train_losses = []
+        num_workers = 2 if os.name == 'nt' else 4
+        pin_memory = torch.cuda.is_available()
+        
         for entity_name, entity_data in train_entity_data:
             entity_dataset = SlidingWindowDataset(entity_data, window_size, target_dims)
-            entity_loader = DataLoader(entity_dataset, batch_size=self.batch_size, shuffle=shuffle_dataset)
+            entity_loader = DataLoader(
+                entity_dataset, batch_size=self.batch_size, shuffle=shuffle_dataset,
+                num_workers=num_workers, pin_memory=pin_memory
+            )
             init_loss = self.evaluate(entity_loader)
             init_train_losses.append(init_loss)
             print(f"Init total train loss for {entity_name}: {init_loss[2]:.5f}")
 
         print(f"Training model for {self.n_epochs} epochs using round-robin approach..")
         train_start = time.time()
+        
+        # 预先创建所有实体的 DataLoader 以提高效率
+        print("Pre-creating DataLoaders for all entities...")
+        entity_loaders = []
+        for entity_name, entity_data in train_entity_data:
+            entity_dataset = SlidingWindowDataset(entity_data, window_size, target_dims)
+            train_loader, val_loader, _ = create_data_loaders(
+                entity_dataset, self.batch_size, val_split, shuffle_dataset, test_dataset=None
+            )
+            entity_loaders.append((entity_name, train_loader, val_loader))
         
         # 轮流训练
         for epoch in range(self.n_epochs):
@@ -293,14 +322,8 @@ class Trainer:
             
             # 在每个epoch选择一个实体进行训练
             entity_idx = epoch % len(train_entity_data)
-            entity_name, entity_data = train_entity_data[entity_idx]
+            entity_name, train_loader, val_loader = entity_loaders[entity_idx]
             print(f"[Epoch {epoch + 1}] Training on entity: {entity_name}")
-            
-            # 创建训练和验证数据集
-            entity_dataset = SlidingWindowDataset(entity_data, window_size, target_dims)
-            train_loader, val_loader, _ = create_data_loaders(
-                entity_dataset, self.batch_size, val_split, shuffle_dataset, test_dataset=None
-            )
             
             # 训练阶段
             self.model.train()
@@ -311,23 +334,29 @@ class Trainer:
                 x = x.to(self.device)
                 y = y.to(self.device)
                 self.optimizer.zero_grad()
-                preds, recons = self.model(x)
 
-                if self.target_dims is not None:
-                    x = x[:, :, self.target_dims]
-                    y = y[:, :, self.target_dims].squeeze(-1)
+                with torch.cuda.amp.autocast(enabled=(self.device == "cuda")):
+                    preds, recons = self.model(x)
 
-                if preds.ndim == 3:
-                    preds = preds.squeeze(1)
-                if y.ndim == 3:
-                    y = y.squeeze(1)
+                    if self.target_dims is not None:
+                        x_target = x[:, :, self.target_dims]
+                        y_target = y[:, :, self.target_dims].squeeze(-1)
+                    else:
+                        x_target = x
+                        y_target = y
 
-                forecast_loss = torch.sqrt(self.forecast_criterion(y, preds))
-                recon_loss = torch.sqrt(self.recon_criterion(x, recons))
-                loss = forecast_loss + recon_loss
+                    if preds.ndim == 3:
+                        preds = preds.squeeze(1)
+                    if y_target.ndim == 3:
+                        y_target = y_target.squeeze(1)
 
-                loss.backward()
-                self.optimizer.step()
+                    forecast_loss = torch.sqrt(self.forecast_criterion(y_target, preds))
+                    recon_loss = torch.sqrt(self.recon_criterion(x_target, recons))
+                    loss = forecast_loss + recon_loss
+
+                self.scaler.scale(loss).backward()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
 
                 forecast_b_losses.append(forecast_loss.item())
                 recon_b_losses.append(recon_loss.item())

@@ -41,7 +41,15 @@ class Predictor:
 
         print("Predicting and calculating anomaly scores..")
         data = SlidingWindowDataset(values, self.window_size, self.target_dims)
-        loader = torch.utils.data.DataLoader(data, batch_size=self.batch_size, shuffle=False)
+        
+        # 优化 DataLoader
+        num_workers = 2 if os.name == 'nt' else 4
+        pin_memory = torch.cuda.is_available()
+        loader = torch.utils.data.DataLoader(
+            data, batch_size=self.batch_size, shuffle=False,
+            num_workers=num_workers, pin_memory=pin_memory
+        )
+        
         device = "cuda" if self.use_cuda and torch.cuda.is_available() else "cpu"
 
         self.model.eval()
@@ -52,11 +60,12 @@ class Predictor:
                 x = x.to(device)
                 y = y.to(device)
 
-                y_hat, _ = self.model(x)
+                with torch.cuda.amp.autocast(enabled=(device == "cuda")):
+                    y_hat, _ = self.model(x)
 
-                # Shifting input to include the observed value (y) when doing the reconstruction
-                recon_x = torch.cat((x[:, 1:, :], y), dim=1)
-                _, window_recon = self.model(recon_x)
+                    # Shifting input to include the observed value (y) when doing the reconstruction
+                    recon_x = torch.cat((x[:, 1:, :], y), dim=1)
+                    _, window_recon = self.model(recon_x)
 
                 preds.append(y_hat.detach().cpu().numpy())
                 # Extract last reconstruction only

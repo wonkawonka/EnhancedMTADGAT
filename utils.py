@@ -385,9 +385,17 @@ class SlidingWindowDataset(Dataset):
 
 def create_data_loaders(train_dataset, batch_size, val_split=0.1, shuffle=True, test_dataset=None):
     train_loader, val_loader, test_loader = None, None, None
+    
+    # 优化参数：针对 GPU 开启 pin_memory，并使用多线程加载
+    num_workers = 2 if os.name == 'nt' else 4  # Windows 下 worker 数不宜过多
+    pin_memory = torch.cuda.is_available()
+
     if val_split == 0.0:
         print(f"train_size: {len(train_dataset)}")
-        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle)
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=batch_size, shuffle=shuffle, 
+            num_workers=num_workers, pin_memory=pin_memory
+        )
 
     else:
         dataset_size = len(train_dataset)
@@ -400,14 +408,23 @@ def create_data_loaders(train_dataset, batch_size, val_split=0.1, shuffle=True, 
         train_sampler = SubsetRandomSampler(train_indices)
         valid_sampler = SubsetRandomSampler(val_indices)
 
-        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler)
-        val_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, sampler=valid_sampler)
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=batch_size, sampler=train_sampler,
+            num_workers=num_workers, pin_memory=pin_memory
+        )
+        val_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=batch_size, sampler=valid_sampler,
+            num_workers=num_workers, pin_memory=pin_memory
+        )
 
         print(f"train_size: {len(train_indices)}")
         print(f"validation_size: {len(val_indices)}")
 
     if test_dataset is not None:
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset, batch_size=batch_size, shuffle=False,
+            num_workers=num_workers, pin_memory=pin_memory
+        )
         print(f"test_size: {len(test_dataset)}")
 
     return train_loader, val_loader, test_loader
