@@ -25,72 +25,101 @@ class ConvLayer(nn.Module):
         return x.permute(0, 2, 1)  # Permute back
 
 
-class CorrelationLayer(nn.Module):
-    """计算线性相关性
-    :param nnodes:节点数（如传感器数）
-    :param top_k: 每个节点保留的邻接边数
-    :param dim: 嵌入维度
-    :param alpha: 缩放因子，控制激活函数灵敏度
-    :param static_feat: 可选静态特征矩阵（形状为 [nnodes, xd]）
+class MultiScaleConvLayer(nn.Module):
+    """多尺度因果膨胀卷积层 (Causal Dilated Convolution)
+    
+    :param n_features: 输入特征数
+    :param dilations: 膨胀率列表，如 [1, 2, 4]
+    :param mode: 'basic' 或 'progressive'
     """
-
-    def __init__(self, nnodes, top_k, dim, alpha, static_feat=None):
-        super(CorrelationLayer, self).__init__()
-        self.nnodes = nnodes
-        if static_feat is not None:
-            xd = static_feat.shape[1]
-            self.lin1 = nn.Linear(xd, dim)
-            self.lin2 = nn.Linear(xd, dim)
-        else:
-            self.emb1 = nn.Embedding(nnodes, dim)
-            self.emb2 = nn.Embedding(nnodes, dim)
-            self.lin1 = nn.Linear(dim, dim)
-            self.lin2 = nn.Linear(dim, dim)
-
-        self.top_k = top_k
-        self.dim = dim
-        # 这里alpha是否要作为传入参数
-        self.alpha = alpha
-        self.static_feat = static_feat
-
+    
+    def __init__(self, n_features, dilations=[1, 2, 4], mode='basic'):
+        super(MultiScaleConvLayer, self).__init__()
+        
+        self.mode = mode
+        self.dilations = dilations
+        self.n_scales = len(dilations)
+        self.kernel_size = 3  # 固定卷积核大小为 3
+        
+        print(f"初始化多尺度因果膨胀卷积: mode={mode}, dilations={dilations}")
+        
+        # 多尺度卷积分支：每个分支使用指定的膨胀率
+        self.scale_convs = nn.ModuleList()
+        for d in dilations:
+            # padding=0，我们在 forward 中手动计算并执行因果填充
+            self.scale_convs.append(nn.Sequential(
+                nn.Conv1d(n_features, n_features, self.kernel_size, dilation=d, padding=0, bias=False),
+                nn.BatchNorm1d(n_features),
+                nn.ReLU()
+            ))
+        
+        # 基础模式的融合卷积
+        self.basic_fusion_conv = nn.Conv1d(
+            n_features * self.n_scales, 
+            n_features, 
+            kernel_size=1,
+            bias=False
+        )
+        
+        # 渐进式融合模块（仅在progressive模式下使用）
+        if mode == 'progressive':
+            self.progressive_fusers = nn.ModuleList([
+                nn.Sequential(
+                    nn.Conv1d(n_features * 2, n_features, kernel_size=1, bias=False),
+                    nn.BatchNorm1d(n_features),
+                    nn.ReLU(),
+                    nn.Dropout(0.2)
+                ) for _ in range(self.n_scales - 1)
+            ])
+            
+            # 残差投影
+            self.residual_proj = nn.ModuleList([
+                nn.Conv1d(n_features, n_features, kernel_size=1, bias=False)
+                for _ in range(self.n_scales)
+            ])
+    
     def forward(self, x):
         """
-        :param x: shape (b, n, k) - batch of time series windows
-        :return: adj_matrix: shape (b, k, k)
+        x: (batch, window, n_features)
         """
-        b, n, k = x.size()
-        idx = torch.arange(self.nnodes).to(x.device)
-        if self.static_feat is None:
-            nodevec1 = self.emb1(idx)  # (k, dim)
-            nodevec2 = self.emb2(idx)
-        else:
-            nodevec1 = self.static_feat[idx, :]
-            nodevec2 = nodevec1
+        x_perm = x.permute(0, 2, 1)  # (batch, n_features, window)
+        
+        # 提取各尺度特征（采用因果膨胀卷积）
+        scale_feats = []
+        for i, conv in enumerate(self.scale_convs):
+            dilation = self.dilations[i]
+            
+            # 【关键】因果膨胀卷积的填充公式：padding = (k - 1) * dilation
+            # 这样可以确保输出长度与输入一致，且只看过去和现在
+            padding_size = (self.kernel_size - 1) * dilation
+            x_padded = F.pad(x_perm, (padding_size, 0))
+            
+            feat = conv(x_padded)
+            scale_feats.append(feat)
+        
+        if self.mode == 'basic':
+            # 基础模式：拼接后融合
+            concatenated = torch.cat(scale_feats, dim=1)
+            fused = self.basic_fusion_conv(concatenated)
+            return fused.permute(0, 2, 1)
+        
+        else:  # progressive mode
+            # 渐进式融合：从最小尺度开始，逐步融合
+            fused = scale_feats[0]
+            
+            for next_scale, fuser in zip(scale_feats[1:], self.progressive_fusers):
+                combined = torch.cat([fused, next_scale], dim=1)
+                fused = fuser(combined)
+            
+            # 添加多尺度残差
+            residual_sum = sum(
+                proj(scale_feats[i]) 
+                for i, proj in enumerate(self.residual_proj)
+            )
+            
+            final_feat = fused + residual_sum * 0.1
+            return final_feat.permute(0, 2, 1)
 
-        # 将 nodevec 扩展为 batch-wise 形式
-        nodevec1 = nodevec1.unsqueeze(0).expand(b, -1, -1)  # (b, k, dim)
-        nodevec2 = nodevec2.unsqueeze(0).expand(b, -1, -1)
-
-        nodevec1 = torch.tanh(self.alpha * self.lin1(nodevec1))  # (k, dim)
-        nodevec2 = torch.tanh(self.alpha * self.lin2(nodevec2))
-
-        # 计算两个方向的外积差值，构建非对称的相似度矩阵 a
-        a = torch.bmm(nodevec1, nodevec2.transpose(2, 1)) - torch.mm(nodevec2, nodevec1.transpose(2, 1))
-        # 使用 tanh 再次放大差异，然后通过 ReLU 截断负值，形成初步邻接矩阵
-        adj = F.relu(torch.tanh(self.alpha * a))
-
-        # 稀疏化操作
-        mask = torch.zeros_like(adj)
-        # mask = torch.zeros(idx.size(0), idx.size(0))
-        mask.fill_(float('0'))
-        # 加一个小随机扰动以保证数值稳定性
-        s1, t1 = (a + torch.rand_like(a) * 0.01).topk(self.top_k, -1)
-        # s1, t1 = (adj + torch.rand_like(adj) * 0.01).topk(self.top_k, 1)  # rand for numerical stability
-        # 利用 scatter_ 在掩码上标记这些位置为 1
-        mask.scatter_(2, t1, s1.fill_(1))
-        # mask.scatter_(1, t1, s1.fill_(1))
-        adj = adj * mask
-        return adj
 
 
 class FeatureAttentionLayer(nn.Module):
@@ -116,7 +145,6 @@ class FeatureAttentionLayer(nn.Module):
         self.attention_sparse = attention_sparse
         self.attention_top_k = attention_top_k
 
-
         # Because linear transformation is done after concatenation in GATv2
         if self.use_gatv2:
             self.embed_dim *= 2
@@ -136,7 +164,7 @@ class FeatureAttentionLayer(nn.Module):
         self.leakyrelu = nn.LeakyReLU(alpha)
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x, adj_matrix=None):
+    def forward(self, x):
         # x shape (b, n, k): b - batch size, n - window size, k - number of features
         # For feature attention we represent a node as the values of a particular feature across all timestamps
 
@@ -170,12 +198,6 @@ class FeatureAttentionLayer(nn.Module):
             topk_values, topk_indices = torch.topk(e, top_k, dim=2)
             sparse_e = torch.full_like(e, float('-inf'))
             sparse_e.scatter_(2, topk_indices, topk_values)
-
-        # 相关性邻接矩阵作为边权重
-        if adj_matrix is not None:
-            # 扩展 adj_matrix 到与 e 同形状: (b, k, k) -> (b, k, k, 1)
-            adj_matrix = adj_matrix.unsqueeze(-1)
-            e = e + adj_matrix  # 加权融合，也可以乘法或其他方式
 
         # Attention weights，softmax over feature dimension
         attention = torch.softmax(e, dim=2)

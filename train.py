@@ -117,14 +117,12 @@ def train_universal_model(args):
         recon_hid_dim=args.recon_hid_dim,
         dropout=args.dropout,
         alpha=args.alpha,
-        correlation_aware=args.correlation_aware,
         use_transformer=args.use_transformer,
-        top_k=args.top_k,
         attention_top_k=args.attention_top_k,
-        attention_sparse=args.attention_sparse,  # Add the missing parameter
-        corr_dim=args.corr_dim,
-        corr_alpha=args.corr_alpha,
-        feature_att_trans=args.feature_att_trans,  # Add the new parameter
+        attention_sparse=args.attention_sparse,
+        feature_att_trans=args.feature_att_trans,
+        multi_scale_mode=args.multi_scale_mode,
+        multi_scale_dilations=[int(d) for d in args.multi_scale_dilations.split(',')]
     )
 
     # 尝试使用 torch.compile 加速 (PyTorch 2.0+)
@@ -348,14 +346,12 @@ if __name__ == "__main__":
             recon_hid_dim=args.recon_hid_dim,
             dropout=args.dropout,
             alpha=args.alpha,
-            correlation_aware=args.correlation_aware,
             use_transformer=args.use_transformer,
-            top_k=args.top_k,
             attention_top_k=args.attention_top_k,
-            attention_sparse=args.attention_sparse,  # Add the missing parameter
-            corr_dim=args.corr_dim,
-            corr_alpha=args.corr_alpha,
-            feature_att_trans=args.feature_att_trans,  # Add the new parameter
+            attention_sparse=args.attention_sparse,
+            feature_att_trans=args.feature_att_trans,
+            multi_scale_mode=args.multi_scale_mode,
+            multi_scale_dilations=[int(d) for d in args.multi_scale_dilations.split(',')]
         )
 
         optimizer = torch.optim.Adam(model.parameters(), lr=args.init_lr)

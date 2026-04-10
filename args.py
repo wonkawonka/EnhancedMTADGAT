@@ -15,16 +15,18 @@ def str2bool(v):
 def get_parser():
     parser = argparse.ArgumentParser()
     # -- enhanced params ---
-    parser.add_argument("--correlation_aware", type=str2bool, default=False)
     parser.add_argument("--use_transformer", type=str2bool, default=False,help="目前是在gru前加transformer encoder")
     parser.add_argument("--attention_sparse", type=str2bool, default=False,help="是否使用稀疏注意力矩阵")
-    parser.add_argument('--top_k', type=int, default=15, help='相关性矩阵的top_k')
     parser.add_argument('--attention_top_k', type=int, default=10, help='特征图注意力top_k连接')
-    parser.add_argument('--corr_dim', type=int, default=256, help='相关性嵌入维度')
-    parser.add_argument('--corr_alpha', type=int, default=20, help='相关性缩放因子')
     # Simplified model option - only feature attention + transformer
-    parser.add_argument("--feature_att_trans", type=str2bool, default=True,
+    parser.add_argument("--feature_att_trans", type=str2bool, default=False,
                         help="仅使用特征注意力和Transformer，跳过时间注意力和GRU")
+    # Multi-scale convolution
+    parser.add_argument("--multi_scale_mode", type=str, default="none",
+                        choices=["none", "basic", "progressive"],
+                        help="多尺度卷积模式: none=单尺度, basic=并行拼接, progressive=渐进式融合")
+    parser.add_argument("--multi_scale_dilations", type=str, default="1,2,4",
+                        help="因果膨胀卷积的膨胀率列表，逗号分隔，如 '1,2,4' (kernel_size 固定为 3)")
     # Spectral Residual cleaning
     parser.add_argument("--apply_sr_cleaning", type=str2bool, default=True,help="是否在预处理阶段应用谱残差异常检测和清洗（CALCE固定清洗）")
     # Transformer layers
