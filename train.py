@@ -23,6 +23,37 @@ def set_seed(seed=3407):
     torch.backends.cudnn.benchmark = False
 
 
+def get_run_id(args):
+    """
+    根据参数生成运行 ID。
+    优先级：
+    1. 若 args.run_id 为非空字符串，直接返回其 strip 后的值；
+    2. 否则自动生成：dataset_multiScaleMode_feattrans-{on|off}_timestamp，
+       若 args.comment 为非空字符串，则将其置于最前面，下划线连接。
+    """
+    run_id = getattr(args, "run_id", None)
+    if not isinstance(run_id, (str, type(None))):
+        raise ValueError("run_id must be string or None")
+    if run_id is not None and run_id.strip():
+        return run_id.strip()
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dataset = str(getattr(args, "dataset", "data")).lower()
+    multi_scale_mode = str(getattr(args, "multi_scale_mode", "none")).lower()
+    feature_att_trans = bool(getattr(args, "feature_att_trans", False))
+    feattrans_mode = "on" if feature_att_trans else "off"
+    auto_name = f"{dataset}_{multi_scale_mode}_feattrans-{feattrans_mode}_{timestamp}"
+
+    comment = getattr(args, "comment", "")
+    if not isinstance(comment, (str, type(None))):
+        raise ValueError("comment must be string or None")
+    comment = (comment or "").strip()
+    if comment:
+        prefix = "_".join(comment.split())
+        return f"{prefix}_{auto_name}"
+    return auto_name
+
+
 def train_universal_model(args):
     """
     训练通用模型（使用训练实体数据训练一个通用模型，然后在测试实体上分别测试）
@@ -65,7 +96,7 @@ def train_universal_model(args):
         raise ValueError("No training data loaded from any entity")
     
     # 训练通用模型
-    id = datetime.now().strftime("%d%m%Y_%H%M%S")
+    id = get_run_id(args)
     window_size = args.lookback
     normalize = args.normalize
     n_epochs = args.epochs
@@ -256,7 +287,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # 设置随机种子以确保实验可重现性
-    set_seed(3407)
+    set_seed(args.seed)
     
     # 实现CALCE/CALCE2的通用模型训练
     if args.dataset in ['CALCE', 'CALCE2']:
@@ -264,7 +295,7 @@ if __name__ == "__main__":
         train_universal_model(args)
     else:
         # 对于其他数据集，使用原始训练逻辑
-        id = datetime.now().strftime("%d%m%Y_%H%M%S")
+        id = get_run_id(args)
 
         dataset = args.dataset
         window_size = args.lookback

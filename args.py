@@ -80,5 +80,7 @@ def get_parser():
 
     # --- Other ---
     parser.add_argument("--comment", type=str, default="")
+    parser.add_argument("--seed", type=int, default=3407, help="随机种子，用于实验可复现")
+    parser.add_argument("--run_id", type=str, default="", help="实验输出目录ID，留空则自动使用时间戳")
 
     return parser
