@@ -322,7 +322,12 @@ if __name__ == "__main__":
             (x_train, _), (x_test, y_test) = get_data(dataset, normalize=normalize)
         elif dataset == 'NASA':
             output_path = f'output/{dataset}'
-            (x_train, _), (x_test, y_test) = get_data(dataset, normalize=normalize)
+            (x_train, _), (x_test, y_test) = get_nasa_battery_data(
+                normalize=normalize,
+                nasa_battery_id=args.nasa_battery_id,
+                nasa_train_batteries=args.nasa_train_batteries,
+                nasa_test_batteries=args.nasa_test_batteries,
+            )
         elif dataset in ['CALCE', 'CALCE2']:
             output_path = f'output/{dataset}'
             (x_train, _), (x_test, y_test) = get_data(dataset, normalize=normalize)
@@ -339,8 +344,22 @@ if __name__ == "__main__":
             os.makedirs(log_dir)
         save_path = f"{output_path}/{id}"
 
-        x_train = torch.from_numpy(x_train).float()
-        x_test = torch.from_numpy(x_test).float()
+        nasa_train_tensors = None
+        if dataset == "NASA" and isinstance(x_train, dict):
+            nasa_train_tensors = {battery_name: torch.from_numpy(battery_data).float()
+                                  for battery_name, battery_data in x_train.items()}
+            first_train_battery = next(iter(nasa_train_tensors))
+            x_train = nasa_train_tensors[first_train_battery]
+        else:
+            x_train = torch.from_numpy(x_train).float()
+        nasa_test_tensors = None
+        if dataset == "NASA" and isinstance(x_test, dict):
+            nasa_test_tensors = {battery_name: torch.from_numpy(battery_data).float()
+                                 for battery_name, battery_data in x_test.items()}
+            first_test_battery = next(iter(nasa_test_tensors))
+            x_test = nasa_test_tensors[first_test_battery]
+        else:
+            x_test = torch.from_numpy(x_test).float()
         n_features = x_train.shape[1]
 
         target_dims = get_target_dims(dataset)
@@ -354,7 +373,14 @@ if __name__ == "__main__":
             print(f"Will forecast and reconstruct input features: {target_dims}")
             out_dim = len(target_dims)
 
-        train_dataset = SlidingWindowDataset(x_train, window_size, target_dims)
+        if dataset == "NASA" and nasa_train_tensors is not None:
+            train_sub_datasets = [
+                SlidingWindowDataset(battery_tensor, window_size, target_dims)
+                for battery_tensor in nasa_train_tensors.values()
+            ]
+            train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
+        else:
+            train_dataset = SlidingWindowDataset(x_train, window_size, target_dims)
         test_dataset = SlidingWindowDataset(x_test, window_size, target_dims)
 
         train_loader, val_loader, test_loader = create_data_loaders(
@@ -413,10 +439,33 @@ if __name__ == "__main__":
         plot_losses(trainer.losses, save_path=save_path, plot=False)
 
         # Check test loss
-        test_loss = trainer.evaluate(test_loader)
-        print(f"Test forecast loss: {test_loss[0]:.5f}")
-        print(f"Test reconstruction loss: {test_loss[1]:.5f}")
-        print(f"Test total loss: {test_loss[2]:.5f}")
+        if dataset == "NASA" and nasa_test_tensors is not None:
+            num_workers = 2 if os.name == 'nt' else 4
+            pin_memory = torch.cuda.is_available()
+            battery_test_losses = {}
+            for battery_name, battery_tensor in nasa_test_tensors.items():
+                battery_test_dataset = SlidingWindowDataset(battery_tensor, window_size, target_dims)
+                battery_test_loader = torch.utils.data.DataLoader(
+                    battery_test_dataset,
+                    batch_size=batch_size,
+                    shuffle=False,
+                    num_workers=num_workers,
+                    pin_memory=pin_memory
+                )
+                battery_test_losses[battery_name] = trainer.evaluate(battery_test_loader)
+                print(f"[{battery_name}] Test forecast loss: {battery_test_losses[battery_name][0]:.5f}")
+                print(f"[{battery_name}] Test reconstruction loss: {battery_test_losses[battery_name][1]:.5f}")
+                print(f"[{battery_name}] Test total loss: {battery_test_losses[battery_name][2]:.5f}")
+
+            mean_test_loss = np.mean(np.array(list(battery_test_losses.values()), dtype=np.float32), axis=0)
+            print(f"Mean test forecast loss: {mean_test_loss[0]:.5f}")
+            print(f"Mean test reconstruction loss: {mean_test_loss[1]:.5f}")
+            print(f"Mean test total loss: {mean_test_loss[2]:.5f}")
+        else:
+            test_loss = trainer.evaluate(test_loader)
+            print(f"Test forecast loss: {test_loss[0]:.5f}")
+            print(f"Test reconstruction loss: {test_loss[1]:.5f}")
+            print(f"Test total loss: {test_loss[2]:.5f}")
 
         # TODO
         # Some suggestions for POT args
@@ -457,150 +506,75 @@ if __name__ == "__main__":
             "save_path": save_path,
         }
         best_model = trainer.model
-        predictor = Predictor(
-            best_model,
-            window_size,
-            n_features,
-            prediction_args,
-        )
 
-        label = y_test[window_size:] if y_test is not None else None
-        predictor.predict_anomalies(x_train, x_test, label)
-
-        # 对于NASA数据集，添加额外的容量特征评估
-        if dataset == "NASA":
+        if dataset == "NASA" and nasa_test_tensors is not None:
             try:
-                # 加载容量数据用于评估
-                import pickle
-                import glob
-                import os
-                
-                # 查找NASA测试数据文件以确定使用的实体
-                test_files = glob.glob("datasets/NASA/processed/NASA_*_test.pkl")
-                if test_files:
-                    # 根据测试数据文件名推断实体名称
-                    # 例如: datasets/NASA/processed/NASA_B0049_test.pkl -> B0049
-                    test_file = test_files[0]  # 使用找到的第一个实体（与数据加载一致）
-                    filename = os.path.basename(test_file)
-                    entity_name = filename.replace('NASA_', '').replace('_test.pkl', '')
-                    capacity_file = os.path.join("datasets/NASA/processed", f"NASA_{entity_name}_capacities.pkl")
-                    
-                    print(f"使用实体 {entity_name} 的容量数据进行评估")
-                    
-                    if os.path.exists(capacity_file):
-                        # 读取完整的周期级容量数据
-                        with open(capacity_file, 'rb') as f:
-                            all_capacities = pickle.load(f)
-                        
-                        # 读取测试结果
-                        try:
-                            test_pred_df = pd.read_pickle(f"{save_path}/test_output.pkl")
-                            anomaly_scores = test_pred_df['A_Score_Global'].values
-                        except Exception as e:
-                            print(f"无法加载测试输出文件: {e}")
-                            raise e
-                        
-                        # 读取测试数据，其中已经包含了插值后的容量数据（在最后一列）
-                        with open(test_file, 'rb') as f:
-                            test_data = pickle.load(f)
-                        
-                        # 从测试数据中提取容量列（最后一列）
-                        # 根据preprocess.py中的处理，列顺序是：[周期编号, 测量电压, 测量电流, 测量温度, 负载电流, 负载电压, 容量]
-                        if test_data.shape[1] >= 7:
-                            capacities_from_test_data = test_data[:, -1]  # 最后一列是容量
-                            
-                            # 确保长度一致（考虑窗口大小的影响）
-                            if len(anomaly_scores) != len(capacities_from_test_data):
-                                min_len = min(len(anomaly_scores), len(capacities_from_test_data))
-                                anomaly_scores = anomaly_scores[:min_len]
-                                capacities_from_test_data = capacities_from_test_data[:min_len]
-                                print(f"调整数据长度以匹配: {min_len}")
-                            
-                            # 检查容量数据的有效性
-                            print(f"容量数据统计: 最小值={np.min(capacities_from_test_data):.4f}, "
-                                  f"最大值={np.max(capacities_from_test_data):.4f}, "
-                                  f"初始值={capacities_from_test_data[0]:.4f}")
-                            
-                            # 使用完整的容量数据计算初始容量（与预处理阶段保持一致）
-                            # 获取第一个非NaN容量值作为初始容量，与预处理阶段保持一致
-                            valid_capacities = all_capacities[~np.isnan(all_capacities)]
-                            if len(valid_capacities) > 0:
-                                initial_capacity = valid_capacities[0]  # 使用所有数据中的第一个有效周期容量作为初始容量
-                                capacity_decay_rate = (initial_capacity - capacities_from_test_data) / initial_capacity
-                                
-                                print(f"基于完整数据集初始容量({initial_capacity:.4f})的容量衰减率统计: "
-                                      f"最小值={np.min(capacity_decay_rate):.4f}, "
-                                      f"最大值={np.max(capacity_decay_rate):.4f}")
-                                
-                                # 检查是否有足够的衰减（超过阈值的数据点）
-                                threshold = 0.2  # 20%容量衰减阈值
-                                # 仅对非NaN值计算正样本数量
-                                valid_decay_rates = capacity_decay_rate[~np.isnan(capacity_decay_rate)]
-                                positive_samples = np.sum(valid_decay_rates > threshold) if len(valid_decay_rates) > 0 else 0
-                                total_valid_samples = len(valid_decay_rates)
-                                
-                                if total_valid_samples > 0:
-                                    print(f"超过{threshold*100}%容量衰减的数据点数量: {positive_samples}/{total_valid_samples} "
-                                          f"({positive_samples/total_valid_samples*100:.2f}%)")
-                                    
-                                    # 只有在有足够的正样本时才进行评估
-                                    if positive_samples > 0:
-                                        # 创建基于容量衰减的标签（处理NaN值）
-                                        labels = (capacity_decay_rate > threshold).astype(int)
-                                        # 将NaN位置的标签设为0
-                                        labels[np.isnan(capacity_decay_rate)] = 0
-                                        
-                                        # 计算ROC曲线（过滤掉NaN值）
-                                        valid_indices = ~np.isnan(capacity_decay_rate) & ~np.isnan(anomaly_scores)
-                                        if np.sum(valid_indices) > 0:
-                                            fpr, tpr, thresholds = roc_curve(labels[valid_indices], anomaly_scores[valid_indices])
-                                            roc_auc = auc(fpr, tpr)
-                                            
-                                            # 绘制ROC曲线
-                                            plot_roc_curve(fpr, tpr, roc_auc, save_path)
-                                            
-                                            # 绘制异常分数与容量关系图
-                                            plot_anomaly_score_vs_capacity(anomaly_scores, capacities_from_test_data, save_path)
-                                            
-                                            print(f"NASA容量特征评估完成，AUC值: {roc_auc:.4f}")
-                                        else:
-                                            print("错误: 没有足够的有效数据进行评估")
-                                    else:
-                                        print("警告: 容量衰减不足，无法进行有意义的评估")
-                                        # 即使没有足够正样本，我们也绘制图表以供观察
-                                        plt.figure(figsize=(12, 6))
-                                        plt.subplot(2, 1, 1)
-                                        plt.plot(capacities_from_test_data, label='Capacity', color='blue')
-                                        plt.ylabel('Capacity')
-                                        plt.title('Capacity Curve')
-                                        plt.legend()
-                                        
-                                        plt.subplot(2, 1, 2)
-                                        plt.plot(anomaly_scores, label='Anomaly Score', color='red')
-                                        plt.ylabel('Anomaly Score')
-                                        plt.xlabel('Time')
-                                        plt.title('Anomaly Score Curve')
-                                        plt.legend()
-                                        
-                                        plt.tight_layout()
-                                        if save_path:
-                                            plt.savefig(f"{save_path}/anomaly_score_vs_capacity.png", bbox_inches="tight", dpi=300)
-                                        plt.show()
-                                        plt.close()
-                                else:
-                                    print("错误: 没有足够的有效容量数据进行评估")
-                            else:
-                                print("错误: 没有找到有效的容量数据")
-                        else:
-                            print("测试数据列数不足，无法提取容量信息")
-                    else:
-                        print(f"未找到容量数据文件: {capacity_file}")
-                else:
-                    print("未找到NASA测试数据文件")
+                processed_prefix = "datasets/NASA/processed"
+                train_batteries, report_test_batteries = resolve_nasa_batteries(
+                    processed_prefix,
+                    nasa_battery_id=args.nasa_battery_id,
+                    nasa_train_batteries=args.nasa_train_batteries,
+                    nasa_test_batteries=args.nasa_test_batteries,
+                )
+
+                nasa_case_summaries = []
+                for battery_name, battery_tensor in nasa_test_tensors.items():
+                    battery_save_path = save_path if len(nasa_test_tensors) == 1 else os.path.join(save_path, f"battery_{battery_name}")
+                    if len(nasa_test_tensors) > 1:
+                        os.makedirs(battery_save_path, exist_ok=True)
+
+                    battery_prediction_args = dict(prediction_args)
+                    battery_prediction_args["save_path"] = battery_save_path
+                    predictor = Predictor(
+                        best_model,
+                        window_size,
+                        n_features,
+                        battery_prediction_args,
+                    )
+
+                    battery_label = None
+                    if isinstance(y_test, dict):
+                        raw_label = y_test.get(battery_name)
+                        if raw_label is not None:
+                            battery_label = raw_label[window_size:]
+
+                    train_reference = nasa_train_tensors if nasa_train_tensors is not None else x_train
+                    predictor.predict_anomalies(train_reference, battery_tensor, battery_label)
+
+                    _, raw_test_data, _ = load_nasa_processed_data(processed_prefix, battery_name)
+                    raw_test_data = np.asarray(raw_test_data, dtype=np.float32)
+                    capacities = raw_test_data[window_size:, -1] if raw_test_data.ndim == 2 and raw_test_data.shape[1] >= 7 else None
+                    if capacities is None:
+                        continue
+
+                    test_pred_df = pd.read_pickle(f"{battery_save_path}/test_output.pkl")
+                    case_summary = save_nasa_case_outputs(
+                        battery_save_path,
+                        test_pred_df,
+                        capacities,
+                        battery_name,
+                        train_batteries,
+                        report_test_batteries,
+                    )
+                    nasa_case_summaries.append(case_summary)
+
+                save_nasa_battery_comparison(save_path, nasa_case_summaries)
+
+                print("NASA专用输出已生成（曲线图、案例分析、分数趋势、电池间对比）")
             except Exception as e:
-                print(f"NASA容量特征评估出错: {e}")
+                print(f"NASA专用报告生成出错: {e}")
                 import traceback
                 traceback.print_exc()
+        else:
+            predictor = Predictor(
+                best_model,
+                window_size,
+                n_features,
+                prediction_args,
+            )
+
+            label = y_test[window_size:] if y_test is not None else None
+            predictor.predict_anomalies(x_train, x_test, label)
 
         # Save config
         args_path = f"{save_path}/config.txt"

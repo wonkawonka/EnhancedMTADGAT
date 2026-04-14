@@ -33,6 +33,31 @@ class Predictor:
         self.pred_args = pred_args
         self.summary_file_name = summary_file_name
 
+    @staticmethod
+    def _to_serializable_dict(metrics):
+        serializable = {}
+        for k, v in metrics.items():
+            if isinstance(v, list):
+                serializable[k] = v
+            else:
+                serializable[k] = float(v)
+        return serializable
+
+    def _save_standard_reports(self, e_eval, p_eval, bf_eval, feature_thresholds, global_threshold):
+        summary = {"epsilon_result": e_eval, "pot_result": p_eval, "bf_result": bf_eval}
+        with open(f"{self.save_path}/{self.summary_file_name}", "w") as f:
+            json.dump(summary, f, indent=2)
+
+        with open(f"{self.save_path}/summary_metrics.json", "w") as f:
+            json.dump(summary, f, indent=2)
+
+        thresholds = {
+            "global_threshold": float(global_threshold),
+            "feature_thresholds": {k: float(v) for k, v in feature_thresholds.items()},
+        }
+        with open(f"{self.save_path}/thresholds.json", "w") as f:
+            json.dump(thresholds, f, indent=2)
+
     def get_score(self, values):
         """Method that calculates anomaly score using given model and data
         :param values: 2D array of multivariate time series data, shape (N, k)
@@ -79,13 +104,16 @@ class Predictor:
             actual = actual[:, self.target_dims]
         #TODO 计算异常分数需要加图结构权重吗？
         anomaly_scores = np.zeros_like(actual)
+        pred_errors = np.zeros_like(actual)
+        recon_errors = np.zeros_like(actual)
         df_dict = {}
         for i in range(preds.shape[1]):
             df_dict[f"Forecast_{i}"] = preds[:, i]
             df_dict[f"Recon_{i}"] = recons[:, i]
             df_dict[f"True_{i}"] = actual[:, i]
-            a_score = np.sqrt((preds[:, i] - actual[:, i]) ** 2) + self.gamma * np.sqrt(
-                (recons[:, i] - actual[:, i]) ** 2)
+            pred_error = np.sqrt((preds[:, i] - actual[:, i]) ** 2)
+            recon_error = np.sqrt((recons[:, i] - actual[:, i]) ** 2)
+            a_score = pred_error + self.gamma * recon_error
 
             if self.scale_scores:
                 q75, q25 = np.percentile(a_score, [75, 25])
@@ -94,13 +122,29 @@ class Predictor:
                 a_score = (a_score - median) / (1+iqr)
 
             anomaly_scores[:, i] = a_score
+            pred_errors[:, i] = pred_error
+            recon_errors[:, i] = recon_error
+            df_dict[f"Pred_Error_{i}"] = pred_error
+            df_dict[f"Recon_Error_{i}"] = recon_error
             df_dict[f"A_Score_{i}"] = a_score
 
         df = pd.DataFrame(df_dict)
+        df['Pred_Error_Global'] = np.mean(pred_errors, axis=1)
+        df['Recon_Error_Global'] = np.mean(recon_errors, axis=1)
         anomaly_scores = np.mean(anomaly_scores, 1)
         df['A_Score_Global'] = anomaly_scores
 
         return df
+
+    def get_score_for_sequences(self, values):
+        if isinstance(values, dict):
+            score_dfs = []
+            for _, battery_values in values.items():
+                score_dfs.append(self.get_score(battery_values))
+            if not score_dfs:
+                raise ValueError("No sequence data provided for scoring")
+            return pd.concat(score_dfs, axis=0, ignore_index=True)
+        return self.get_score(values)
 
     def predict_anomalies(self, train, test, true_anomalies=None, load_scores=False, save_output=True,
                           scale_scores=False):
@@ -125,8 +169,8 @@ class Predictor:
             test_anomaly_scores = test_pred_df['A_Score_Global'].values
 
         else:
-            train_pred_df = self.get_score(train)
-            test_pred_df = self.get_score(test)
+            train_pred_df = self.get_score_for_sequences(train)
+            test_pred_df = self.get_score_for_sequences(test)
 
             train_anomaly_scores = train_pred_df['A_Score_Global'].values
             test_anomaly_scores = test_pred_df['A_Score_Global'].values
@@ -146,10 +190,12 @@ class Predictor:
         # Find threshold and predict anomalies at feature-level (for plotting and diagnosis purposes)
         out_dim = self.n_features if self.target_dims is None else len(self.target_dims)
         all_preds = np.zeros((len(test_pred_df), out_dim))
+        feature_thresholds = {}
         for i in range(out_dim):
             train_feature_anom_scores = train_pred_df[f"A_Score_{i}"].values
             test_feature_anom_scores = test_pred_df[f"A_Score_{i}"].values
             epsilon = find_epsilon(train_feature_anom_scores, reg_level=2)
+            feature_thresholds[f"feature_{i}"] = epsilon
 
             train_feature_anom_preds = (train_feature_anom_scores >= epsilon).astype(int)
             test_feature_anom_preds = (test_feature_anom_scores >= epsilon).astype(int)
@@ -184,23 +230,14 @@ class Predictor:
             print(f"Results using peak-over-threshold method:\n {p_eval}")
         print(f"Results using best f1 score search:\n {bf_eval}")
 
-        for k, v in e_eval.items():
-            if not type(e_eval[k]) == list:
-                e_eval[k] = float(v)
-        for k, v in p_eval.items():
-            if not type(p_eval[k]) == list:
-                p_eval[k] = float(v)
-        for k, v in bf_eval.items():
-            bf_eval[k] = float(v)
-
-        # Save
-        summary = {"epsilon_result": e_eval, "pot_result": p_eval, "bf_result": bf_eval}
-        with open(f"{self.save_path}/{self.summary_file_name}", "w") as f:
-            json.dump(summary, f, indent=2)
+        e_eval = self._to_serializable_dict(e_eval)
+        p_eval = self._to_serializable_dict(p_eval)
+        bf_eval = self._to_serializable_dict(bf_eval)
+        global_epsilon = e_eval["threshold"] if "threshold" in e_eval else np.percentile(train_anomaly_scores, 95)
+        self._save_standard_reports(e_eval, p_eval, bf_eval, feature_thresholds, global_epsilon)
 
         # Save anomaly predictions made using epsilon method (could be changed to pot or bf-method)
         if save_output:
-            global_epsilon = e_eval["threshold"] if "threshold" in e_eval else np.percentile(train_anomaly_scores, 95)
             if true_anomalies is not None:
                 test_pred_df["A_True_Global"] = true_anomalies
             train_pred_df["Thresh_Global"] = global_epsilon

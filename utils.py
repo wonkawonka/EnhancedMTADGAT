@@ -1,5 +1,6 @@
 import os
 import pickle
+import json
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -117,8 +118,129 @@ def inject_point_anomalies(data, anomaly_ratio=0.05):
     return data_copy, labels
 
 
+def parse_entity_list(entity_input):
+    if entity_input is None:
+        return None
+    if isinstance(entity_input, str):
+        items = [item.strip() for item in entity_input.split(",")]
+        items = [item for item in items if item]
+        return items if items else None
+    if isinstance(entity_input, (list, tuple)):
+        items = [str(item).strip() for item in entity_input if str(item).strip()]
+        return items if items else None
+    raise ValueError("entity list input must be string, list, tuple, or None")
+
+
+def get_available_nasa_batteries(prefix):
+    battery_names = []
+    for file_name in os.listdir(prefix):
+        if file_name.startswith("NASA_") and file_name.endswith("_train.pkl"):
+            battery_name = file_name.replace("NASA_", "").replace("_train.pkl", "")
+            battery_names.append(battery_name)
+    return sorted(battery_names)
+
+
+def load_nasa_processed_data(prefix, battery_name):
+    train_path = os.path.join(prefix, f"NASA_{battery_name}_train.pkl")
+    test_path = os.path.join(prefix, f"NASA_{battery_name}_test.pkl")
+    label_path = os.path.join(prefix, f"NASA_{battery_name}_test_label.pkl")
+
+    if not os.path.exists(train_path):
+        raise FileNotFoundError(f"NASA train file not found for battery {battery_name}: {train_path}")
+    if not os.path.exists(test_path):
+        raise FileNotFoundError(f"NASA test file not found for battery {battery_name}: {test_path}")
+
+    with open(train_path, "rb") as f:
+        train_data = pickle.load(f)
+    with open(test_path, "rb") as f:
+        test_data = pickle.load(f)
+
+    test_label = None
+    if os.path.exists(label_path):
+        with open(label_path, "rb") as f:
+            test_label = pickle.load(f)
+
+    return train_data, test_data, test_label
+
+
+def resolve_nasa_batteries(prefix, nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None):
+    available_batteries = get_available_nasa_batteries(prefix)
+    if not available_batteries:
+        raise FileNotFoundError(f"No processed NASA battery data found in {prefix}")
+
+    selected_single = str(nasa_battery_id).strip() if nasa_battery_id is not None else None
+    train_batteries = parse_entity_list(nasa_train_batteries)
+    test_batteries = parse_entity_list(nasa_test_batteries)
+
+    if selected_single:
+        train_batteries = [selected_single]
+        test_batteries = [selected_single]
+    elif train_batteries is None and test_batteries is None:
+        train_batteries = [available_batteries[0]]
+        test_batteries = [available_batteries[0]]
+    elif train_batteries is None:
+        train_batteries = list(test_batteries)
+    elif test_batteries is None:
+        test_batteries = list(train_batteries)
+
+    missing_batteries = [b for b in set(train_batteries + test_batteries) if b not in available_batteries]
+    if missing_batteries:
+        raise FileNotFoundError(
+            f"NASA batteries not found in processed data: {missing_batteries}. "
+            f"Available batteries: {available_batteries}"
+        )
+
+    return train_batteries, test_batteries
+
+
+def get_nasa_battery_data(nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None,
+                          normalize=False, prefix="datasets/NASA/processed"):
+    train_batteries, test_batteries = resolve_nasa_batteries(
+        prefix,
+        nasa_battery_id=nasa_battery_id,
+        nasa_train_batteries=nasa_train_batteries,
+        nasa_test_batteries=nasa_test_batteries,
+    )
+
+    print(f"Using NASA train batteries: {train_batteries}")
+    print(f"Using NASA test batteries: {test_batteries}")
+
+    train_data_map = {}
+    test_data_map = {}
+    test_label_map = {}
+
+    for battery_name in train_batteries:
+        battery_train_data, _, _ = load_nasa_processed_data(prefix, battery_name)
+        train_data_map[battery_name] = np.asarray(battery_train_data, dtype=np.float32)
+
+    for battery_name in test_batteries:
+        _, battery_test_data, battery_test_label = load_nasa_processed_data(prefix, battery_name)
+        test_data_map[battery_name] = np.asarray(battery_test_data, dtype=np.float32)
+        test_label_map[battery_name] = None if battery_test_label is None else np.asarray(battery_test_label)
+
+    if all(label is None for label in test_label_map.values()):
+        print("NASA test labels are unavailable for the selected batteries; supervised metrics should be skipped.")
+
+    if normalize:
+        concatenated_train = np.concatenate(list(train_data_map.values()), axis=0)
+        _, scaler = normalize_data(concatenated_train, scaler=None)
+
+        normalized_train_map = {}
+        for battery_name, battery_train_data in train_data_map.items():
+            normalized_train_map[battery_name], _ = normalize_data(battery_train_data, scaler=scaler)
+        train_data_map = normalized_train_map
+
+        normalized_test_map = {}
+        for battery_name, battery_test_data in test_data_map.items():
+            normalized_test_map[battery_name], _ = normalize_data(battery_test_data, scaler=scaler)
+        test_data_map = normalized_test_map
+
+    return (train_data_map, None), (test_data_map, test_label_map)
+
+
 def get_data(dataset, max_train_size=None, max_test_size=None,
-             normalize=False, spec_res=False, train_start=0, test_start=0):
+             normalize=False, spec_res=False, train_start=0, test_start=0,
+             nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None):
     """
     Get data from pkl files
 
@@ -151,79 +273,28 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
     x_dim = get_data_dim(dataset)
     
     if dataset == "NASA":
-        # 对于NASA数据集，加载处理后的pkl文件
-        import glob
-        # 尝试加载合并后的数据
-        try:
-            f = open(os.path.join(prefix, dataset + "_train.pkl"), "rb")
-            train_data = pickle.load(f)
-            f.close()
-        except (KeyError, FileNotFoundError):
-            # 如果没有合并后的数据，则加载单个电池的数据
-            pkl_files = glob.glob(os.path.join(prefix, "NASA_*_train.pkl"))
-            if not pkl_files:
-                raise FileNotFoundError(f"No processed NASA battery data found in {prefix}")
-            
-            # 为了简单起见，我们只使用第一个电池的数据
-            battery_file = pkl_files[0]
-            f = open(battery_file, "rb")
-            train_data = pickle.load(f)
-            f.close()
-            print(f"Using battery data from: {os.path.basename(battery_file)}")
-        
-        try:
-            f = open(os.path.join(prefix, dataset + "_test.pkl"), "rb")
-            test_data = pickle.load(f)
-            f.close()
-        except (KeyError, FileNotFoundError):
-            pkl_files = glob.glob(os.path.join(prefix, "NASA_*_test.pkl"))
-            if not pkl_files:
-                test_data = None
-            else:
-                battery_file = pkl_files[0]
-                f = open(battery_file, "rb")
-                test_data = pickle.load(f)
-                f.close()
-        
-        try:
-            f = open(os.path.join(prefix, dataset + "_test_label.pkl"), "rb")
-            test_label = pickle.load(f)
-            f.close()
-        except (KeyError, FileNotFoundError):
-            pkl_files = glob.glob(os.path.join(prefix, "NASA_*_test_label.pkl"))
-            if not pkl_files:
-                test_label = None
-            else:
-                battery_file = pkl_files[0]
-                f = open(battery_file, "rb")
-                test_label = pickle.load(f)
-                f.close()
-        
-        # 对于NASA数据集，我们现在有了三维数据 (num_cycles, max_len, features)
-        # 但为了向后兼容，我们需要将其转换为二维数据 (num_cycles * max_len, features)
-        # 这样可以保持现有模型的接口不变
-        if train_data is not None and train_data.ndim == 3:
-            num_cycles, max_len, features = train_data.shape
-            train_data = train_data.reshape(num_cycles * max_len, features)
-            
-        if test_data is not None and test_data.ndim == 3:
-            num_cycles, max_len, features = test_data.shape
-            test_data = test_data.reshape(num_cycles * max_len, features)
-            
-        # 加载容量信息用于评估
-        try:
-            f = open(os.path.join(prefix, dataset + "_capacities.pkl"), "rb")
-            capacities = pickle.load(f)
-            f.close()
-        except (KeyError, FileNotFoundError):
-            pkl_files = glob.glob(os.path.join(prefix, "NASA_*_capacities.pkl"))
-            if not pkl_files:
-                capacities = None
-            else:
-                battery_file = pkl_files[0]
-                f = open(battery_file, "rb")
-                capacities = pickle.load(f)
-                f.close()
+        (train_data_map, _), (test_data_map, test_label_map) = get_nasa_battery_data(
+            nasa_battery_id=nasa_battery_id,
+            nasa_train_batteries=nasa_train_batteries,
+            nasa_test_batteries=nasa_test_batteries,
+            normalize=False,
+            prefix=prefix,
+        )
+        train_data = np.concatenate(list(train_data_map.values()), axis=0)
+        test_data = np.concatenate(list(test_data_map.values()), axis=0)
+
+        has_any_label = any(label is not None for label in test_label_map.values())
+        if has_any_label:
+            aligned_labels = []
+            for battery_name, battery_test_data in test_data_map.items():
+                battery_test_label = test_label_map[battery_name]
+                if battery_test_label is None:
+                    aligned_labels.append(np.zeros(len(battery_test_data), dtype=np.int32))
+                else:
+                    aligned_labels.append(np.asarray(battery_test_label))
+            test_label = np.concatenate(aligned_labels, axis=0)
+        else:
+            test_label = None
     elif dataset in ["CALCE", "CALCE2"]:
         # 统一处理CALCE和CALCE2数据集
         # 使用训练/测试划分方式加载数据
@@ -357,13 +428,40 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
     # 4. 基于训练集统计量进行归一化，并同步应用到测试集
     scaler = None
     if normalize:
-        train_data, scaler = normalize_data(train_data, scaler=None)
-        if test_data is not None:
-            test_data, _ = normalize_data(test_data, scaler=scaler)
+        if isinstance(train_data, dict):
+            concatenated_train = np.concatenate(list(train_data.values()), axis=0)
+            _, scaler = normalize_data(concatenated_train, scaler=None)
+            normalized_train_map = {}
+            for battery_name, battery_train_data in train_data.items():
+                normalized_train_map[battery_name], _ = normalize_data(battery_train_data, scaler=scaler)
+            train_data = normalized_train_map
+        else:
+            train_data, scaler = normalize_data(train_data, scaler=None)
 
-    print("train set shape: ", train_data.shape)
-    print("test set shape: ", test_data.shape if test_data is not None else "None")
-    print("test set label shape: ", None if test_label is None else test_label.shape)
+        if test_data is not None:
+            if isinstance(test_data, dict):
+                normalized_test_map = {}
+                for battery_name, battery_test_data in test_data.items():
+                    normalized_test_map[battery_name], _ = normalize_data(battery_test_data, scaler=scaler)
+                test_data = normalized_test_map
+            else:
+                test_data, _ = normalize_data(test_data, scaler=scaler)
+
+    if isinstance(train_data, dict):
+        print("train set batteries: ", list(train_data.keys()))
+        print("train set shapes: ", {k: v.shape for k, v in train_data.items()})
+    else:
+        print("train set shape: ", train_data.shape)
+    if isinstance(test_data, dict):
+        print("test set batteries: ", list(test_data.keys()))
+        print("test set shapes: ", {k: v.shape for k, v in test_data.items()})
+        if isinstance(test_label, dict):
+            print("test set label shapes: ", {k: None if v is None else v.shape for k, v in test_label.items()})
+        else:
+            print("test set label shape: ", None)
+    else:
+        print("test set shape: ", test_data.shape if test_data is not None else "None")
+        print("test set label shape: ", None if test_label is None else test_label.shape)
     return (train_data, None), (test_data, test_label)
 
 
@@ -672,25 +770,312 @@ def plot_roc_curve(fpr, tpr, roc_auc, save_path=""):
     plt.close()
 
 
-def plot_anomaly_score_vs_capacity(anomaly_scores, capacities, save_path=""):
+def plot_anomaly_score_vs_capacity(anomaly_scores, capacities, save_path="", file_name="anomaly_score_vs_capacity.png",
+                                   title="Anomaly Score vs Capacity"):
     """
     绘制异常分数与容量的关系图
     :param anomaly_scores: 异常分数
     :param capacities: 容量值
     :param save_path: 保存路径
     """
-    plt.figure(figsize=(12, 6))
-    plt.plot(capacities, label='Capacity', color='blue')
-    plt.ylabel('Capacity')
-    plt.twinx().plot(anomaly_scores, label='Anomaly Score', color='red')
-    plt.ylabel('Anomaly Score')
-    plt.xlabel('Time')
-    plt.title('Anomaly Score vs Capacity')
-    plt.legend()
+    capacities = np.asarray(capacities, dtype=np.float32)
+    anomaly_scores = np.asarray(anomaly_scores, dtype=np.float32)
+    min_len = min(len(capacities), len(anomaly_scores))
+    capacities = capacities[:min_len]
+    anomaly_scores = anomaly_scores[:min_len]
+
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+    line1 = ax1.plot(capacities, label='Capacity', color='blue')
+    ax1.set_ylabel('Capacity')
+    ax1.set_xlabel('Time')
+
+    ax2 = ax1.twinx()
+    line2 = ax2.plot(anomaly_scores, label='Anomaly Score', color='red')
+    ax2.set_ylabel('Anomaly Score')
+    ax1.set_title(title)
+    lines = line1 + line2
+    ax1.legend(lines, [line.get_label() for line in lines], loc="upper right")
+    fig.tight_layout()
     if save_path:
-        plt.savefig(f"{save_path}/anomaly_score_vs_capacity.png", bbox_inches="tight", dpi=300)
-    plt.show()
-    plt.close()
+        plt.savefig(f"{save_path}/{file_name}", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def plot_nasa_trend(series, save_path, file_name, ylabel, title, threshold=None, color="tab:red"):
+    series = np.asarray(series, dtype=np.float32)
+    fig, ax = plt.subplots(figsize=(12, 4))
+    ax.plot(series, color=color, linewidth=1.2)
+    if threshold is not None:
+        ax.axhline(float(threshold), color="black", linestyle="--", linewidth=1, label="Threshold")
+        ax.legend(loc="upper right")
+    ax.set_xlabel("Time")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    if save_path:
+        plt.savefig(f"{save_path}/{file_name}", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def plot_nasa_case_overview(capacities, pred_error, recon_error, anomaly_scores, save_path,
+                            file_name="nasa_case_overview.png"):
+    capacities = np.asarray(capacities, dtype=np.float32)
+    pred_error = np.asarray(pred_error, dtype=np.float32)
+    recon_error = np.asarray(recon_error, dtype=np.float32)
+    anomaly_scores = np.asarray(anomaly_scores, dtype=np.float32)
+    min_len = min(len(capacities), len(pred_error), len(recon_error), len(anomaly_scores))
+    capacities = capacities[:min_len]
+    pred_error = pred_error[:min_len]
+    recon_error = recon_error[:min_len]
+    anomaly_scores = anomaly_scores[:min_len]
+
+    fig, axes = plt.subplots(4, 1, figsize=(12, 12), sharex=True)
+    axes[0].plot(capacities, color="tab:blue", linewidth=1.2)
+    axes[0].set_ylabel("Capacity")
+    axes[0].set_title("NASA Degradation Case Overview")
+    axes[0].grid(True, alpha=0.3)
+
+    axes[1].plot(pred_error, color="tab:orange", linewidth=1.2)
+    axes[1].set_ylabel("Pred Error")
+    axes[1].grid(True, alpha=0.3)
+
+    axes[2].plot(recon_error, color="tab:green", linewidth=1.2)
+    axes[2].set_ylabel("Recon Error")
+    axes[2].grid(True, alpha=0.3)
+
+    axes[3].plot(anomaly_scores, color="tab:red", linewidth=1.2)
+    axes[3].set_ylabel("Score")
+    axes[3].set_xlabel("Time")
+    axes[3].grid(True, alpha=0.3)
+
+    fig.tight_layout()
+    if save_path:
+        plt.savefig(f"{save_path}/{file_name}", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def get_nasa_battery_profiles(prefix, battery_names, window_size):
+    profiles = []
+    offset = 0
+    for battery_name in battery_names:
+        _, battery_test_data, _ = load_nasa_processed_data(prefix, battery_name)
+        battery_test_data = np.asarray(battery_test_data, dtype=np.float32)
+        effective_len = max(len(battery_test_data) - window_size, 0)
+        capacities = None
+        if battery_test_data.ndim == 2 and battery_test_data.shape[1] >= 1 and effective_len > 0:
+            capacities = battery_test_data[window_size:, -1]
+        profiles.append({
+            "battery_id": battery_name,
+            "raw_test_len": int(len(battery_test_data)),
+            "effective_len": int(effective_len),
+            "start": int(offset),
+            "end": int(offset + effective_len),
+            "capacities": capacities,
+        })
+        offset += effective_len
+    return profiles
+
+
+def _get_score_rising_stage(scores):
+    if len(scores) == 0:
+        return "unknown"
+    boundaries = np.linspace(0, len(scores), 4, dtype=int)
+    stage_names = ["early", "middle", "late"]
+    stage_means = []
+    for idx in range(3):
+        start, end = boundaries[idx], boundaries[idx + 1]
+        if end <= start:
+            stage_means.append(float("-inf"))
+        else:
+            stage_means.append(float(np.mean(scores[start:end])))
+    return stage_names[int(np.argmax(stage_means))]
+
+
+def extract_top_score_segments(anomaly_scores, threshold=None, top_k=5):
+    scores = np.asarray(anomaly_scores, dtype=np.float32)
+    if len(scores) == 0:
+        return []
+
+    if threshold is None:
+        threshold = float(np.percentile(scores, 95))
+
+    segments = []
+    start = None
+    for idx, score in enumerate(scores):
+        if score >= threshold and start is None:
+            start = idx
+        elif score < threshold and start is not None:
+            end = idx - 1
+            segment_scores = scores[start:end + 1]
+            peak_offset = int(np.argmax(segment_scores))
+            peak_idx = start + peak_offset
+            segments.append({
+                "start_idx": int(start),
+                "end_idx": int(end),
+                "length": int(end - start + 1),
+                "peak_idx": int(peak_idx),
+                "peak_score": float(scores[peak_idx]),
+                "mean_score": float(np.mean(segment_scores)),
+            })
+            start = None
+
+    if start is not None:
+        end = len(scores) - 1
+        segment_scores = scores[start:end + 1]
+        peak_offset = int(np.argmax(segment_scores))
+        peak_idx = start + peak_offset
+        segments.append({
+            "start_idx": int(start),
+            "end_idx": int(end),
+            "length": int(end - start + 1),
+            "peak_idx": int(peak_idx),
+            "peak_score": float(scores[peak_idx]),
+            "mean_score": float(np.mean(segment_scores)),
+        })
+
+    if not segments:
+        top_indices = np.argsort(scores)[-top_k:][::-1]
+        for idx in top_indices:
+            segments.append({
+                "start_idx": int(idx),
+                "end_idx": int(idx),
+                "length": 1,
+                "peak_idx": int(idx),
+                "peak_score": float(scores[idx]),
+                "mean_score": float(scores[idx]),
+            })
+
+    segments.sort(key=lambda item: item["peak_score"], reverse=True)
+    return segments[:top_k]
+
+
+def save_nasa_case_outputs(save_path, test_pred_df, capacities, battery_name, train_batteries, test_batteries):
+    anomaly_scores = np.asarray(test_pred_df["A_Score_Global"].values, dtype=np.float32)
+    pred_error = np.asarray(test_pred_df["Pred_Error_Global"].values, dtype=np.float32)
+    recon_error = np.asarray(test_pred_df["Recon_Error_Global"].values, dtype=np.float32)
+    capacities = np.asarray(capacities, dtype=np.float32)
+
+    min_len = min(len(anomaly_scores), len(pred_error), len(recon_error), len(capacities))
+    anomaly_scores = anomaly_scores[:min_len]
+    pred_error = pred_error[:min_len]
+    recon_error = recon_error[:min_len]
+    capacities = capacities[:min_len]
+
+    threshold = None
+    if "Thresh_Global" in test_pred_df.columns and len(test_pred_df) > 0:
+        threshold = float(test_pred_df["Thresh_Global"].iloc[0])
+
+    plot_anomaly_score_vs_capacity(
+        anomaly_scores,
+        capacities,
+        save_path=save_path,
+        file_name="capacity_vs_score.png",
+        title=f"{battery_name} Capacity vs Anomaly Score",
+    )
+    plot_nasa_trend(
+        anomaly_scores,
+        save_path=save_path,
+        file_name="score_trend.png",
+        ylabel="Anomaly Score",
+        title=f"{battery_name} Anomaly Score Trend",
+        threshold=threshold,
+        color="tab:red",
+    )
+    plot_nasa_trend(
+        pred_error,
+        save_path=save_path,
+        file_name="prediction_error_trend.png",
+        ylabel="Prediction Error",
+        title=f"{battery_name} Prediction Error Trend",
+        color="tab:orange",
+    )
+    plot_nasa_trend(
+        recon_error,
+        save_path=save_path,
+        file_name="reconstruction_error_trend.png",
+        ylabel="Reconstruction Error",
+        title=f"{battery_name} Reconstruction Error Trend",
+        color="tab:green",
+    )
+    plot_nasa_case_overview(capacities, pred_error, recon_error, anomaly_scores, save_path)
+
+    top_segments = extract_top_score_segments(anomaly_scores, threshold=threshold, top_k=5)
+    top_segments_df = pd.DataFrame(top_segments)
+    top_segments_df.to_csv(f"{save_path}/top_anomaly_segments.csv", index=False)
+
+    valid_capacities = capacities[~np.isnan(capacities)]
+    capacity_drop_rate = 0.0
+    if len(valid_capacities) > 1 and valid_capacities[0] != 0:
+        capacity_drop_rate = float((valid_capacities[0] - valid_capacities[-1]) / valid_capacities[0])
+
+    summary = {
+        "battery_id": battery_name,
+        "train_batteries": train_batteries,
+        "test_batteries": test_batteries,
+        "num_points": int(min_len),
+        "global_threshold": threshold,
+        "max_score": float(np.max(anomaly_scores)) if len(anomaly_scores) > 0 else None,
+        "mean_score": float(np.mean(anomaly_scores)) if len(anomaly_scores) > 0 else None,
+        "score_std": float(np.std(anomaly_scores)) if len(anomaly_scores) > 0 else None,
+        "score_rising_stage": _get_score_rising_stage(anomaly_scores),
+        "capacity_drop_rate": capacity_drop_rate,
+        "pred_error_mean": float(np.mean(pred_error)) if len(pred_error) > 0 else None,
+        "recon_error_mean": float(np.mean(recon_error)) if len(recon_error) > 0 else None,
+        "topk_score_indices": [int(idx) for idx in np.argsort(anomaly_scores)[-5:][::-1].tolist()] if len(anomaly_scores) > 0 else [],
+    }
+    with open(f"{save_path}/nasa_case_summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
+
+    return summary
+
+
+def save_nasa_battery_comparison(save_path, case_summaries):
+    if not case_summaries:
+        return []
+
+    comparison_rows = []
+    for summary in case_summaries:
+        comparison_rows.append({
+            "battery_id": summary["battery_id"],
+            "num_points": summary["num_points"],
+            "mean_score": summary["mean_score"],
+            "max_score": summary["max_score"],
+            "score_std": summary["score_std"],
+            "pred_error_mean": summary["pred_error_mean"],
+            "recon_error_mean": summary["recon_error_mean"],
+            "capacity_drop_rate": summary["capacity_drop_rate"],
+        })
+
+    if not comparison_rows:
+        return []
+
+    comparison_df = pd.DataFrame(comparison_rows)
+    comparison_df.to_csv(f"{save_path}/battery_comparison.csv", index=False)
+
+    fig, ax1 = plt.subplots(figsize=(10, 5))
+    x = np.arange(len(comparison_df))
+    ax1.bar(x - 0.15, comparison_df["mean_score"], width=0.3, label="Mean Score", color="tab:red")
+    ax1.bar(x + 0.15, comparison_df["max_score"], width=0.3, label="Max Score", color="tab:orange")
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(comparison_df["battery_id"].tolist())
+    ax1.set_ylabel("Anomaly Score")
+
+    ax2 = ax1.twinx()
+    if comparison_df["capacity_drop_rate"].notna().any():
+        capacity_values = comparison_df["capacity_drop_rate"].fillna(0.0).values
+        ax2.plot(x, capacity_values, color="tab:blue", marker="o", linewidth=1.5, label="Capacity Drop Rate")
+        ax2.set_ylabel("Capacity Drop Rate")
+
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+    lines_2, labels_2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc="upper right")
+    ax1.set_title("NASA Battery Comparison")
+    fig.tight_layout()
+    plt.savefig(f"{save_path}/battery_comparison.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+    return comparison_rows
 
 
 def interpolate_capacity_to_timesteps(cycle_capacities, cycle_lengths, cycle_types):

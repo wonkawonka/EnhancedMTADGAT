@@ -101,11 +101,33 @@ if __name__ == "__main__":
 
     if dataset == "SMD":
         (x_train, _), (x_test, y_test) = get_data(f"machine-{group_index}-{index}", normalize=normalize)
+    elif dataset == "NASA":
+        (x_train, _), (x_test, y_test) = get_nasa_battery_data(
+            normalize=normalize,
+            nasa_battery_id=model_args.nasa_battery_id if hasattr(model_args, "nasa_battery_id") else "",
+            nasa_train_batteries=model_args.nasa_train_batteries if hasattr(model_args, "nasa_train_batteries") else "",
+            nasa_test_batteries=model_args.nasa_test_batteries if hasattr(model_args, "nasa_test_batteries") else "",
+        )
     else:
         (x_train, _), (x_test, y_test) = get_data(args.dataset, normalize=normalize)
 
-    x_train = torch.from_numpy(x_train).float()
-    x_test = torch.from_numpy(x_test).float()
+    nasa_train_tensors = None
+    if dataset == "NASA" and isinstance(x_train, dict):
+        nasa_train_tensors = {battery_name: torch.from_numpy(battery_data).float()
+                              for battery_name, battery_data in x_train.items()}
+        first_train_battery = next(iter(nasa_train_tensors))
+        x_train = nasa_train_tensors[first_train_battery]
+    else:
+        x_train = torch.from_numpy(x_train).float()
+
+    nasa_test_tensors = None
+    if dataset == "NASA" and isinstance(x_test, dict):
+        nasa_test_tensors = {battery_name: torch.from_numpy(battery_data).float()
+                             for battery_name, battery_data in x_test.items()}
+        first_test_battery = next(iter(nasa_test_tensors))
+        x_test = nasa_test_tensors[first_test_battery]
+    else:
+        x_test = torch.from_numpy(x_test).float()
     n_features = x_train.shape[1]
 
     target_dims = get_target_dims(args.dataset)
@@ -211,8 +233,42 @@ if __name__ == "__main__":
     else:
         summary_file_name = f"summary_{count}.txt"
 
-    label = y_test[window_size:] if y_test is not None else None
-    predictor = Predictor(model, window_size, n_features, prediction_args, summary_file_name=summary_file_name)
-    predictor.predict_anomalies(x_train, x_test, label,
-                                load_scores=args.load_scores,
-                                save_output=args.save_output)
+    if dataset == "NASA" and nasa_test_tensors is not None:
+        train_reference = nasa_train_tensors if nasa_train_tensors is not None else x_train
+        for battery_name, battery_tensor in nasa_test_tensors.items():
+            battery_save_path = save_path if len(nasa_test_tensors) == 1 else os.path.join(save_path, f"battery_{battery_name}")
+            if len(nasa_test_tensors) > 1:
+                os.makedirs(battery_save_path, exist_ok=True)
+
+            battery_prediction_args = dict(prediction_args)
+            battery_prediction_args["save_path"] = battery_save_path
+
+            battery_summary_count = 0
+            for filename in os.listdir(battery_save_path):
+                if filename.startswith("summary"):
+                    battery_summary_count += 1
+            if battery_summary_count == 0:
+                battery_summary_name = "summary.txt"
+            else:
+                battery_summary_name = f"summary_{battery_summary_count}.txt"
+
+            predictor = Predictor(model, window_size, n_features, battery_prediction_args, summary_file_name=battery_summary_name)
+            battery_label = None
+            if isinstance(y_test, dict):
+                raw_label = y_test.get(battery_name)
+                if raw_label is not None:
+                    battery_label = raw_label[window_size:]
+
+            predictor.predict_anomalies(
+                train_reference,
+                battery_tensor,
+                battery_label,
+                load_scores=args.load_scores,
+                save_output=args.save_output,
+            )
+    else:
+        label = y_test[window_size:] if y_test is not None else None
+        predictor = Predictor(model, window_size, n_features, prediction_args, summary_file_name=summary_file_name)
+        predictor.predict_anomalies(x_train, x_test, label,
+                                    load_scores=args.load_scores,
+                                    save_output=args.save_output)

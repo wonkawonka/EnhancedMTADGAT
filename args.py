@@ -34,6 +34,9 @@ def get_parser():
     # -- Data params ---
     parser.add_argument('--dataset', type=str.upper, default='NASA',choices=['SMD', 'SMAP', 'MSL', 'NASA', 'CALCE','CALCE2', 'BMS'],help='dataset name')
     parser.add_argument("--group", type=str, default="1-1", help="指定SMD数据集中具体机器编号. <group_index>-<index>")
+    parser.add_argument("--nasa_battery_id", type=str, default="", help="指定单个NASA电池ID，如 B0018")
+    parser.add_argument("--nasa_train_batteries", type=str, default="", help="NASA训练电池ID列表，逗号分隔，如 B0005,B0006,B0007")
+    parser.add_argument("--nasa_test_batteries", type=str, default="", help="NASA测试电池ID列表，逗号分隔，如 B0018")
     parser.add_argument("--lookback", type=int, default=100,help="窗口大小（window size），即模型输入的时间步数")
     parser.add_argument("--normalize", type=str2bool, default=True)
     parser.add_argument("--spec_res", type=str2bool, default=False,help="特殊分辨率设置，目前未在代码中详细使用")

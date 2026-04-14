@@ -31,7 +31,7 @@ try:
     
     print(f"训练集形状: {train_data.shape}")
     print(f"测试集形状: {test_data.shape}")
-    print(f"测试标签形状: {test_labels.shape}")
+    print(f"测试标签形状: {None if test_labels is None else test_labels.shape}")
     
     # NASA 特征名称 (根据实际数据结构调整)
     # 数据有7列：[周期编号, 测量电压, 测量电流, 测量温度, 负载电流, 负载电压, 容量]
@@ -139,6 +139,7 @@ plt.show()
 if battery_names:  # 只有当存在电池单元时才绘图
     plt.figure(figsize=(15, 8))
     colors = plt.cm.tab10(np.linspace(0, 1, len(battery_names)))  # 为所有电池单元生成不同颜色
+    has_any_anomaly_label = False
 
     for i, (battery_name, color) in enumerate(zip(battery_names, colors)):
         try:
@@ -147,10 +148,15 @@ if battery_names:  # 只有当存在电池单元时才绘图
                 
             with open(os.path.join(prefix, f"NASA_{battery_name}_test_label.pkl"), "rb") as f:
                 battery_test_labels = pickle.load(f)
+
+            if battery_test_labels is None:
+                print(f"{battery_name} 测试标签为空，跳过异常点标注")
+                continue
             
             # 标记异常点
             anomaly_points = np.where(battery_test_labels == 1)[0]
             normal_indices = np.where(battery_test_labels == 0)[0]
+            has_any_anomaly_label = True
             
             # 不再进行下采样，显示全部数据点
             x_data = battery_test_data[:, -1]  # 只显示容量数据 (索引-1或6)
@@ -166,14 +172,18 @@ if battery_names:  # 只有当存在电池单元时才绘图
         except Exception as e:
             print(f"处理 {battery_name} 时出错: {e}")
 
-    plt.title('NASA 测试集异常点分布')
-    plt.xlabel('时间点')
-    plt.ylabel('容量')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(f"{save_path}/测试集异常点分布.png", bbox_inches="tight", dpi=300)
-    plt.show()
+    if has_any_anomaly_label:
+        plt.title('NASA 测试集异常点分布')
+        plt.xlabel('时间点')
+        plt.ylabel('容量')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(f"{save_path}/测试集异常点分布.png", bbox_inches="tight", dpi=300)
+        plt.show()
+    else:
+        plt.close()
+        print("未找到可用的 NASA 二分类测试标签，跳过异常点分布图")
 
 ## 6. 特征间相关性分析
 # 分析训练集特征间的相关性

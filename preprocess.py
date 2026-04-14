@@ -389,34 +389,8 @@ def load_data(dataset, apply_sr_cleaning=False):
             if np.any(zero_or_negative_capacities):
                 print(f"警告: 发现 {np.sum(zero_or_negative_capacities)} 个零或负容量值")
             
-            # 生成测试标签（基于容量衰减作为异常）
-            if len(all_capacities) > 0 and not np.all(np.isnan(all_capacities)):
-                # 使用第一个非NaN容量值作为初始容量
-                valid_capacity_indices = ~np.isnan(all_capacities)
-                if np.any(valid_capacity_indices):
-                    initial_capacity = all_capacities[valid_capacity_indices][0]
-                    # 对于NaN值，使用线性插值填充后再计算衰减率
-                    all_capacities_filled = all_capacities.copy()
-                    if np.any(np.isnan(all_capacities_filled)):
-                        # 线性插值填充NaN值
-                        nans = np.isnan(all_capacities_filled)
-                        not_nans = ~nans
-                        if np.any(not_nans):  # 确保有非NaN值可以用于插值
-                            all_capacities_filled[nans] = np.interp(
-                                np.where(nans)[0], 
-                                np.where(not_nans)[0], 
-                                all_capacities_filled[not_nans]
-                            )
-                    
-                    capacity_decay_rate = (initial_capacity - all_capacities_filled) / initial_capacity
-
-                    # 定义阈值，当容量衰减超过一定比例时标记为异常
-                    threshold = 0.2  # 20%容量衰减作为异常开始点
-                    cycle_labels = (capacity_decay_rate > threshold).astype(np.int32)
-                else:
-                    cycle_labels = np.zeros(len(all_capacities), dtype=np.int32)
-            else:
-                cycle_labels = np.array([], dtype=np.int32)
+            # NASA 在本文中作为无监督退化偏离案例数据使用，这里不再人为构造 20% 容量衰减标签
+            cycle_labels = None
 
             # 按周期顺序划分训练集和测试集（80%训练，20%测试）
             total_cycles = len(all_cycle_data)
@@ -432,8 +406,8 @@ def load_data(dataset, apply_sr_cleaning=False):
             test_cycle_data = all_cycle_data[split_index:]
             
             # 划分对应的标签（按周期）
-            train_cycle_labels = cycle_labels[:split_index]
-            test_cycle_labels = cycle_labels[split_index:]
+            train_cycle_labels = None
+            test_cycle_labels = None
             
             # 创建展开后的完整数据和标签
             # 将周期级的容量和标签插值到每个时间点（仅针对充电周期）
@@ -457,16 +431,7 @@ def load_data(dataset, apply_sr_cleaning=False):
                 train_cycle_capacities.append(cycle_data[0, 0])  # 周期容量
                 train_cycle_numbers.append(cycle_index)         # 周期编号
                 
-                # 对于充电周期，使用插值；对于放电周期，保持原值
-                if cycle_type == 'charge':
-                    # 充电周期使用周期级标签
-                    expanded_labels = np.full(cycle_length, train_cycle_labels[i])
-                else:
-                    # 放电周期使用周期级标签
-                    expanded_labels = np.full(cycle_length, train_cycle_labels[i])
-                
                 train_data_full.append(cycle_data)
-                train_labels_full.extend(expanded_labels)
             
             # 处理测试数据
             test_cycle_lengths = []  # 记录每个周期的长度
@@ -483,21 +448,12 @@ def load_data(dataset, apply_sr_cleaning=False):
                 test_cycle_capacities.append(cycle_data[0, 0])  # 周期容量
                 test_cycle_numbers.append(cycle_index)         # 周期编号
                 
-                # 对于充电周期，使用插值；对于放电周期，保持原值
-                if cycle_type == 'charge':
-                    # 充电周期使用周期级标签
-                    expanded_labels = np.full(cycle_length, test_cycle_labels[i])
-                else:
-                    # 放电周期使用周期级标签
-                    expanded_labels = np.full(cycle_length, test_cycle_labels[i])
-                
                 test_data_full.append(cycle_data)
-                test_labels_full.extend(expanded_labels)
             
             # 合并所有周期的数据
             if train_data_full:
                 train_data_combined = np.vstack(train_data_full)
-                train_labels_combined = np.array(train_labels_full, dtype=np.int32)
+                train_labels_combined = None
                 
                 # 打印处理前的数据示例（展平前）
                 print("=" * 50)
@@ -574,11 +530,11 @@ def load_data(dataset, apply_sr_cleaning=False):
                 print()
             else:
                 train_data_combined = np.array([])
-                train_labels_combined = np.array([], dtype=np.int32)
+                train_labels_combined = None
                 
             if test_data_full:
                 test_data_combined = np.vstack(test_data_full)
-                test_labels_combined = np.array(test_labels_full, dtype=np.int32)
+                test_labels_combined = None
                 
                 # 打印处理前的数据示例（展平前）
                 print("=" * 50)
@@ -655,7 +611,7 @@ def load_data(dataset, apply_sr_cleaning=False):
                 print()
             else:
                 test_data_combined = np.array([])
-                test_labels_combined = np.array([], dtype=np.int32)
+                test_labels_combined = None
 
             # 应用谱残差清洗（如果启用）
             if apply_sr_cleaning and len(train_data_combined) > 0:
@@ -665,8 +621,8 @@ def load_data(dataset, apply_sr_cleaning=False):
 
             print(f"{battery_id} Train data shape: {train_data_combined.shape}")
             print(f"{battery_id} Test data shape: {test_data_combined.shape}")
-            print(f"{battery_id} Train labels shape: {train_labels_combined.shape}")
-            print(f"{battery_id} Test labels shape: {test_labels_combined.shape}")
+            print(f"{battery_id} Train labels shape: None")
+            print(f"{battery_id} Test labels shape: None")
 
             # 保存处理后的数据（展开的时间点数据，不按周期组织）
             with open(path.join(output_folder, f"NASA_{battery_id}_train.pkl"), "wb") as file:
