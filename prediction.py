@@ -4,6 +4,13 @@ from eval_methods import *
 from utils import *
 
 
+def _autocast_context(device):
+    enabled = device == "cuda"
+    if hasattr(torch, "amp") and hasattr(torch.amp, "autocast"):
+        return torch.amp.autocast("cuda", enabled=enabled)
+    return torch.cuda.amp.autocast(enabled=enabled)
+
+
 class Predictor:
     """MTAD-GAT predictor class.
 
@@ -85,7 +92,7 @@ class Predictor:
                 x = x.to(device)
                 y = y.to(device)
 
-                with torch.cuda.amp.autocast(enabled=(device == "cuda")):
+                with _autocast_context(device):
                     y_hat, _ = self.model(x)
 
                     # Shifting input to include the observed value (y) when doing the reconstruction

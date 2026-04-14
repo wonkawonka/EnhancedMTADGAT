@@ -8,6 +8,20 @@ from torch.utils.tensorboard import SummaryWriter
 from utils import *
 
 
+def _build_grad_scaler(use_cuda):
+    enabled = use_cuda and torch.cuda.is_available()
+    if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
+        return torch.amp.GradScaler("cuda", enabled=enabled)
+    return torch.cuda.amp.GradScaler(enabled=enabled)
+
+
+def _autocast_context(device):
+    enabled = device == "cuda"
+    if hasattr(torch, "amp") and hasattr(torch.amp, "autocast"):
+        return torch.amp.autocast("cuda", enabled=enabled)
+    return torch.cuda.amp.autocast(enabled=enabled)
+
+
 class Trainer:
     """Trainer class for MTAD-GAT model.
 
@@ -66,7 +80,7 @@ class Trainer:
         self.log_tensorboard = log_tensorboard
 
         # 混合精度训练设置
-        self.scaler = torch.cuda.amp.GradScaler(enabled=(self.device == "cuda"))
+        self.scaler = _build_grad_scaler(use_cuda)
 
         self.losses = {
             "train_total": [],
@@ -113,7 +127,7 @@ class Trainer:
                 y = y.to(self.device)
                 self.optimizer.zero_grad()
 
-                with torch.cuda.amp.autocast(enabled=(self.device == "cuda")):
+                with _autocast_context(self.device):
                     preds, recons = self.model(x)
 
                     if self.target_dims is not None:
@@ -211,7 +225,7 @@ class Trainer:
                 x = x.to(self.device)
                 y = y.to(self.device)
 
-                with torch.cuda.amp.autocast(enabled=(self.device == "cuda")):
+                with _autocast_context(self.device):
                     preds, recons = self.model(x)
 
                     if self.target_dims is not None:
@@ -335,7 +349,7 @@ class Trainer:
                 y = y.to(self.device)
                 self.optimizer.zero_grad()
 
-                with torch.cuda.amp.autocast(enabled=(self.device == "cuda")):
+                with _autocast_context(self.device):
                     preds, recons = self.model(x)
 
                     if self.target_dims is not None:
