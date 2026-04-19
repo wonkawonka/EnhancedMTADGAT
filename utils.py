@@ -855,6 +855,232 @@ def plot_nasa_case_overview(capacities, pred_error, recon_error, anomaly_scores,
     plt.close(fig)
 
 
+def plot_nasa_cycle_trend(cycle_numbers, series, save_path, file_name, ylabel, title, threshold=None, color="tab:red"):
+    cycle_numbers = np.asarray(cycle_numbers, dtype=np.float32)
+    series = np.asarray(series, dtype=np.float32)
+    min_len = min(len(cycle_numbers), len(series))
+    cycle_numbers = cycle_numbers[:min_len]
+    series = series[:min_len]
+
+    fig, ax = plt.subplots(figsize=(12, 4))
+    ax.plot(cycle_numbers, series, color=color, linewidth=1.2, marker="o", markersize=2)
+    if threshold is not None:
+        ax.axhline(float(threshold), color="black", linestyle="--", linewidth=1, label="阈值")
+        ax.legend(loc="upper right")
+    ax.set_xlabel("循环编号")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    if save_path:
+        plt.savefig(f"{save_path}/{file_name}", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def _find_knee_cycle_candidates(cycle_numbers, capacities, top_k=3):
+    cycle_numbers = np.asarray(cycle_numbers, dtype=np.float32)
+    capacities = np.asarray(capacities, dtype=np.float32)
+    min_len = min(len(cycle_numbers), len(capacities))
+    if min_len < 5:
+        return []
+
+    cycle_numbers = cycle_numbers[:min_len]
+    capacities = capacities[:min_len]
+
+    finite_mask = np.isfinite(cycle_numbers) & np.isfinite(capacities)
+    if np.count_nonzero(finite_mask) < 5:
+        return []
+
+    cycle_numbers = cycle_numbers[finite_mask]
+    capacities = capacities[finite_mask]
+
+    if len(cycle_numbers) < 5:
+        return []
+
+    smooth_series = pd.Series(capacities).interpolate(limit_direction="both").rolling(
+        window=5, center=True, min_periods=1
+    ).mean().values
+    first_grad = np.gradient(smooth_series, cycle_numbers)
+    second_grad = np.gradient(first_grad, cycle_numbers)
+
+    candidate_scores = -second_grad
+    valid_mask = np.ones_like(candidate_scores, dtype=bool)
+    valid_mask[:2] = False
+    valid_mask[-2:] = False
+    candidate_scores = np.where(valid_mask & np.isfinite(candidate_scores), candidate_scores, -np.inf)
+
+    top_indices = np.argsort(candidate_scores)[-top_k:][::-1]
+    top_indices = [int(idx) for idx in top_indices if np.isfinite(candidate_scores[idx])]
+
+    seen_cycles = set()
+    candidates = []
+    for idx in top_indices:
+        cycle_num = int(cycle_numbers[idx])
+        capacity_val = capacities[idx]
+        if cycle_num in seen_cycles:
+            continue
+        if not np.isfinite(capacity_val):
+            continue
+        seen_cycles.add(cycle_num)
+        candidates.append({
+            "cycle_number": cycle_num,
+            "capacity": float(capacity_val),
+            "score": float(candidate_scores[idx]),
+        })
+    return candidates
+
+
+def plot_nasa_cycle_capacity_score(cycle_level_df, save_path, file_name, title, threshold=None, top_k=3):
+    if cycle_level_df.empty:
+        return
+
+    plot_df = cycle_level_df.sort_values("cycle_number").reset_index(drop=True)
+    cycle_numbers = plot_df["cycle_number"].values
+    capacities = plot_df["capacity_last"].values
+    score_mean = plot_df["score_mean"].values
+
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+    line1 = ax1.plot(cycle_numbers, capacities, color="tab:blue", linewidth=2.0, marker="o", markersize=3,
+                     label="容量")
+    ax1.set_xlabel("循环编号")
+    ax1.set_ylabel("容量", color="tab:blue")
+    ax1.tick_params(axis="y", labelcolor="tab:blue")
+    ax1.grid(True, alpha=0.3)
+
+    ax2 = ax1.twinx()
+    line2 = ax2.plot(cycle_numbers, score_mean, color="tab:red", linewidth=1.8, marker="s", markersize=3,
+                     label="平均异常分数")
+    ax2.set_ylabel("异常分数", color="tab:red")
+    ax2.tick_params(axis="y", labelcolor="tab:red")
+    threshold_handle = None
+    if threshold is not None:
+        threshold_handle = ax2.axhline(float(threshold), color="black", linestyle="--", linewidth=1.0, label="阈值")
+
+    top_cycle_rows = plot_df.sort_values("score_max", ascending=False).head(top_k)
+    for _, row in top_cycle_rows.iterrows():
+        cycle_num = row["cycle_number"]
+        score_val = row["score_mean"]
+        ax2.scatter(cycle_num, score_val, color="gold", edgecolors="black", s=50, zorder=5)
+        ax2.annotate(
+            f"异常:{int(cycle_num)}",
+            xy=(cycle_num, score_val),
+            xytext=(0, 8),
+            textcoords="offset points",
+            ha="center",
+            fontsize=8,
+            color="black",
+            arrowprops=dict(arrowstyle="-", color="gray", linewidth=0.8),
+        )
+
+    knee_candidates = _find_knee_cycle_candidates(cycle_numbers, capacities, top_k=3)
+    for idx, candidate in enumerate(knee_candidates, start=1):
+        cycle_num = candidate["cycle_number"]
+        capacity_val = candidate["capacity"]
+        ax1.scatter(cycle_num, capacity_val, color="purple", marker="^", s=60, zorder=6)
+        ax1.annotate(
+            f"K{idx}:{cycle_num}",
+            xy=(cycle_num, capacity_val),
+            xytext=(8, -14),
+            textcoords="offset points",
+            ha="left",
+            fontsize=8,
+            color="purple",
+            arrowprops=dict(arrowstyle="->", color="purple", linewidth=0.8),
+        )
+
+    ax1.set_title(title)
+    lines = line1 + line2
+    labels = [line.get_label() for line in lines]
+    if threshold_handle is not None:
+        lines = lines + [threshold_handle]
+        labels = labels + [threshold_handle.get_label()]
+    ax1.legend(lines, labels, loc="upper right")
+    fig.tight_layout()
+    if save_path:
+        plt.savefig(f"{save_path}/{file_name}", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def build_nasa_cycle_level_df(cycle_numbers, capacities, pred_error, recon_error, anomaly_scores, threshold=None):
+    cycle_numbers = np.asarray(cycle_numbers, dtype=np.float32)
+    capacities = np.asarray(capacities, dtype=np.float32)
+    pred_error = np.asarray(pred_error, dtype=np.float32)
+    recon_error = np.asarray(recon_error, dtype=np.float32)
+    anomaly_scores = np.asarray(anomaly_scores, dtype=np.float32)
+
+    min_len = min(len(cycle_numbers), len(capacities), len(pred_error), len(recon_error), len(anomaly_scores))
+    if min_len == 0:
+        return pd.DataFrame()
+
+    cycle_df = pd.DataFrame({
+        "cycle_number": cycle_numbers[:min_len].astype(np.int32),
+        "capacity": capacities[:min_len],
+        "pred_error": pred_error[:min_len],
+        "recon_error": recon_error[:min_len],
+        "anomaly_score": anomaly_scores[:min_len],
+    })
+
+    grouped = cycle_df.groupby("cycle_number", as_index=False).agg(
+        capacity_mean=("capacity", "mean"),
+        capacity_last=("capacity", "last"),
+        pred_error_mean=("pred_error", "mean"),
+        pred_error_max=("pred_error", "max"),
+        recon_error_mean=("recon_error", "mean"),
+        recon_error_max=("recon_error", "max"),
+        score_mean=("anomaly_score", "mean"),
+        score_max=("anomaly_score", "max"),
+        score_std=("anomaly_score", "std"),
+        n_points=("anomaly_score", "size"),
+    )
+    grouped["score_std"] = grouped["score_std"].fillna(0.0)
+    if threshold is not None:
+        grouped["score_mean_over_threshold"] = (grouped["score_mean"] >= float(threshold)).astype(int)
+        grouped["score_max_over_threshold"] = (grouped["score_max"] >= float(threshold)).astype(int)
+    return grouped
+
+
+def save_nasa_cycle_level_outputs(save_path, battery_name, cycle_level_df, threshold=None):
+    if cycle_level_df.empty:
+        return {}
+
+    cycle_level_df.to_csv(f"{save_path}/cycle_level_scores.csv", index=False)
+
+    plot_nasa_cycle_capacity_score(
+        cycle_level_df,
+        save_path=save_path,
+        file_name="cycle_level_capacity_vs_score.png",
+        title=f"{battery_name} 循环级容量-异常分数图",
+        threshold=threshold,
+        top_k=3,
+    )
+    plot_nasa_cycle_trend(
+        cycle_level_df["cycle_number"].values,
+        cycle_level_df["score_mean"].values,
+        save_path=save_path,
+        file_name="cycle_level_score_trend.png",
+        ylabel="循环级平均异常分数",
+        title=f"{battery_name} 循环级平均异常分数趋势图",
+        threshold=threshold,
+        color="tab:red",
+    )
+
+    top_cycle_rows = cycle_level_df.sort_values("score_max", ascending=False).head(5)
+    summary = {
+        "num_cycles": int(len(cycle_level_df)),
+        "global_threshold": threshold,
+        "max_cycle_score": float(cycle_level_df["score_max"].max()),
+        "mean_cycle_score": float(cycle_level_df["score_mean"].mean()),
+        "top_cycles_by_score_max": [int(v) for v in top_cycle_rows["cycle_number"].tolist()],
+        "top_cycles_by_score_mean": [
+            int(v) for v in cycle_level_df.sort_values("score_mean", ascending=False).head(5)["cycle_number"].tolist()
+        ],
+    }
+    with open(f"{save_path}/cycle_level_summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
+
+    return summary
+
+
 def get_nasa_battery_profiles(prefix, battery_names, window_size):
     profiles = []
     offset = 0
@@ -950,17 +1176,27 @@ def extract_top_score_segments(anomaly_scores, threshold=None, top_k=5):
     return segments[:top_k]
 
 
-def save_nasa_case_outputs(save_path, test_pred_df, capacities, battery_name, train_batteries, test_batteries):
+def save_nasa_case_outputs(save_path, test_pred_df, capacities, cycle_numbers=None, battery_name="", train_batteries=None, test_batteries=None):
     anomaly_scores = np.asarray(test_pred_df["A_Score_Global"].values, dtype=np.float32)
     pred_error = np.asarray(test_pred_df["Pred_Error_Global"].values, dtype=np.float32)
     recon_error = np.asarray(test_pred_df["Recon_Error_Global"].values, dtype=np.float32)
     capacities = np.asarray(capacities, dtype=np.float32)
+    if cycle_numbers is None:
+        cycle_numbers = np.arange(len(capacities), dtype=np.float32)
+    else:
+        cycle_numbers = np.asarray(cycle_numbers, dtype=np.float32)
 
-    min_len = min(len(anomaly_scores), len(pred_error), len(recon_error), len(capacities))
+    if train_batteries is None:
+        train_batteries = []
+    if test_batteries is None:
+        test_batteries = []
+
+    min_len = min(len(anomaly_scores), len(pred_error), len(recon_error), len(capacities), len(cycle_numbers))
     anomaly_scores = anomaly_scores[:min_len]
     pred_error = pred_error[:min_len]
     recon_error = recon_error[:min_len]
     capacities = capacities[:min_len]
+    cycle_numbers = cycle_numbers[:min_len]
 
     threshold = None
     if "Thresh_Global" in test_pred_df.columns and len(test_pred_df) > 0:
@@ -1000,6 +1236,16 @@ def save_nasa_case_outputs(save_path, test_pred_df, capacities, battery_name, tr
     )
     plot_nasa_case_overview(capacities, pred_error, recon_error, anomaly_scores, save_path)
 
+    cycle_level_df = build_nasa_cycle_level_df(
+        cycle_numbers,
+        capacities,
+        pred_error,
+        recon_error,
+        anomaly_scores,
+        threshold=threshold,
+    )
+    cycle_level_summary = save_nasa_cycle_level_outputs(save_path, battery_name, cycle_level_df, threshold=threshold)
+
     top_segments = extract_top_score_segments(anomaly_scores, threshold=threshold, top_k=5)
     top_segments_df = pd.DataFrame(top_segments)
     top_segments_df.to_csv(f"{save_path}/top_anomaly_segments.csv", index=False)
@@ -1023,6 +1269,9 @@ def save_nasa_case_outputs(save_path, test_pred_df, capacities, battery_name, tr
         "pred_error_mean": float(np.mean(pred_error)) if len(pred_error) > 0 else None,
         "recon_error_mean": float(np.mean(recon_error)) if len(recon_error) > 0 else None,
         "topk_score_indices": [int(idx) for idx in np.argsort(anomaly_scores)[-5:][::-1].tolist()] if len(anomaly_scores) > 0 else [],
+        "num_cycles": int(cycle_level_summary["num_cycles"]) if cycle_level_summary else 0,
+        "top_cycles_by_score_max": cycle_level_summary.get("top_cycles_by_score_max", []),
+        "top_cycles_by_score_mean": cycle_level_summary.get("top_cycles_by_score_mean", []),
     }
     with open(f"{save_path}/nasa_case_summary.json", "w") as f:
         json.dump(summary, f, indent=2)

@@ -544,7 +544,8 @@ if __name__ == "__main__":
                     _, raw_test_data, _ = load_nasa_processed_data(processed_prefix, battery_name)
                     raw_test_data = np.asarray(raw_test_data, dtype=np.float32)
                     capacities = raw_test_data[window_size:, -1] if raw_test_data.ndim == 2 and raw_test_data.shape[1] >= 7 else None
-                    if capacities is None:
+                    cycle_numbers = raw_test_data[window_size:, 0] if raw_test_data.ndim == 2 and raw_test_data.shape[1] >= 1 else None
+                    if capacities is None or cycle_numbers is None:
                         continue
 
                     test_pred_df = pd.read_pickle(f"{battery_save_path}/test_output.pkl")
@@ -552,6 +553,7 @@ if __name__ == "__main__":
                         battery_save_path,
                         test_pred_df,
                         capacities,
+                        cycle_numbers,
                         battery_name,
                         train_batteries,
                         report_test_batteries,
