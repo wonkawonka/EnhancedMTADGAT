@@ -1,0 +1,27 @@
+{
+  "battery_id": "B0018",
+  "train_batteries": [
+    "B0005",
+    "B0006",
+    "B0007"
+  ],
+  "test_batteries": [
+    "B0018"
+  ],
+  "num_points": 46396,
+  "global_threshold": 0.48390084877610207,
+  "max_score": 1.0980653762817383,
+  "mean_score": 0.28058815002441406,
+  "score_std": 0.14811299741268158,
+  "score_rising_stage": "late",
+  "capacity_drop_rate": 0.08757590502500534,
+  "pred_error_mean": 0.11946813762187958,
+  "recon_error_mean": 0.16112002730369568,
+  "topk_score_indices": [
+    24684,
+    24930,
+    3479,
+    45554,
+    45552
+  ]
+}

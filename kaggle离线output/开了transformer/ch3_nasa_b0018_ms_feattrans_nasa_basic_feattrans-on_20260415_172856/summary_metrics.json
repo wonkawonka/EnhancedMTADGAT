@@ -1,0 +1,10 @@
+{
+  "epsilon_result": {
+    "threshold": 0.11067477893084288,
+    "reg_level": 0.0
+  },
+  "pot_result": {
+    "threshold": 0.11123999953269958
+  },
+  "bf_result": {}
+}
