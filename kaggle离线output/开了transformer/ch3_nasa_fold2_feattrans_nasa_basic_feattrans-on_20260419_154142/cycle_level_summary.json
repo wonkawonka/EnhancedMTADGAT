@@ -1,0 +1,20 @@
+{
+  "num_cycles": 68,
+  "global_threshold": 0.5356420353055,
+  "max_cycle_score": 0.6379127502441406,
+  "mean_cycle_score": 0.5205472707748413,
+  "top_cycles_by_score_max": [
+    605,
+    609,
+    607,
+    603,
+    601
+  ],
+  "top_cycles_by_score_mean": [
+    607,
+    605,
+    603,
+    601,
+    599
+  ]
+}
