@@ -966,6 +966,98 @@ def _find_knee_cycle_candidates(cycle_numbers, capacities, top_k=3):
     return candidates
 
 
+def _find_score_knee_cycle_candidates(cycle_numbers, scores, top_k=3):
+    cycle_numbers = np.asarray(cycle_numbers, dtype=np.float32)
+    scores = np.asarray(scores, dtype=np.float32)
+    min_len = min(len(cycle_numbers), len(scores))
+    if min_len < 5:
+        return []
+
+    cycle_numbers = cycle_numbers[:min_len]
+    scores = scores[:min_len]
+
+    finite_mask = np.isfinite(cycle_numbers) & np.isfinite(scores)
+    if np.count_nonzero(finite_mask) < 5:
+        return []
+
+    cycle_numbers = cycle_numbers[finite_mask]
+    scores = scores[finite_mask]
+
+    if len(cycle_numbers) < 5:
+        return []
+
+    smooth_series = pd.Series(scores).interpolate(limit_direction="both").rolling(
+        window=5, center=True, min_periods=1
+    ).mean().values
+    first_grad = np.gradient(smooth_series, cycle_numbers)
+    second_grad = np.gradient(first_grad, cycle_numbers)
+
+    candidate_scores = second_grad
+    valid_mask = np.ones_like(candidate_scores, dtype=bool)
+    valid_mask[:2] = False
+    valid_mask[-2:] = False
+    candidate_scores = np.where(valid_mask & np.isfinite(candidate_scores), candidate_scores, -np.inf)
+
+    top_indices = np.argsort(candidate_scores)[-top_k:][::-1]
+    top_indices = [int(idx) for idx in top_indices if np.isfinite(candidate_scores[idx])]
+
+    seen_cycles = set()
+    candidates = []
+    for idx in top_indices:
+        cycle_num = int(cycle_numbers[idx])
+        score_val = scores[idx]
+        if cycle_num in seen_cycles:
+            continue
+        if not np.isfinite(score_val):
+            continue
+        seen_cycles.add(cycle_num)
+        candidates.append({
+            "cycle_number": cycle_num,
+            "score_mean": float(score_val),
+            "knee_score": float(candidate_scores[idx]),
+        })
+    return candidates
+
+
+def _build_nasa_knee_metrics(cycle_level_df):
+    if cycle_level_df.empty:
+        return {}
+
+    cycle_numbers = cycle_level_df["cycle_number"].values
+    capacities = cycle_level_df["capacity_last"].values
+    score_mean = cycle_level_df["score_mean"].values
+
+    true_knee_candidates = _find_knee_cycle_candidates(cycle_numbers, capacities, top_k=3)
+    pred_knee_candidates = _find_score_knee_cycle_candidates(cycle_numbers, score_mean, top_k=3)
+
+    summary = {
+        "true_knee_candidates": true_knee_candidates,
+        "pred_knee_candidates": pred_knee_candidates,
+        "true_knee_cycle": None,
+        "pred_knee_cycle": None,
+        "knee_cycle_error": None,
+        "normalized_knee_error": None,
+        "early_warning_lead": None,
+    }
+
+    if not true_knee_candidates or not pred_knee_candidates:
+        return summary
+
+    true_knee_cycle = int(true_knee_candidates[0]["cycle_number"])
+    pred_knee_cycle = int(pred_knee_candidates[0]["cycle_number"])
+    knee_cycle_error = abs(pred_knee_cycle - true_knee_cycle)
+    num_cycles = max(int(len(cycle_level_df)), 1)
+
+    summary.update({
+        "true_knee_cycle": true_knee_cycle,
+        "pred_knee_cycle": pred_knee_cycle,
+        "knee_cycle_error": int(knee_cycle_error),
+        "normalized_knee_error": float(knee_cycle_error / num_cycles),
+        "early_warning_lead": int(true_knee_cycle - pred_knee_cycle),
+    })
+    return summary
+
+
 def plot_nasa_cycle_capacity_score(cycle_level_df, save_path, file_name, title, threshold=None, top_k=3):
     if cycle_level_df.empty:
         return
@@ -977,20 +1069,22 @@ def plot_nasa_cycle_capacity_score(cycle_level_df, save_path, file_name, title, 
 
     fig, ax1 = plt.subplots(figsize=(12, 6))
     line1 = ax1.plot(cycle_numbers, capacities, color="tab:blue", linewidth=2.0, marker="o", markersize=3,
-                     label="容量")
-    ax1.set_xlabel("循环编号")
-    ax1.set_ylabel("容量", color="tab:blue")
+                     label="Capacity")
+    ax1.set_xlabel("Cycle Number")
+    ax1.set_ylabel("Capacity", color="tab:blue")
     ax1.tick_params(axis="y", labelcolor="tab:blue")
     ax1.grid(True, alpha=0.3)
 
     ax2 = ax1.twinx()
     line2 = ax2.plot(cycle_numbers, score_mean, color="tab:red", linewidth=1.8, marker="s", markersize=3,
-                     label="平均异常分数")
-    ax2.set_ylabel("异常分数", color="tab:red")
+                     label="Mean Anomaly Score")
+    ax2.set_ylabel("Anomaly Score", color="tab:red")
     ax2.tick_params(axis="y", labelcolor="tab:red")
     threshold_handle = None
+    true_knee_handle = None
+    pred_knee_handle = None
     if threshold is not None:
-        threshold_handle = ax2.axhline(float(threshold), color="black", linestyle="--", linewidth=1.0, label="阈值")
+        threshold_handle = ax2.axhline(float(threshold), color="black", linestyle="--", linewidth=1.0, label="Threshold")
 
     top_cycle_rows = plot_df.sort_values("score_max", ascending=False).head(top_k)
     for _, row in top_cycle_rows.iterrows():
@@ -998,7 +1092,7 @@ def plot_nasa_cycle_capacity_score(cycle_level_df, save_path, file_name, title, 
         score_val = row["score_mean"]
         ax2.scatter(cycle_num, score_val, color="gold", edgecolors="black", s=50, zorder=5)
         ax2.annotate(
-            f"异常:{int(cycle_num)}",
+            f"Anom:{int(cycle_num)}",
             xy=(cycle_num, score_val),
             xytext=(0, 8),
             textcoords="offset points",
@@ -1012,9 +1106,19 @@ def plot_nasa_cycle_capacity_score(cycle_level_df, save_path, file_name, title, 
     for idx, candidate in enumerate(knee_candidates, start=1):
         cycle_num = candidate["cycle_number"]
         capacity_val = candidate["capacity"]
-        ax1.scatter(cycle_num, capacity_val, color="purple", marker="^", s=60, zorder=6)
+        scatter = ax1.scatter(
+            cycle_num,
+            capacity_val,
+            color="purple",
+            marker="^",
+            s=60,
+            zorder=6,
+            label="True Knee" if idx == 1 else None,
+        )
+        if idx == 1:
+            true_knee_handle = scatter
         ax1.annotate(
-            f"K{idx}:{cycle_num}",
+            f"TK{idx}:{cycle_num}",
             xy=(cycle_num, capacity_val),
             xytext=(8, -14),
             textcoords="offset points",
@@ -1024,12 +1128,44 @@ def plot_nasa_cycle_capacity_score(cycle_level_df, save_path, file_name, title, 
             arrowprops=dict(arrowstyle="->", color="purple", linewidth=0.8),
         )
 
+    pred_knee_candidates = _find_score_knee_cycle_candidates(cycle_numbers, score_mean, top_k=1)
+    if pred_knee_candidates:
+        pred_candidate = pred_knee_candidates[0]
+        pred_cycle_num = pred_candidate["cycle_number"]
+        pred_score_val = pred_candidate["score_mean"]
+        pred_knee_handle = ax2.scatter(
+            pred_cycle_num,
+            pred_score_val,
+            color="limegreen",
+            marker="D",
+            s=58,
+            edgecolors="black",
+            zorder=6,
+            label="Predicted Knee",
+        )
+        ax2.annotate(
+            f"PK:{int(pred_cycle_num)}",
+            xy=(pred_cycle_num, pred_score_val),
+            xytext=(8, 10),
+            textcoords="offset points",
+            ha="left",
+            fontsize=8,
+            color="darkgreen",
+            arrowprops=dict(arrowstyle="->", color="darkgreen", linewidth=0.8),
+        )
+
     ax1.set_title(title)
     lines = line1 + line2
     labels = [line.get_label() for line in lines]
     if threshold_handle is not None:
         lines = lines + [threshold_handle]
         labels = labels + [threshold_handle.get_label()]
+    if true_knee_handle is not None:
+        lines = lines + [true_knee_handle]
+        labels = labels + [true_knee_handle.get_label()]
+    if pred_knee_handle is not None:
+        lines = lines + [pred_knee_handle]
+        labels = labels + [pred_knee_handle.get_label()]
     ax1.legend(lines, labels, loc="upper right")
     fig.tight_layout()
     if save_path:
@@ -1085,7 +1221,7 @@ def save_nasa_cycle_level_outputs(save_path, battery_name, cycle_level_df, thres
         cycle_level_df,
         save_path=save_path,
         file_name="cycle_level_capacity_vs_score.png",
-        title=f"{battery_name} 循环级容量-异常分数图",
+        title=f"{battery_name} Cycle-level Capacity vs Anomaly Score",
         threshold=threshold,
         top_k=3,
     )
@@ -1094,13 +1230,14 @@ def save_nasa_cycle_level_outputs(save_path, battery_name, cycle_level_df, thres
         cycle_level_df["score_mean"].values,
         save_path=save_path,
         file_name="cycle_level_score_trend.png",
-        ylabel="循环级平均异常分数",
-        title=f"{battery_name} 循环级平均异常分数趋势图",
+        ylabel="Cycle-level Mean Anomaly Score",
+        title=f"{battery_name} Cycle-level Mean Anomaly Score Trend",
         threshold=threshold,
         color="tab:red",
     )
 
     top_cycle_rows = cycle_level_df.sort_values("score_max", ascending=False).head(5)
+    knee_metrics = _build_nasa_knee_metrics(cycle_level_df)
     summary = {
         "num_cycles": int(len(cycle_level_df)),
         "global_threshold": threshold,
@@ -1110,6 +1247,13 @@ def save_nasa_cycle_level_outputs(save_path, battery_name, cycle_level_df, thres
         "top_cycles_by_score_mean": [
             int(v) for v in cycle_level_df.sort_values("score_mean", ascending=False).head(5)["cycle_number"].tolist()
         ],
+        "true_knee_cycle": knee_metrics.get("true_knee_cycle"),
+        "pred_knee_cycle": knee_metrics.get("pred_knee_cycle"),
+        "knee_cycle_error": knee_metrics.get("knee_cycle_error"),
+        "normalized_knee_error": knee_metrics.get("normalized_knee_error"),
+        "early_warning_lead": knee_metrics.get("early_warning_lead"),
+        "true_knee_candidates": knee_metrics.get("true_knee_candidates", []),
+        "pred_knee_candidates": knee_metrics.get("pred_knee_candidates", []),
     }
     with open(f"{save_path}/cycle_level_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
@@ -1308,6 +1452,11 @@ def save_nasa_case_outputs(save_path, test_pred_df, capacities, cycle_numbers=No
         "num_cycles": int(cycle_level_summary["num_cycles"]) if cycle_level_summary else 0,
         "top_cycles_by_score_max": cycle_level_summary.get("top_cycles_by_score_max", []),
         "top_cycles_by_score_mean": cycle_level_summary.get("top_cycles_by_score_mean", []),
+        "true_knee_cycle": cycle_level_summary.get("true_knee_cycle"),
+        "pred_knee_cycle": cycle_level_summary.get("pred_knee_cycle"),
+        "knee_cycle_error": cycle_level_summary.get("knee_cycle_error"),
+        "normalized_knee_error": cycle_level_summary.get("normalized_knee_error"),
+        "early_warning_lead": cycle_level_summary.get("early_warning_lead"),
     }
     with open(f"{save_path}/nasa_case_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
