@@ -16,6 +16,133 @@ from args import get_parser
 from spectral_residual import apply_spectral_residual_cleaning
 
 
+BMS_CLUSTER_MAIN_FEATURES = [
+    "BMSnVol_T",
+    "BMSnVol_B",
+    "BMSnI",
+    "BMSnRSOC",
+    "BMSnSOH",
+    "BMSnICMax",
+    "BMSnIDMax",
+    "BMSnVmax",
+    "BMSnVmin",
+    "BMSnVmean",
+    "BMSnTmax",
+    "BMSnTmin",
+    "BMSnTmean",
+    "BMSnETmax",
+    "BMSnETmean",
+]
+
+BMS_GROUP_CONTEXT_FEATURES = [
+    "SYS_Vol",
+    "SYS_I",
+    "SYS_SOH",
+    "SYS_Vmax",
+    "SYS_Vmin",
+    "SYS_Tmax",
+    "SYS_Tmin",
+]
+
+BMS_FEATURE_NAMES = BMS_CLUSTER_MAIN_FEATURES + [
+    "cell_v_std",
+    "cell_v_range",
+    "cell_v_max_dev_from_mean",
+    "cell_v_min_dev_from_mean",
+    "cell_t_std",
+    "cell_t_range",
+] + BMS_GROUP_CONTEXT_FEATURES
+
+
+def _sanitize_bms_entity_name(name):
+    keep_chars = []
+    for ch in str(name):
+        if ch.isalnum():
+            keep_chars.append(ch)
+        else:
+            keep_chars.append("_")
+    return "".join(keep_chars).strip("_")
+
+
+def _load_bms_excel(file_path, sheet_name=0):
+    df = pd.read_excel(file_path, sheet_name=sheet_name)
+    if "Date" not in df.columns:
+        raise ValueError(f"{file_path} 缺少 Date 列")
+    df = df.copy()
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Date"]).sort_values("Date")
+    df = df.drop_duplicates(subset=["Date"], keep="last")
+    return df
+
+
+def _build_bms_detail_summary(detail_df, prefix):
+    value_columns = [col for col in detail_df.columns if col.startswith(prefix)]
+    if not value_columns:
+        return detail_df[["Date"]].copy()
+
+    detail_values = detail_df[value_columns].apply(pd.to_numeric, errors="coerce")
+    summary_df = pd.DataFrame({"Date": detail_df["Date"].values})
+
+    row_mean = detail_values.mean(axis=1)
+    row_max = detail_values.max(axis=1)
+    row_min = detail_values.min(axis=1)
+
+    if prefix == "BMSnV":
+        summary_df["cell_v_std"] = detail_values.std(axis=1, ddof=0)
+        summary_df["cell_v_range"] = row_max - row_min
+        summary_df["cell_v_max_dev_from_mean"] = row_max - row_mean
+        summary_df["cell_v_min_dev_from_mean"] = row_min - row_mean
+    else:
+        summary_df["cell_t_std"] = detail_values.std(axis=1, ddof=0)
+        summary_df["cell_t_range"] = row_max - row_min
+
+    return summary_df
+
+
+def _build_bms_cluster_feature_frame(stat_df, volt_summary_df, temp_summary_df, group_df):
+    merged_df = stat_df[["Date"] + [col for col in BMS_CLUSTER_MAIN_FEATURES if col in stat_df.columns]].copy()
+    merged_df = merged_df.merge(volt_summary_df, on="Date", how="left")
+    merged_df = merged_df.merge(temp_summary_df, on="Date", how="left")
+    merged_df = merged_df.merge(
+        group_df[["Date"] + [col for col in BMS_GROUP_CONTEXT_FEATURES if col in group_df.columns]].copy(),
+        on="Date",
+        how="left",
+    )
+
+    for feature_name in BMS_FEATURE_NAMES:
+        if feature_name not in merged_df.columns:
+            merged_df[feature_name] = np.nan
+
+    merged_df = merged_df.sort_values("Date").reset_index(drop=True)
+    feature_df = merged_df[BMS_FEATURE_NAMES].apply(pd.to_numeric, errors="coerce")
+    feature_df = feature_df.interpolate(limit_direction="both")
+    feature_df = feature_df.ffill().bfill().fillna(0.0)
+    return feature_df.astype(np.float32)
+
+
+def _save_bms_processed_splits(output_folder, entity_name, feature_df, apply_sr_cleaning=False):
+    feature_array = feature_df.to_numpy(dtype=np.float32, copy=True)
+
+    if apply_sr_cleaning:
+        print(f"Applying spectral residual cleaning to BMS {entity_name} data...")
+        feature_array = apply_spectral_residual_cleaning(feature_array, threshold=3.0)
+        print(f"Cleaning completed. Shape: {feature_array.shape}")
+
+    split_index = int(len(feature_array) * 0.8)
+    train_data = feature_array[:split_index]
+    test_data = feature_array[split_index:]
+    test_labels = np.zeros(len(test_data), dtype=np.int32)
+
+    with open(path.join(output_folder, f"{entity_name}_train.pkl"), "wb") as file:
+        dump(train_data, file)
+    with open(path.join(output_folder, f"{entity_name}_test.pkl"), "wb") as file:
+        dump(test_data, file)
+    with open(path.join(output_folder, f"{entity_name}_test_label.pkl"), "wb") as file:
+        dump(test_labels, file)
+
+    return train_data, test_data, test_labels
+
+
 def interpolate_capacity_to_timesteps(cycle_capacities, cycle_lengths, cycle_types):
     """
     将周期级的容量值插值到每个时间步（仅对充电周期进行插值）
@@ -200,63 +327,87 @@ def load_data(dataset, apply_sr_cleaning=False):
         dataset_folder = "datasets/BMS"
         output_folder = "datasets/BMS/processed"
         makedirs(output_folder, exist_ok=True)
+        suffix_map = {
+            "_BMS0Data.xls": "group",
+            "_BMSnStatData.xls": "stat",
+            "_BMSnDetailTempData.xls": "temp",
+            "_BMSnDetailVoltData.xls": "volt",
+            "_BMS0Data.xlsx": "group",
+            "_BMSnStatData.xlsx": "stat",
+            "_BMSnDetailTempData.xlsx": "temp",
+            "_BMSnDetailVoltData.xlsx": "volt",
+        }
 
-        # 查找数据文件
-        data_files = [f for f in listdir(dataset_folder) if f.endswith((".xls", ".xlsx"))]
-        
-        for filename in data_files:
-            print(f"Processing {filename}...")
-            # 读取Excel文件
-            file_path = path.join(dataset_folder, filename)
-            df = pd.read_excel(file_path)
-            
-            # 选择指定列（去除Date列）
-            required_columns = ['SYS_Vol', 'SYS_I', 'SYS_DSOC', 'SYS_SOH', 'SYS_Vmax']
-            # 检查这些列是否存在
-            available_columns = [col for col in required_columns if col in df.columns]
-            print(f"Available columns: {available_columns}")
-            
-            # 提取所需数据
-            selected_data = df[available_columns].values.astype(np.float32)
-            
-            # 应用谱残差清洗（如果启用）
-            if apply_sr_cleaning:
-                print(f"Applying spectral residual cleaning to BMS {filename} data...")
-                selected_data = apply_spectral_residual_cleaning(selected_data, threshold=3.0)
-                print(f"Cleaning completed. Shape: {selected_data.shape}")
-            
-            # 生成标签（这里简单地将所有标签设为0，表示正常数据）
-            labels = np.zeros(len(selected_data), dtype=np.int32)
-            
-            # 按时间顺序划分训练集和测试集（80%训练，20%测试）
-            split_ratio = 0.8
-            split_index = int(len(selected_data) * split_ratio)
-            
-            # 划分训练集和测试集数据
-            train_data = selected_data[:split_index]
-            test_data = selected_data[split_index:]
-            
-            # 划分对应的标签
-            train_labels = labels[:split_index]
-            test_labels = labels[split_index:]
-            
-            print(f"Train data shape: {train_data.shape}")
-            print(f"Test data shape: {test_data.shape}")
-            print(f"Train labels shape: {train_labels.shape}")
-            print(f"Test labels shape: {test_labels.shape}")
-            
-            # 保存数据
-            battery_name = filename.split('.')[0]  # 使用文件名作为电池名称
-            with open(path.join(output_folder, f"BMS_{battery_name}_train.pkl"), "wb") as file:
-                dump(train_data, file)
-            
-            with open(path.join(output_folder, f"BMS_{battery_name}_test.pkl"), "wb") as file:
-                dump(test_data, file)
-            
-            with open(path.join(output_folder, f"BMS_{battery_name}_test_label.pkl"), "wb") as file:
-                dump(test_labels, file)
-            
-            print(f"Saved {battery_name} data")
+        grouped_files = {}
+        for filename in listdir(dataset_folder):
+            if filename.startswith("~$"):
+                continue
+            for suffix, key in suffix_map.items():
+                if filename.endswith(suffix):
+                    prefix_name = filename[: -len(suffix)]
+                    grouped_files.setdefault(prefix_name, {})[key] = path.join(dataset_folder, filename)
+                    break
+
+        merged_train_list = []
+        merged_test_list = []
+        merged_label_list = []
+
+        for prefix_name, file_map in sorted(grouped_files.items()):
+            required_keys = {"group", "stat", "temp", "volt"}
+            if not required_keys.issubset(file_map.keys()):
+                missing_keys = sorted(required_keys - set(file_map.keys()))
+                print(f"Skipping {prefix_name}, missing files: {missing_keys}")
+                continue
+
+            print(f"Processing BMS bundle: {prefix_name}")
+            group_df = _load_bms_excel(file_map["group"])
+            stat_xls = pd.ExcelFile(file_map["stat"])
+            temp_xls = pd.ExcelFile(file_map["temp"])
+            volt_xls = pd.ExcelFile(file_map["volt"])
+
+            common_sheets = [sheet for sheet in stat_xls.sheet_names if sheet in temp_xls.sheet_names and sheet in volt_xls.sheet_names]
+            if not common_sheets:
+                print(f"No shared cluster sheets found for {prefix_name}")
+                continue
+
+            bundle_name = _sanitize_bms_entity_name(prefix_name)
+            for sheet_name in common_sheets:
+                stat_df = _load_bms_excel(file_map["stat"], sheet_name=sheet_name)
+                temp_df = _load_bms_excel(file_map["temp"], sheet_name=sheet_name)
+                volt_df = _load_bms_excel(file_map["volt"], sheet_name=sheet_name)
+
+                temp_summary_df = _build_bms_detail_summary(temp_df, prefix="BMSnT")
+                volt_summary_df = _build_bms_detail_summary(volt_df, prefix="BMSnV")
+                feature_df = _build_bms_cluster_feature_frame(stat_df, volt_summary_df, temp_summary_df, group_df)
+
+                cluster_entity_name = f"BMS_{bundle_name}_cluster{sheet_name}"
+                train_data, test_data, test_labels = _save_bms_processed_splits(
+                    output_folder,
+                    cluster_entity_name,
+                    feature_df,
+                    apply_sr_cleaning=apply_sr_cleaning,
+                )
+
+                merged_train_list.append(train_data)
+                merged_test_list.append(test_data)
+                merged_label_list.append(test_labels)
+                print(f"Saved {cluster_entity_name}: train {train_data.shape}, test {test_data.shape}")
+
+        if not merged_train_list:
+            raise FileNotFoundError("未找到可用于构建 BMS 特征的数据文件组合")
+
+        merged_train = np.concatenate(merged_train_list, axis=0)
+        merged_test = np.concatenate(merged_test_list, axis=0)
+        merged_labels = np.concatenate(merged_label_list, axis=0)
+
+        with open(path.join(output_folder, "BMS_train.pkl"), "wb") as file:
+            dump(merged_train, file)
+        with open(path.join(output_folder, "BMS_test.pkl"), "wb") as file:
+            dump(merged_test, file)
+        with open(path.join(output_folder, "BMS_test_label.pkl"), "wb") as file:
+            dump(merged_labels, file)
+
+        print(f"Saved merged BMS data: train {merged_train.shape}, test {merged_test.shape}")
     # TODO 主要还是预测容量的异常，但是其他数据可以作为特征
     elif dataset == "NASA":
         dataset_folder = "datasets/NASA/"

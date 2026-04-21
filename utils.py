@@ -11,6 +11,38 @@ from sklearn.metrics import roc_curve, auc
 from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler
 
 
+BMS_FEATURE_NAMES = [
+    "BMSnVol_T",
+    "BMSnVol_B",
+    "BMSnI",
+    "BMSnRSOC",
+    "BMSnSOH",
+    "BMSnICMax",
+    "BMSnIDMax",
+    "BMSnVmax",
+    "BMSnVmin",
+    "BMSnVmean",
+    "BMSnTmax",
+    "BMSnTmin",
+    "BMSnTmean",
+    "BMSnETmax",
+    "BMSnETmean",
+    "cell_v_std",
+    "cell_v_range",
+    "cell_v_max_dev_from_mean",
+    "cell_v_min_dev_from_mean",
+    "cell_t_std",
+    "cell_t_range",
+    "SYS_Vol",
+    "SYS_I",
+    "SYS_SOH",
+    "SYS_Vmax",
+    "SYS_Vmin",
+    "SYS_Tmax",
+    "SYS_Tmin",
+]
+
+
 def normalize_data(data, scaler=None):
     data = np.asarray(data, dtype=np.float32)
     if np.any(np.isnan(data)):
@@ -23,6 +55,10 @@ def normalize_data(data, scaler=None):
     print("Data normalized")
 
     return data, scaler
+
+
+def get_bms_feature_names():
+    return list(BMS_FEATURE_NAMES)
 
 
 def adjust_anomaly_scores(scores, dataset, is_train, window_size):
@@ -58,8 +94,8 @@ def get_data_dim(dataset):
         # CALCE数据集是单特征时间序列
         return 1
     elif dataset == "BMS":
-        # BMS数据集特征维度
-        return 5  # SYS_Vol, SYS_I, SYS_DSOC, SYS_SOH, SYS_Vmax
+        # BMS当前使用28维特征，维度与 BMS_FEATURE_NAMES 保持同步
+        return len(BMS_FEATURE_NAMES)
     else:
         raise ValueError("unknown dataset " + str(dataset))
 
