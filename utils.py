@@ -274,6 +274,72 @@ def get_nasa_battery_data(nasa_battery_id=None, nasa_train_batteries=None, nasa_
     return (train_data_map, None), (test_data_map, test_label_map)
 
 
+def get_available_bms_clusters(prefix):
+    cluster_names = []
+    for file_name in os.listdir(prefix):
+        if file_name.startswith("BMS_") and file_name.endswith("_train.pkl") and "_cluster" in file_name:
+            cluster_name = file_name.replace("_train.pkl", "")
+            cluster_names.append(cluster_name)
+    return sorted(cluster_names)
+
+
+def load_bms_cluster_processed_data(prefix, cluster_name):
+    train_path = os.path.join(prefix, f"{cluster_name}_train.pkl")
+    test_path = os.path.join(prefix, f"{cluster_name}_test.pkl")
+    label_path = os.path.join(prefix, f"{cluster_name}_test_label.pkl")
+
+    if not os.path.exists(train_path):
+        raise FileNotFoundError(f"BMS train file not found for cluster {cluster_name}: {train_path}")
+    if not os.path.exists(test_path):
+        raise FileNotFoundError(f"BMS test file not found for cluster {cluster_name}: {test_path}")
+
+    with open(train_path, "rb") as f:
+        train_data = pickle.load(f)
+    with open(test_path, "rb") as f:
+        test_data = pickle.load(f)
+
+    test_label = None
+    if os.path.exists(label_path):
+        with open(label_path, "rb") as f:
+            test_label = pickle.load(f)
+
+    return train_data, test_data, test_label
+
+
+def get_bms_cluster_data(normalize=False, prefix="datasets/BMS/processed"):
+    cluster_names = get_available_bms_clusters(prefix)
+    if not cluster_names:
+        raise FileNotFoundError(f"No processed BMS cluster data found in {prefix}")
+
+    print(f"Using BMS clusters: {cluster_names}")
+
+    train_data_map = {}
+    test_data_map = {}
+    test_label_map = {}
+
+    for cluster_name in cluster_names:
+        cluster_train_data, cluster_test_data, cluster_test_label = load_bms_cluster_processed_data(prefix, cluster_name)
+        train_data_map[cluster_name] = np.asarray(cluster_train_data, dtype=np.float32)
+        test_data_map[cluster_name] = np.asarray(cluster_test_data, dtype=np.float32)
+        test_label_map[cluster_name] = None if cluster_test_label is None else np.asarray(cluster_test_label)
+
+    if normalize:
+        concatenated_train = np.concatenate(list(train_data_map.values()), axis=0)
+        _, scaler = normalize_data(concatenated_train, scaler=None)
+
+        normalized_train_map = {}
+        for cluster_name, cluster_train_data in train_data_map.items():
+            normalized_train_map[cluster_name], _ = normalize_data(cluster_train_data, scaler=scaler)
+        train_data_map = normalized_train_map
+
+        normalized_test_map = {}
+        for cluster_name, cluster_test_data in test_data_map.items():
+            normalized_test_map[cluster_name], _ = normalize_data(cluster_test_data, scaler=scaler)
+        test_data_map = normalized_test_map
+
+    return (train_data_map, None), (test_data_map, test_label_map)
+
+
 def get_data(dataset, max_train_size=None, max_test_size=None,
              normalize=False, spec_res=False, train_start=0, test_start=0,
              nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None):
@@ -397,53 +463,35 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
         else:
             test_data, test_label = None, None
     elif dataset == "BMS":
-        # 对于BMS数据集，加载处理后的pkl文件
-        import glob
-        # 尝试加载合并后的数据
         try:
-            f = open(os.path.join(prefix, dataset + "_train.pkl"), "rb")
-            train_data = pickle.load(f)
-            f.close()
-        except (KeyError, FileNotFoundError):
-            # 如果没有合并后的数据，则加载单个电池的数据
-            pkl_files = glob.glob(os.path.join(prefix, "BMS_*_train.pkl"))
-            if not pkl_files:
-                raise FileNotFoundError(f"No processed BMS battery data found in {prefix}")
-            
-            # 为了简单起见，我们只使用第一个电池的数据
-            battery_file = pkl_files[0]
-            f = open(battery_file, "rb")
-            train_data = pickle.load(f)
-            f.close()
-            print(f"Using battery data from: {os.path.basename(battery_file)}")
-        
-        try:
-            f = open(os.path.join(prefix, dataset + "_test.pkl"), "rb")
-            test_data = pickle.load(f)
-            f.close()
-        except (KeyError, FileNotFoundError):
-            pkl_files = glob.glob(os.path.join(prefix, "BMS_*_test.pkl"))
-            if not pkl_files:
-                test_data = None
-            else:
-                battery_file = pkl_files[0]
-                f = open(battery_file, "rb")
+            with open(os.path.join(prefix, dataset + "_train.pkl"), "rb") as f:
+                train_data = pickle.load(f)
+            with open(os.path.join(prefix, dataset + "_test.pkl"), "rb") as f:
                 test_data = pickle.load(f)
-                f.close()
-        
-        try:
-            f = open(os.path.join(prefix, dataset + "_test_label.pkl"), "rb")
-            test_label = pickle.load(f)
-            f.close()
-        except (KeyError, FileNotFoundError):
-            pkl_files = glob.glob(os.path.join(prefix, "BMS_*_test_label.pkl"))
-            if not pkl_files:
+            try:
+                with open(os.path.join(prefix, dataset + "_test_label.pkl"), "rb") as f:
+                    test_label = pickle.load(f)
+            except (KeyError, FileNotFoundError):
                 test_label = None
+        except (KeyError, FileNotFoundError):
+            (train_data_map, _), (test_data_map, test_label_map) = get_bms_cluster_data(
+                normalize=False,
+                prefix=prefix,
+            )
+            train_data = np.concatenate(list(train_data_map.values()), axis=0)
+            test_data = np.concatenate(list(test_data_map.values()), axis=0)
+            has_any_label = any(label is not None for label in test_label_map.values())
+            if has_any_label:
+                aligned_labels = []
+                for cluster_name, cluster_test_data in test_data_map.items():
+                    cluster_test_label = test_label_map[cluster_name]
+                    if cluster_test_label is None:
+                        aligned_labels.append(np.zeros(len(cluster_test_data), dtype=np.int32))
+                    else:
+                        aligned_labels.append(np.asarray(cluster_test_label))
+                test_label = np.concatenate(aligned_labels, axis=0)
             else:
-                battery_file = pkl_files[0]
-                f = open(battery_file, "rb")
-                test_label = pickle.load(f)
-                f.close()
+                test_label = None
     else:
         f = open(os.path.join(prefix, dataset + "_train.pkl"), "rb")
         train_data = pickle.load(f).reshape((-1, x_dim))[train_start:train_end, :]

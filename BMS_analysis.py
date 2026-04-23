@@ -1,6 +1,7 @@
 # BMS 数据集可视化分析
 
 import glob
+import json
 import os
 import pickle
 import re
@@ -19,7 +20,6 @@ plt.rcParams["font.sans-serif"] = ["SimHei", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
 sys.path.insert(0, "")
-from plotting import Plotter
 from utils import get_bms_feature_names, get_data, get_data_dim
 
 
@@ -320,33 +320,132 @@ def load_bms_data():
     return train_data, test_data, test_labels
 
 
-def plot_model_outputs_if_available():
-    output_path = "output/BMS"
+def get_latest_bms_run_dir():
+    output_path = os.path.join("output", "BMS")
     if not os.path.exists(output_path):
+        return None
+
+    run_dirs = []
+    for entry in os.listdir(output_path):
+        run_path = os.path.join(output_path, entry)
+        if not os.path.isdir(run_path):
+            continue
+        if entry == "logs":
+            continue
+        run_dirs.append(run_path)
+
+    if not run_dirs:
+        return None
+
+    run_dirs.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    return run_dirs[0]
+
+
+def find_cluster_output_dirs(run_dir):
+    if run_dir is None or not os.path.exists(run_dir):
+        return []
+
+    cluster_dirs = []
+    for entry in sorted(os.listdir(run_dir)):
+        entry_path = os.path.join(run_dir, entry)
+        if not os.path.isdir(entry_path):
+            continue
+        if os.path.exists(os.path.join(entry_path, "test_output.pkl")):
+            cluster_dirs.append(entry_path)
+    return cluster_dirs
+
+
+def plot_cluster_output_trends(cluster_output_dirs):
+    if not cluster_output_dirs:
+        print("未检测到按簇输出目录，跳过簇级模型结果分析。")
+        return
+
+    summary_rows = []
+    fig, axes = plt.subplots(3, 1, figsize=(16, 10), sharex=False)
+    metric_configs = [
+        ("A_Score_Global", "Global Anomaly Score", axes[0], "cluster_test_anomaly_scores.png"),
+        ("Pred_Error_Global", "Global Prediction Error", axes[1], None),
+        ("Recon_Error_Global", "Global Reconstruction Error", axes[2], None),
+    ]
+
+    for cluster_idx, cluster_dir in enumerate(cluster_output_dirs):
+        cluster_name = os.path.basename(cluster_dir)
+        test_output_path = os.path.join(cluster_dir, "test_output.pkl")
+        summary_path = os.path.join(cluster_dir, "summary_metrics.json")
+        threshold_path = os.path.join(cluster_dir, "thresholds.json")
+
+        if not os.path.exists(test_output_path):
+            continue
+
+        test_output = pd.read_pickle(test_output_path)
+        threshold_value = None
+        if os.path.exists(threshold_path):
+            with open(threshold_path, "r", encoding="utf-8") as f:
+                thresholds = json.load(f)
+            threshold_value = thresholds.get("global_threshold")
+
+        summary_metrics = {}
+        if os.path.exists(summary_path):
+            with open(summary_path, "r", encoding="utf-8") as f:
+                summary_metrics = json.load(f)
+
+        for metric_name, title, ax, _ in metric_configs:
+            if metric_name not in test_output.columns:
+                continue
+            ax.plot(
+                np.arange(len(test_output)),
+                test_output[metric_name].values,
+                linewidth=1.0,
+                alpha=0.9,
+                label=cluster_name,
+            )
+            ax.set_title(title)
+            ax.set_ylabel(metric_name)
+            ax.grid(True, alpha=0.25)
+
+            if metric_name == "A_Score_Global" and threshold_value is not None:
+                ax.axhline(float(threshold_value), color="black", linestyle="--", linewidth=0.8, alpha=0.35)
+
+        summary_rows.append(
+            {
+                "cluster": cluster_name,
+                "test_points": int(len(test_output)),
+                "mean_global_score": float(test_output["A_Score_Global"].mean()) if "A_Score_Global" in test_output else np.nan,
+                "max_global_score": float(test_output["A_Score_Global"].max()) if "A_Score_Global" in test_output else np.nan,
+                "mean_pred_error": float(test_output["Pred_Error_Global"].mean()) if "Pred_Error_Global" in test_output else np.nan,
+                "mean_recon_error": float(test_output["Recon_Error_Global"].mean()) if "Recon_Error_Global" in test_output else np.nan,
+                "global_threshold": float(threshold_value) if threshold_value is not None else np.nan,
+                "epsilon_threshold": (
+                    summary_metrics.get("epsilon_result", {}).get("threshold")
+                    if isinstance(summary_metrics, dict) else np.nan
+                ),
+            }
+        )
+
+    handles, labels = axes[0].get_legend_handles_labels()
+    if handles:
+        fig.legend(handles, labels, loc="upper center", ncol=min(6, len(labels)), frameon=False)
+        fig.subplots_adjust(top=0.90)
+    save_and_show(fig, "cluster_model_output_trends.png")
+
+    if summary_rows:
+        summary_df = pd.DataFrame(summary_rows).sort_values("cluster")
+        summary_csv_path = os.path.join(OUTPUT_DIR, "cluster_model_output_summary.csv")
+        summary_df.to_csv(summary_csv_path, index=False, encoding="utf-8-sig")
+        print(f"模型输出汇总已保存: {summary_csv_path}")
+        print("\n=== BMS 按簇模型输出摘要 ===")
+        print(summary_df.to_string(index=False))
+
+
+def plot_model_outputs_if_available():
+    latest_run_dir = get_latest_bms_run_dir()
+    if latest_run_dir is None:
         print("未找到 BMS 训练结果目录，跳过模型输出分析。")
         return
 
-    print("检测到 BMS 训练结果，尝试加载 Plotter...")
-    try:
-        plotter = Plotter(output_path, model_id="-1")
-        plotter.result_summary()
-        plotter.plot_global_predictions(type="test")
-        for feature_idx in range(get_data_dim("BMS")):
-            plotter.plot_feature(
-                feature=feature_idx,
-                plot_train=True,
-                plot_errors=True,
-                plot_feature_anom=True,
-                start=0,
-                end=min(2000, len(plotter.test_output)),
-            )
-    except KeyError as exc:
-        print(
-            "检测到的 `output/BMS` 结果与当前 28 维 BMS 特征名不兼容，"
-            f"通常是旧实验输出，已跳过该部分可视化。缺失键: {exc}"
-        )
-    except Exception as exc:
-        print(f"加载结果时出错: {exc}")
+    print(f"检测到最新 BMS 运行目录: {latest_run_dir}")
+    cluster_output_dirs = find_cluster_output_dirs(latest_run_dir)
+    plot_cluster_output_trends(cluster_output_dirs)
 
 
 def main():

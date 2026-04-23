@@ -1,4 +1,5 @@
 import os
+import time
 from ast import literal_eval
 from csv import reader
 from datetime import datetime
@@ -121,7 +122,7 @@ def _build_bms_cluster_feature_frame(stat_df, volt_summary_df, temp_summary_df, 
 
 
 def _save_bms_processed_splits(output_folder, entity_name, feature_df, apply_sr_cleaning=False):
-    feature_array = feature_df.to_numpy(dtype=np.float32, copy=True)
+    feature_array = np.asarray(feature_df, dtype=np.float32)
 
     if apply_sr_cleaning:
         print(f"Applying spectral residual cleaning to BMS {entity_name} data...")
@@ -327,6 +328,9 @@ def load_data(dataset, apply_sr_cleaning=False):
         dataset_folder = "datasets/BMS"
         output_folder = "datasets/BMS/processed"
         makedirs(output_folder, exist_ok=True)
+        print(f"[BMS] Dataset folder: {dataset_folder}")
+        print(f"[BMS] Output folder: {output_folder}")
+        print(f"[BMS] Spectral residual cleaning: {apply_sr_cleaning}")
         suffix_map = {
             "_BMS0Data.xls": "group",
             "_BMSnStatData.xls": "stat",
@@ -348,19 +352,26 @@ def load_data(dataset, apply_sr_cleaning=False):
                     grouped_files.setdefault(prefix_name, {})[key] = path.join(dataset_folder, filename)
                     break
 
+        print(f"[BMS] Detected {len(grouped_files)} candidate bundle(s)")
+
         merged_train_list = []
         merged_test_list = []
         merged_label_list = []
+        bms_start_time = time.perf_counter()
 
-        for prefix_name, file_map in sorted(grouped_files.items()):
+        for bundle_idx, (prefix_name, file_map) in enumerate(sorted(grouped_files.items()), start=1):
             required_keys = {"group", "stat", "temp", "volt"}
             if not required_keys.issubset(file_map.keys()):
                 missing_keys = sorted(required_keys - set(file_map.keys()))
                 print(f"Skipping {prefix_name}, missing files: {missing_keys}")
                 continue
 
-            print(f"Processing BMS bundle: {prefix_name}")
+            bundle_start_time = time.perf_counter()
+            print(f"[BMS][{bundle_idx}/{len(grouped_files)}] Processing bundle: {prefix_name}")
+            print(f"[BMS][{bundle_idx}/{len(grouped_files)}] Loading group table...")
             group_df = _load_bms_excel(file_map["group"])
+            print(f"[BMS][{bundle_idx}/{len(grouped_files)}] Group rows: {len(group_df)}")
+            print(f"[BMS][{bundle_idx}/{len(grouped_files)}] Reading workbook metadata...")
             stat_xls = pd.ExcelFile(file_map["stat"])
             temp_xls = pd.ExcelFile(file_map["temp"])
             volt_xls = pd.ExcelFile(file_map["volt"])
@@ -369,18 +380,36 @@ def load_data(dataset, apply_sr_cleaning=False):
             if not common_sheets:
                 print(f"No shared cluster sheets found for {prefix_name}")
                 continue
+            print(f"[BMS][{bundle_idx}/{len(grouped_files)}] Shared cluster sheets: {common_sheets}")
 
             bundle_name = _sanitize_bms_entity_name(prefix_name)
-            for sheet_name in common_sheets:
+            for sheet_idx, sheet_name in enumerate(common_sheets, start=1):
+                sheet_start_time = time.perf_counter()
+                print(f"[BMS][{bundle_idx}/{len(grouped_files)}][Sheet {sheet_idx}/{len(common_sheets)}] Loading stat/temp/volt data for cluster {sheet_name}...")
                 stat_df = _load_bms_excel(file_map["stat"], sheet_name=sheet_name)
                 temp_df = _load_bms_excel(file_map["temp"], sheet_name=sheet_name)
                 volt_df = _load_bms_excel(file_map["volt"], sheet_name=sheet_name)
+                print(
+                    f"[BMS][{bundle_idx}/{len(grouped_files)}][Sheet {sheet_idx}/{len(common_sheets)}] "
+                    f"Rows loaded - stat: {len(stat_df)}, temp: {len(temp_df)}, volt: {len(volt_df)}"
+                )
 
+                print(f"[BMS][{bundle_idx}/{len(grouped_files)}][Sheet {sheet_idx}/{len(common_sheets)}] Building temperature summary...")
                 temp_summary_df = _build_bms_detail_summary(temp_df, prefix="BMSnT")
+                print(f"[BMS][{bundle_idx}/{len(grouped_files)}][Sheet {sheet_idx}/{len(common_sheets)}] Building voltage summary...")
                 volt_summary_df = _build_bms_detail_summary(volt_df, prefix="BMSnV")
+                print(f"[BMS][{bundle_idx}/{len(grouped_files)}][Sheet {sheet_idx}/{len(common_sheets)}] Merging cluster features...")
                 feature_df = _build_bms_cluster_feature_frame(stat_df, volt_summary_df, temp_summary_df, group_df)
+                print(
+                    f"[BMS][{bundle_idx}/{len(grouped_files)}][Sheet {sheet_idx}/{len(common_sheets)}] "
+                    f"Feature frame shape: {feature_df.shape}"
+                )
 
                 cluster_entity_name = f"BMS_{bundle_name}_cluster{sheet_name}"
+                print(
+                    f"[BMS][{bundle_idx}/{len(grouped_files)}][Sheet {sheet_idx}/{len(common_sheets)}] "
+                    f"Saving processed splits for {cluster_entity_name}..."
+                )
                 train_data, test_data, test_labels = _save_bms_processed_splits(
                     output_folder,
                     cluster_entity_name,
@@ -391,11 +420,25 @@ def load_data(dataset, apply_sr_cleaning=False):
                 merged_train_list.append(train_data)
                 merged_test_list.append(test_data)
                 merged_label_list.append(test_labels)
-                print(f"Saved {cluster_entity_name}: train {train_data.shape}, test {test_data.shape}")
+                print(
+                    f"[BMS][{bundle_idx}/{len(grouped_files)}][Sheet {sheet_idx}/{len(common_sheets)}] "
+                    f"Saved {cluster_entity_name}: train {train_data.shape}, test {test_data.shape}"
+                )
+                sheet_elapsed = time.perf_counter() - sheet_start_time
+                print(
+                    f"[BMS][{bundle_idx}/{len(grouped_files)}][Sheet {sheet_idx}/{len(common_sheets)}] "
+                    f"Elapsed: {sheet_elapsed:.2f}s"
+                )
+
+            bundle_elapsed = time.perf_counter() - bundle_start_time
+            print(
+                f"[BMS][{bundle_idx}/{len(grouped_files)}] Bundle completed in {bundle_elapsed:.2f}s"
+            )
 
         if not merged_train_list:
             raise FileNotFoundError("未找到可用于构建 BMS 特征的数据文件组合")
 
+        print("[BMS] Concatenating merged train/test splits across all processed clusters...")
         merged_train = np.concatenate(merged_train_list, axis=0)
         merged_test = np.concatenate(merged_test_list, axis=0)
         merged_labels = np.concatenate(merged_label_list, axis=0)
@@ -408,6 +451,7 @@ def load_data(dataset, apply_sr_cleaning=False):
             dump(merged_labels, file)
 
         print(f"Saved merged BMS data: train {merged_train.shape}, test {merged_test.shape}")
+        print(f"[BMS] Total elapsed: {time.perf_counter() - bms_start_time:.2f}s")
     # TODO 主要还是预测容量的异常，但是其他数据可以作为特征
     elif dataset == "NASA":
         dataset_folder = "datasets/NASA/"
@@ -422,7 +466,7 @@ def load_data(dataset, apply_sr_cleaning=False):
             # 提取电池编号
             battery_id = filename.split(".mat")[0]
 
-            print(f"Processing {filename}...")
+            print(f"[NASA] Processing {filename}...")
 
             # 加载数据
             try:
@@ -441,7 +485,7 @@ def load_data(dataset, apply_sr_cleaning=False):
             # 解析NASA电池数据结构
             # MATLAB结构中的存储方式。整个循环数据都存储在cycle[0]这个数组中
             num_cycles = len(battery_data['cycle'][0])
-            print('Total cycle data in dataset: ', num_cycles)
+            print(f"[NASA][{battery_id}] Total cycle entries: {num_cycles}")
             
             # 收集所有周期的数据（包括充电和放电）
             cycle_data_list = []
@@ -465,7 +509,6 @@ def load_data(dataset, apply_sr_cleaning=False):
                     # 检查数据结构，确保Capacity字段存在且可访问
                     try:
                         capacity = data[0][0]['Capacity'][0][0]
-                        print(f"周期 {i} ({cycle_type}) 容量值: {capacity}")
                         
                         # 检查容量值是否合理（大于0）
                         if capacity <= 0:
@@ -496,7 +539,7 @@ def load_data(dataset, apply_sr_cleaning=False):
                             else:  # discharge
                                 current_load = data[0][0]['Current_load'][0][j]
                                 voltage_load = data[0][0]['Voltage_load'][0][j]
-                            time = data[0][0]['Time'][0][j]
+                            step_time = data[0][0]['Time'][0][j]
                             
                             # 构造该时间点的数据（暂时使用周期级别的capacity）
                             measurement = [capacity, voltage_measured, current_measured,
@@ -517,7 +560,7 @@ def load_data(dataset, apply_sr_cleaning=False):
                             'capacity': capacity  # 保存该周期的容量值
                         })
 
-            print(f"Processed {len(cycle_data_list)} cycles")
+            print(f"[NASA][{battery_id}] Parsed usable charge/discharge cycles: {len(cycle_data_list)}")
             
             # 按时间顺序排列周期
             cycle_data_list.sort(key=lambda x: x['date_time'])
@@ -551,6 +594,10 @@ def load_data(dataset, apply_sr_cleaning=False):
                 
             split_ratio = 0.8
             split_index = int(total_cycles * split_ratio)
+            print(
+                f"[NASA][{battery_id}] Split cycles -> train: {split_index}, "
+                f"test: {total_cycles - split_index}"
+            )
 
             # 划分训练集和测试集数据（按周期分割）
             train_cycle_data = all_cycle_data[:split_index]
@@ -606,20 +653,7 @@ def load_data(dataset, apply_sr_cleaning=False):
                 train_data_combined = np.vstack(train_data_full)
                 train_labels_combined = None
                 
-                # 打印处理前的数据示例（展平前）
-                print("=" * 50)
-                print("训练数据展平前的示例（前2个周期）:")
-                print("=" * 50)
-                for i in range(min(2, len(train_cycle_data))):
-                    cycle_type = all_cycle_types[i]
-                    cycle_number = all_cycle_indices[i]
-                    print(f"周期 {cycle_number} ({cycle_type}) - 前3个时间步数据:")
-                    print("列名: [容量, 测量电压, 测量电流, 测量温度, 负载电流, 负载电压]")
-                    print(train_cycle_data[i][:3])
-                    print()
-                
                 # 对训练数据中的容量进行插值处理（仅充电周期）
-                original_capacities = train_data_combined[:, 0].copy()  # 保存原始容量值用于对比
                 train_interpolated_capacities = interpolate_capacity_to_timesteps(
                     np.array(train_cycle_capacities), train_cycle_lengths, all_cycle_types[:split_index])
                 train_data_combined[:, 0] = train_interpolated_capacities  # 更新容量列
@@ -628,25 +662,6 @@ def load_data(dataset, apply_sr_cleaning=False):
                 negative_interp_capacities = np.sum(train_data_combined[:, 0] <= 0)
                 if negative_interp_capacities > 0:
                     print(f"警告: 训练数据插值后发现 {negative_interp_capacities} 个非正值容量")
-                
-                # 打印插值处理前后的对比
-                print("=" * 50)
-                print("容量插值处理对比（前10个时间步）:")
-                print("=" * 50)
-                print("说明: 仅对充电周期进行插值，放电周期保持原值")
-                # 计算充电周期的范围
-                charge_cycle_ranges = []
-                step_idx = 0
-                for i, (length, cycle_type) in enumerate(zip(train_cycle_lengths, all_cycle_types[:split_index])):
-                    if cycle_type == 'charge':
-                        charge_cycle_ranges.append((step_idx, step_idx + length - 1, i))
-                    step_idx += length
-                
-                print(f"充电周期时间步范围: {charge_cycle_ranges}")
-                print("前10个时间步插值结果:")
-                for i in range(min(10, len(original_capacities))):
-                    print(f"  时间步 {i}: 原始值={original_capacities[i]:.4f}, 插值后={train_interpolated_capacities[i]:.4f}")
-                print()
                 
                 # 添加周期编号作为新的一列特征（先添加到最后）
                 cycle_number_column = np.zeros(len(train_data_combined), dtype=np.float32)
@@ -663,22 +678,6 @@ def load_data(dataset, apply_sr_cleaning=False):
                 # 目标顺序：[Cycle_Number, Voltage_measured, Current_measured, Temperature_measured, Current_load, Voltage_load, Capacity]
                 cols_order = [6, 1, 2, 3, 4, 5, 0]  # 新的列索引顺序
                 train_data_combined = train_data_combined[:, cols_order]
-                
-                # 打印示例数据用于调试
-                print("=" * 50)
-                print("训练数据最终结果示例（前5行）:")
-                print("=" * 50)
-                print("列名: [周期编号, 测量电压, 测量电流, 测量温度, 负载电流, 负载电压, 容量]")
-                for i in range(min(5, len(train_data_combined))):
-                    cycle_type_for_row = None
-                    accumulated_length = 0
-                    for j, length in enumerate(train_cycle_lengths):
-                        if i < accumulated_length + length:
-                            cycle_type_for_row = all_cycle_types[j]
-                            break
-                        accumulated_length += length
-                    print(f"行 {i}: {train_data_combined[i]} (周期类型: {cycle_type_for_row})")
-                print()
             else:
                 train_data_combined = np.array([])
                 train_labels_combined = None
@@ -687,20 +686,7 @@ def load_data(dataset, apply_sr_cleaning=False):
                 test_data_combined = np.vstack(test_data_full)
                 test_labels_combined = None
                 
-                # 打印处理前的数据示例（展平前）
-                print("=" * 50)
-                print("测试数据展平前的示例（前2个周期）:")
-                print("=" * 50)
-                for i in range(min(2, len(test_cycle_data))):
-                    cycle_type = all_cycle_types[split_index + i]
-                    cycle_number = all_cycle_indices[split_index + i]
-                    print(f"周期 {cycle_number} ({cycle_type}) - 前3个时间步数据:")
-                    print("列名: [容量, 测量电压, 测量电流, 测量温度, 负载电流, 负载电压]")
-                    print(test_cycle_data[i][:3])
-                    print()
-                
                 # 对测试数据中的容量进行插值处理（仅充电周期）
-                original_capacities = test_data_combined[:, 0].copy()  # 保存原始容量值用于对比
                 test_interpolated_capacities = interpolate_capacity_to_timesteps(
                     np.array(test_cycle_capacities), test_cycle_lengths, all_cycle_types[split_index:])
                 test_data_combined[:, 0] = test_interpolated_capacities  # 更新容量列
@@ -709,25 +695,6 @@ def load_data(dataset, apply_sr_cleaning=False):
                 negative_interp_capacities = np.sum(test_data_combined[:, 0] <= 0)
                 if negative_interp_capacities > 0:
                     print(f"警告: 测试数据插值后发现 {negative_interp_capacities} 个非正值容量")
-                
-                # 打印插值处理前后的对比
-                print("=" * 50)
-                print("测试数据容量插值处理对比（前10个时间步）:")
-                print("=" * 50)
-                print("说明: 仅对充电周期进行插值，放电周期保持原值")
-                # 计算充电周期的范围
-                charge_cycle_ranges = []
-                step_idx = 0
-                for i, (length, cycle_type) in enumerate(zip(test_cycle_lengths, all_cycle_types[split_index:])):
-                    if cycle_type == 'charge':
-                        charge_cycle_ranges.append((step_idx, step_idx + length - 1, i))
-                    step_idx += length
-                
-                print(f"充电周期时间步范围: {charge_cycle_ranges}")
-                print("前10个时间步插值结果:")
-                for i in range(min(10, len(original_capacities))):
-                    print(f"  时间步 {i}: 原始值={original_capacities[i]:.4f}, 插值后={test_interpolated_capacities[i]:.4f}")
-                print()
                 
                 # 添加周期编号作为新的一列特征（先添加到最后）
                 cycle_number_column = np.zeros(len(test_data_combined), dtype=np.float32)
@@ -744,36 +711,20 @@ def load_data(dataset, apply_sr_cleaning=False):
                 # 目标顺序：[Cycle_Number, Voltage_measured, Current_measured, Temperature_measured, Current_load, Voltage_load, Capacity]
                 cols_order = [6, 1, 2, 3, 4, 5, 0]  # 新的列索引顺序
                 test_data_combined = test_data_combined[:, cols_order]
-                
-                # 打印示例数据用于调试
-                print("=" * 50)
-                print("测试数据最终结果示例（前5行）:")
-                print("=" * 50)
-                print("列名: [周期编号, 测量电压, 测量电流, 测量温度, 负载电流, 负载电压, 容量]")
-                for i in range(min(5, len(test_data_combined))):
-                    cycle_type_for_row = None
-                    accumulated_length = 0
-                    for j, length in enumerate(test_cycle_lengths):
-                        if i < accumulated_length + length:
-                            cycle_type_for_row = all_cycle_types[split_index + j]
-                            break
-                        accumulated_length += length
-                    print(f"行 {i}: {test_data_combined[i]} (周期类型: {cycle_type_for_row})")
-                print()
             else:
                 test_data_combined = np.array([])
                 test_labels_combined = None
 
             # 应用谱残差清洗（如果启用）
             if apply_sr_cleaning and len(train_data_combined) > 0:
-                print(f"Applying spectral residual cleaning to NASA {battery_id} train data...")
+                print(f"[NASA][{battery_id}] Applying spectral residual cleaning to train data...")
                 train_data_combined = apply_spectral_residual_cleaning(train_data_combined, threshold=3.0)
-                print(f"Cleaning completed. Shape: {train_data_combined.shape}")
+                print(f"[NASA][{battery_id}] Cleaning completed. Shape: {train_data_combined.shape}")
 
-            print(f"{battery_id} Train data shape: {train_data_combined.shape}")
-            print(f"{battery_id} Test data shape: {test_data_combined.shape}")
-            print(f"{battery_id} Train labels shape: None")
-            print(f"{battery_id} Test labels shape: None")
+            print(
+                f"[NASA][{battery_id}] Final arrays -> train: {train_data_combined.shape}, "
+                f"test: {test_data_combined.shape}, labels: None"
+            )
 
             # 保存处理后的数据（展开的时间点数据，不按周期组织）
             with open(path.join(output_folder, f"NASA_{battery_id}_train.pkl"), "wb") as file:
@@ -797,7 +748,7 @@ def load_data(dataset, apply_sr_cleaning=False):
             with open(path.join(output_folder, f"NASA_{battery_id}_cycle_indices.pkl"), "wb") as file:
                 dump(all_cycle_indices, file)
 
-            print(f"Saved {battery_id} data with shape: {train_data_combined.shape} in unified folder")
+            print(f"[NASA][{battery_id}] Saved processed files to {output_folder}")
 
     # TODO 异常标签按曲率计算
     elif dataset == "CALCE":

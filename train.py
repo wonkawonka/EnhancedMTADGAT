@@ -333,7 +333,7 @@ if __name__ == "__main__":
             (x_train, _), (x_test, y_test) = get_data(dataset, normalize=normalize)
         elif dataset == 'BMS':
             output_path = f'output/{dataset}'
-            (x_train, _), (x_test, y_test) = get_data(dataset, normalize=normalize)
+            (x_train, _), (x_test, y_test) = get_bms_cluster_data(normalize=normalize)
         else:
             raise Exception(f'Dataset "{dataset}" not available.')
 
@@ -345,19 +345,31 @@ if __name__ == "__main__":
         save_path = f"{output_path}/{id}"
 
         nasa_train_tensors = None
+        bms_train_tensors = None
         if dataset == "NASA" and isinstance(x_train, dict):
             nasa_train_tensors = {battery_name: torch.from_numpy(battery_data).float()
                                   for battery_name, battery_data in x_train.items()}
             first_train_battery = next(iter(nasa_train_tensors))
             x_train = nasa_train_tensors[first_train_battery]
+        elif dataset == "BMS" and isinstance(x_train, dict):
+            bms_train_tensors = {cluster_name: torch.from_numpy(cluster_data).float()
+                                 for cluster_name, cluster_data in x_train.items()}
+            first_train_cluster = next(iter(bms_train_tensors))
+            x_train = bms_train_tensors[first_train_cluster]
         else:
             x_train = torch.from_numpy(x_train).float()
         nasa_test_tensors = None
+        bms_test_tensors = None
         if dataset == "NASA" and isinstance(x_test, dict):
             nasa_test_tensors = {battery_name: torch.from_numpy(battery_data).float()
                                  for battery_name, battery_data in x_test.items()}
             first_test_battery = next(iter(nasa_test_tensors))
             x_test = nasa_test_tensors[first_test_battery]
+        elif dataset == "BMS" and isinstance(x_test, dict):
+            bms_test_tensors = {cluster_name: torch.from_numpy(cluster_data).float()
+                                for cluster_name, cluster_data in x_test.items()}
+            first_test_cluster = next(iter(bms_test_tensors))
+            x_test = bms_test_tensors[first_test_cluster]
         else:
             x_test = torch.from_numpy(x_test).float()
         n_features = x_train.shape[1]
@@ -377,6 +389,12 @@ if __name__ == "__main__":
             train_sub_datasets = [
                 SlidingWindowDataset(battery_tensor, window_size, target_dims)
                 for battery_tensor in nasa_train_tensors.values()
+            ]
+            train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
+        elif dataset == "BMS" and bms_train_tensors is not None:
+            train_sub_datasets = [
+                SlidingWindowDataset(cluster_tensor, window_size, target_dims)
+                for cluster_tensor in bms_train_tensors.values()
             ]
             train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
         else:
@@ -458,6 +476,28 @@ if __name__ == "__main__":
                 print(f"[{battery_name}] Test total loss: {battery_test_losses[battery_name][2]:.5f}")
 
             mean_test_loss = np.mean(np.array(list(battery_test_losses.values()), dtype=np.float32), axis=0)
+            print(f"Mean test forecast loss: {mean_test_loss[0]:.5f}")
+            print(f"Mean test reconstruction loss: {mean_test_loss[1]:.5f}")
+            print(f"Mean test total loss: {mean_test_loss[2]:.5f}")
+        elif dataset == "BMS" and bms_test_tensors is not None:
+            num_workers = 2 if os.name == 'nt' else 4
+            pin_memory = torch.cuda.is_available()
+            cluster_test_losses = {}
+            for cluster_name, cluster_tensor in bms_test_tensors.items():
+                cluster_test_dataset = SlidingWindowDataset(cluster_tensor, window_size, target_dims)
+                cluster_test_loader = torch.utils.data.DataLoader(
+                    cluster_test_dataset,
+                    batch_size=batch_size,
+                    shuffle=False,
+                    num_workers=num_workers,
+                    pin_memory=pin_memory
+                )
+                cluster_test_losses[cluster_name] = trainer.evaluate(cluster_test_loader)
+                print(f"[{cluster_name}] Test forecast loss: {cluster_test_losses[cluster_name][0]:.5f}")
+                print(f"[{cluster_name}] Test reconstruction loss: {cluster_test_losses[cluster_name][1]:.5f}")
+                print(f"[{cluster_name}] Test total loss: {cluster_test_losses[cluster_name][2]:.5f}")
+
+            mean_test_loss = np.mean(np.array(list(cluster_test_losses.values()), dtype=np.float32), axis=0)
             print(f"Mean test forecast loss: {mean_test_loss[0]:.5f}")
             print(f"Mean test reconstruction loss: {mean_test_loss[1]:.5f}")
             print(f"Mean test total loss: {mean_test_loss[2]:.5f}")
@@ -567,6 +607,30 @@ if __name__ == "__main__":
                 print(f"NASA专用报告生成出错: {e}")
                 import traceback
                 traceback.print_exc()
+        elif dataset == "BMS" and bms_test_tensors is not None:
+            for cluster_name, cluster_tensor in bms_test_tensors.items():
+                cluster_save_path = os.path.join(save_path, cluster_name)
+                os.makedirs(cluster_save_path, exist_ok=True)
+
+                cluster_prediction_args = dict(prediction_args)
+                cluster_prediction_args["save_path"] = cluster_save_path
+                predictor = Predictor(
+                    best_model,
+                    window_size,
+                    n_features,
+                    cluster_prediction_args,
+                )
+
+                cluster_label = None
+                if isinstance(y_test, dict):
+                    raw_label = y_test.get(cluster_name)
+                    if raw_label is not None:
+                        cluster_label = raw_label[window_size:]
+
+                train_reference = bms_train_tensors if bms_train_tensors is not None else x_train
+                predictor.predict_anomalies(train_reference, cluster_tensor, cluster_label)
+
+            print("BMS按簇输出已生成（联合训练、分簇测试）")
         else:
             predictor = Predictor(
                 best_model,
