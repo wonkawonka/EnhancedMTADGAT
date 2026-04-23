@@ -65,6 +65,192 @@ class Predictor:
         with open(f"{self.save_path}/thresholds.json", "w") as f:
             json.dump(thresholds, f, indent=2)
 
+    @staticmethod
+    def _add_segment_metadata(score_df, segment_id, segment_source_length, global_start_index):
+        score_df = score_df.copy()
+        score_df["Segment_ID"] = int(segment_id)
+        score_df["Segment_Pos"] = np.arange(len(score_df), dtype=np.int32)
+        score_df["Segment_Source_Length"] = int(segment_source_length)
+        score_df["Global_Pos"] = np.arange(global_start_index, global_start_index + len(score_df), dtype=np.int32)
+        return score_df
+
+    @staticmethod
+    def _collect_segment_boundaries(score_df):
+        if "Segment_ID" not in score_df.columns or len(score_df) == 0:
+            return []
+
+        boundaries = []
+        current_segment = None
+        for idx, segment_id in enumerate(score_df["Segment_ID"].values):
+            if current_segment is None:
+                current_segment = segment_id
+                continue
+            if segment_id != current_segment:
+                boundaries.append(idx)
+                current_segment = segment_id
+        return boundaries
+
+    @staticmethod
+    def _build_segment_summary(score_df):
+        if "Segment_ID" not in score_df.columns or len(score_df) == 0:
+            return pd.DataFrame()
+
+        summary_rows = []
+        for segment_id, segment_df in score_df.groupby("Segment_ID", sort=True):
+            pred_count = int(segment_df["A_Pred_Global"].sum()) if "A_Pred_Global" in segment_df.columns else 0
+            summary_rows.append({
+                "segment_id": int(segment_id),
+                "score_length": int(len(segment_df)),
+                "score_start_index": int(segment_df.index[0]),
+                "score_end_index": int(segment_df.index[-1]),
+                "global_start_pos": int(segment_df["Global_Pos"].iloc[0]),
+                "global_end_pos": int(segment_df["Global_Pos"].iloc[-1]),
+                "global_mid_pos": float((segment_df["Global_Pos"].iloc[0] + segment_df["Global_Pos"].iloc[-1]) / 2.0),
+                "source_length": int(segment_df["Segment_Source_Length"].iloc[0]),
+                "max_score": float(segment_df["A_Score_Global"].max()),
+                "mean_score": float(segment_df["A_Score_Global"].mean()),
+                "pred_anomaly_count": pred_count,
+            })
+        return pd.DataFrame(summary_rows)
+
+    def _save_segment_metadata(self, score_df, file_name):
+        if "Segment_ID" not in score_df.columns or len(score_df) == 0:
+            return
+
+        metadata_df = self._build_segment_summary(score_df)
+        metadata_df.to_csv(f"{self.save_path}/{file_name}", index=False)
+
+    def _plot_segment_overview(self, score_df, threshold, file_name, title, top_k=5):
+        if "Segment_ID" not in score_df.columns or len(score_df) == 0:
+            return
+
+        x_axis = score_df["Global_Pos"].values if "Global_Pos" in score_df.columns else np.arange(len(score_df))
+        y_axis = score_df["A_Score_Global"].values
+        pred_axis = score_df["A_Pred_Global"].values if "A_Pred_Global" in score_df.columns else None
+        segment_summary = self._build_segment_summary(score_df)
+
+        fig, ax = plt.subplots(figsize=(14, 4.5))
+        ax.plot(x_axis, y_axis, color="tab:red", linewidth=1.1, label="Global Score")
+        ax.axhline(threshold, color="tab:blue", linestyle="--", linewidth=1.0, label="Threshold")
+
+        if pred_axis is not None and np.any(pred_axis > 0):
+            anomaly_x = x_axis[pred_axis > 0]
+            anomaly_y = y_axis[pred_axis > 0]
+            ax.scatter(anomaly_x, anomaly_y, color="black", s=10, alpha=0.7, label="Predicted Anomaly")
+
+        for boundary in self._collect_segment_boundaries(score_df):
+            boundary_x = x_axis[boundary]
+            ax.axvline(boundary_x, color="gray", linestyle=":", linewidth=0.9, alpha=0.8)
+
+        if not segment_summary.empty:
+            top_segments = segment_summary.sort_values(
+                ["max_score", "pred_anomaly_count", "mean_score"],
+                ascending=False
+            ).head(top_k)
+            top_segment_ids = set(top_segments["segment_id"].tolist())
+
+            y_upper = max(float(np.max(y_axis)), float(threshold)) if len(y_axis) > 0 else float(threshold)
+            text_y = y_upper * 1.03 if y_upper > 0 else 0.05
+
+            for _, row in segment_summary.iterrows():
+                start_x = row["global_start_pos"]
+                end_x = row["global_end_pos"]
+                mid_x = row["global_mid_pos"]
+                segment_id = int(row["segment_id"])
+                is_top_segment = segment_id in top_segment_ids
+
+                if is_top_segment:
+                    ax.axvspan(start_x, end_x, color="gold", alpha=0.10)
+
+                label_text = f"S{segment_id:02d}"
+                if is_top_segment:
+                    label_text += f" max={row['max_score']:.3f}"
+                ax.text(
+                    mid_x,
+                    text_y,
+                    label_text,
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                    color="black" if is_top_segment else "dimgray",
+                    rotation=0,
+                    clip_on=False,
+                )
+
+        ax.set_title(title)
+        ax.set_xlabel("Score Index")
+        ax.set_ylabel("Global Anomaly Score")
+        ax.legend(loc="upper right")
+        ax.grid(alpha=0.25, linestyle="--", linewidth=0.5)
+        plt.tight_layout()
+        plt.savefig(f"{self.save_path}/{file_name}", bbox_inches="tight", dpi=300)
+        plt.close(fig)
+
+    def _plot_segment_detail_figures(self, score_df, threshold, output_dir_name):
+        if "Segment_ID" not in score_df.columns or len(score_df) == 0:
+            return
+
+        output_dir = os.path.join(self.save_path, output_dir_name)
+        os.makedirs(output_dir, exist_ok=True)
+
+        for segment_id, segment_df in score_df.groupby("Segment_ID", sort=True):
+            x_axis = segment_df["Segment_Pos"].values if "Segment_Pos" in segment_df.columns else np.arange(len(segment_df))
+            y_axis = segment_df["A_Score_Global"].values
+            pred_axis = segment_df["A_Pred_Global"].values if "A_Pred_Global" in segment_df.columns else None
+            segment_max_score = float(segment_df["A_Score_Global"].max())
+            segment_mean_score = float(segment_df["A_Score_Global"].mean())
+            pred_count = int(segment_df["A_Pred_Global"].sum()) if "A_Pred_Global" in segment_df.columns else 0
+
+            fig, ax = plt.subplots(figsize=(12, 4))
+            ax.plot(x_axis, y_axis, color="tab:red", linewidth=1.2, label="Global Score")
+            ax.axhline(threshold, color="tab:blue", linestyle="--", linewidth=1.0, label="Threshold")
+
+            if pred_axis is not None and np.any(pred_axis > 0):
+                anomaly_x = x_axis[pred_axis > 0]
+                anomaly_y = y_axis[pred_axis > 0]
+                ax.scatter(anomaly_x, anomaly_y, color="black", s=12, alpha=0.7, label="Predicted Anomaly")
+
+            ax.set_title(
+                f"Segment {int(segment_id):02d} Global Score "
+                f"(len={len(segment_df)}, source_len={int(segment_df['Segment_Source_Length'].iloc[0])}, "
+                f"max={segment_max_score:.3f}, mean={segment_mean_score:.3f}, pred={pred_count})"
+            )
+            ax.set_xlabel("Position Within Segment Score")
+            ax.set_ylabel("Global Anomaly Score")
+            ax.legend(loc="upper right")
+            ax.grid(alpha=0.25, linestyle="--", linewidth=0.5)
+            plt.tight_layout()
+            plt.savefig(
+                os.path.join(output_dir, f"segment_{int(segment_id):02d}_score.png"),
+                bbox_inches="tight",
+                dpi=300,
+            )
+            plt.close(fig)
+
+    def _save_segment_visualizations(self, train_pred_df, test_pred_df, threshold):
+        if "Segment_ID" not in test_pred_df.columns:
+            return
+
+        self._save_segment_metadata(test_pred_df, "test_segment_metadata.csv")
+        self._plot_segment_overview(
+            test_pred_df,
+            threshold,
+            "test_score_segment_overview.png",
+            "Test Global Anomaly Score with Segment Boundaries",
+            top_k=5,
+        )
+        self._plot_segment_detail_figures(test_pred_df, threshold, "test_segments")
+
+        if "Segment_ID" in train_pred_df.columns:
+            self._save_segment_metadata(train_pred_df, "train_segment_metadata.csv")
+            self._plot_segment_overview(
+                train_pred_df,
+                threshold,
+                "train_score_segment_overview.png",
+                "Train Global Anomaly Score with Segment Boundaries",
+                top_k=5,
+            )
+
     def get_score(self, values):
         """Method that calculates anomaly score using given model and data
         :param values: 2D array of multivariate time series data, shape (N, k)
@@ -146,12 +332,67 @@ class Predictor:
     def get_score_for_sequences(self, values):
         if isinstance(values, dict):
             score_dfs = []
-            for _, battery_values in values.items():
-                score_dfs.append(self.get_score(battery_values))
+            for _, entity_values in values.items():
+                score_dfs.append(self.get_score_for_sequences(entity_values))
             if not score_dfs:
                 raise ValueError("No sequence data provided for scoring")
             return pd.concat(score_dfs, axis=0, ignore_index=True)
+        if is_sequence_container(values):
+            score_dfs = []
+            global_start_index = 0
+            for segment_id, seq_values in enumerate(ensure_sequence_list(values)):
+                if len(seq_values) <= self.window_size:
+                    continue
+                segment_score_df = self.get_score(seq_values)
+                segment_score_df = self._add_segment_metadata(
+                    segment_score_df,
+                    segment_id=segment_id,
+                    segment_source_length=len(seq_values),
+                    global_start_index=global_start_index,
+                )
+                global_start_index += len(segment_score_df)
+                score_dfs.append(segment_score_df)
+            if not score_dfs:
+                raise ValueError("No valid sequence is longer than the window size")
+            return pd.concat(score_dfs, axis=0, ignore_index=True)
         return self.get_score(values)
+
+    def _prepare_true_anomalies(self, true_anomalies, expected_length):
+        if true_anomalies is None:
+            return None
+
+        if isinstance(true_anomalies, dict):
+            aligned_parts = []
+            for _, entity_labels in true_anomalies.items():
+                aligned_entity = self._prepare_true_anomalies(entity_labels, expected_length=None)
+                if aligned_entity is not None and len(aligned_entity) > 0:
+                    aligned_parts.append(aligned_entity)
+            true_anomalies = np.concatenate(aligned_parts, axis=0) if aligned_parts else None
+        elif is_sequence_container(true_anomalies):
+            aligned_parts = []
+            for seq_labels in ensure_sequence_list(true_anomalies):
+                seq_labels = np.asarray(seq_labels)
+                if len(seq_labels) > self.window_size:
+                    aligned_parts.append(seq_labels[self.window_size:])
+            true_anomalies = np.concatenate(aligned_parts, axis=0) if aligned_parts else None
+        else:
+            true_anomalies = np.asarray(true_anomalies)
+
+        if true_anomalies is None:
+            return None
+
+        if expected_length is None:
+            return true_anomalies
+
+        if len(true_anomalies) == expected_length:
+            return true_anomalies
+
+        if len(true_anomalies) == expected_length + self.window_size:
+            return true_anomalies[self.window_size:]
+
+        raise ValueError(
+            f"True anomaly labels length {len(true_anomalies)} does not match expected score length {expected_length}"
+        )
 
     def predict_anomalies(self, train, test, true_anomalies=None, load_scores=False, save_output=True,
                           scale_scores=False):
@@ -188,6 +429,8 @@ class Predictor:
             # Update df
             train_pred_df['A_Score_Global'] = train_anomaly_scores
             test_pred_df['A_Score_Global'] = test_anomaly_scores
+
+        true_anomalies = self._prepare_true_anomalies(true_anomalies, expected_length=len(test_pred_df))
 
         if self.use_mov_av:
             smoothing_window = int(self.batch_size * self.window_size * 0.05)
@@ -259,5 +502,6 @@ class Predictor:
             print(f"Saving output to {self.save_path}/<train/test>_output.pkl")
             train_pred_df.to_pickle(f"{self.save_path}/train_output.pkl")
             test_pred_df.to_pickle(f"{self.save_path}/test_output.pkl")
+            self._save_segment_visualizations(train_pred_df, test_pred_df, global_epsilon)
 
         print("-- Done.")

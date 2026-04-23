@@ -179,6 +179,61 @@ def parse_entity_list(entity_input):
     raise ValueError("entity list input must be string, list, tuple, or None")
 
 
+def is_sequence_container(data):
+    return isinstance(data, (list, tuple))
+
+
+def ensure_sequence_list(data):
+    if is_sequence_container(data):
+        return [seq for seq in data if len(seq) > 0]
+    if data is None or len(data) == 0:
+        return []
+    return [data]
+
+
+def flatten_sequence_collection(sequence_collection, dtype=np.float32):
+    arrays = []
+    for sequence_data in sequence_collection:
+        for seq in ensure_sequence_list(sequence_data):
+            arrays.append(np.asarray(seq, dtype=dtype))
+    if not arrays:
+        raise ValueError("No sequence data available for concatenation")
+    return np.concatenate(arrays, axis=0)
+
+
+def normalize_sequence_container(sequence_data, scaler):
+    if is_sequence_container(sequence_data):
+        normalized_sequences = []
+        for seq in ensure_sequence_list(sequence_data):
+            normalized_seq, _ = normalize_data(np.asarray(seq, dtype=np.float32), scaler=scaler)
+            normalized_sequences.append(normalized_seq.astype(np.float32, copy=False))
+        return normalized_sequences
+
+    normalized_data, _ = normalize_data(np.asarray(sequence_data, dtype=np.float32), scaler=scaler)
+    return normalized_data.astype(np.float32, copy=False)
+
+
+def flatten_label_container(label_data):
+    if label_data is None:
+        return None
+
+    if is_sequence_container(label_data):
+        label_parts = []
+        for seq_label in ensure_sequence_list(label_data):
+            label_parts.append(np.asarray(seq_label))
+        if not label_parts:
+            return None
+        return np.concatenate(label_parts, axis=0)
+
+    return np.asarray(label_data)
+
+
+def describe_data_shape(data):
+    if is_sequence_container(data):
+        return [tuple(np.asarray(seq).shape) for seq in ensure_sequence_list(data)]
+    return tuple(np.asarray(data).shape)
+
+
 def get_available_prefixed_entities(prefix, file_prefix):
     entity_names = []
     for file_name in os.listdir(prefix):
@@ -285,28 +340,46 @@ def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteri
 
     for battery_name in train_batteries:
         battery_train_data, _, _ = load_prefixed_processed_data(prefix, battery_name, file_prefix)
-        train_data_map[battery_name] = np.asarray(battery_train_data, dtype=np.float32)
+        if is_sequence_container(battery_train_data):
+            train_data_map[battery_name] = [
+                np.asarray(seq, dtype=np.float32) for seq in ensure_sequence_list(battery_train_data)
+            ]
+        else:
+            train_data_map[battery_name] = np.asarray(battery_train_data, dtype=np.float32)
 
     for battery_name in test_batteries:
         _, battery_test_data, battery_test_label = load_prefixed_processed_data(prefix, battery_name, file_prefix)
-        test_data_map[battery_name] = np.asarray(battery_test_data, dtype=np.float32)
-        test_label_map[battery_name] = None if battery_test_label is None else np.asarray(battery_test_label)
+        if is_sequence_container(battery_test_data):
+            test_data_map[battery_name] = [
+                np.asarray(seq, dtype=np.float32) for seq in ensure_sequence_list(battery_test_data)
+            ]
+        else:
+            test_data_map[battery_name] = np.asarray(battery_test_data, dtype=np.float32)
+
+        if battery_test_label is None:
+            test_label_map[battery_name] = None
+        elif is_sequence_container(battery_test_label):
+            test_label_map[battery_name] = [
+                np.asarray(seq_label) for seq_label in ensure_sequence_list(battery_test_label)
+            ]
+        else:
+            test_label_map[battery_name] = np.asarray(battery_test_label)
 
     if all(label is None for label in test_label_map.values()):
         print(f"{dataset} test labels are unavailable for the selected batteries; supervised metrics should be skipped.")
 
     if normalize:
-        concatenated_train = np.concatenate(list(train_data_map.values()), axis=0)
+        concatenated_train = flatten_sequence_collection(train_data_map.values(), dtype=np.float32)
         _, scaler = normalize_data(concatenated_train, scaler=None)
 
         normalized_train_map = {}
         for battery_name, battery_train_data in train_data_map.items():
-            normalized_train_map[battery_name], _ = normalize_data(battery_train_data, scaler=scaler)
+            normalized_train_map[battery_name] = normalize_sequence_container(battery_train_data, scaler=scaler)
         train_data_map = normalized_train_map
 
         normalized_test_map = {}
         for battery_name, battery_test_data in test_data_map.items():
-            normalized_test_map[battery_name], _ = normalize_data(battery_test_data, scaler=scaler)
+            normalized_test_map[battery_name] = normalize_sequence_container(battery_test_data, scaler=scaler)
         test_data_map = normalized_test_map
 
     return (train_data_map, None), (test_data_map, test_label_map)
@@ -458,18 +531,21 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
                 normalize=False,
                 prefix=prefix,
             )
-        train_data = np.concatenate(list(train_data_map.values()), axis=0)
-        test_data = np.concatenate(list(test_data_map.values()), axis=0)
+        train_data = flatten_sequence_collection(train_data_map.values(), dtype=np.float32)
+        test_data = flatten_sequence_collection(test_data_map.values(), dtype=np.float32)
 
         has_any_label = any(label is not None for label in test_label_map.values())
         if has_any_label:
             aligned_labels = []
-            for battery_name, battery_test_data in test_data_map.items():
+            for battery_name in test_data_map.keys():
                 battery_test_label = test_label_map[battery_name]
                 if battery_test_label is None:
-                    aligned_labels.append(np.zeros(len(battery_test_data), dtype=np.int32))
+                    battery_sequences = ensure_sequence_list(test_data_map[battery_name])
+                    for seq in battery_sequences:
+                        aligned_labels.append(np.zeros(len(seq), dtype=np.int32))
                 else:
-                    aligned_labels.append(np.asarray(battery_test_label))
+                    flattened_label = flatten_label_container(battery_test_label)
+                    aligned_labels.append(flattened_label)
             test_label = np.concatenate(aligned_labels, axis=0)
         else:
             test_label = None
@@ -589,11 +665,11 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
     scaler = None
     if normalize:
         if isinstance(train_data, dict):
-            concatenated_train = np.concatenate(list(train_data.values()), axis=0)
+            concatenated_train = flatten_sequence_collection(train_data.values(), dtype=np.float32)
             _, scaler = normalize_data(concatenated_train, scaler=None)
             normalized_train_map = {}
             for battery_name, battery_train_data in train_data.items():
-                normalized_train_map[battery_name], _ = normalize_data(battery_train_data, scaler=scaler)
+                normalized_train_map[battery_name] = normalize_sequence_container(battery_train_data, scaler=scaler)
             train_data = normalized_train_map
         else:
             train_data, scaler = normalize_data(train_data, scaler=None)
@@ -602,21 +678,21 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
             if isinstance(test_data, dict):
                 normalized_test_map = {}
                 for battery_name, battery_test_data in test_data.items():
-                    normalized_test_map[battery_name], _ = normalize_data(battery_test_data, scaler=scaler)
+                    normalized_test_map[battery_name] = normalize_sequence_container(battery_test_data, scaler=scaler)
                 test_data = normalized_test_map
             else:
                 test_data, _ = normalize_data(test_data, scaler=scaler)
 
     if isinstance(train_data, dict):
         print("train set batteries: ", list(train_data.keys()))
-        print("train set shapes: ", {k: v.shape for k, v in train_data.items()})
+        print("train set shapes: ", {k: describe_data_shape(v) for k, v in train_data.items()})
     else:
         print("train set shape: ", train_data.shape)
     if isinstance(test_data, dict):
         print("test set batteries: ", list(test_data.keys()))
-        print("test set shapes: ", {k: v.shape for k, v in test_data.items()})
+        print("test set shapes: ", {k: describe_data_shape(v) for k, v in test_data.items()})
         if isinstance(test_label, dict):
-            print("test set label shapes: ", {k: None if v is None else v.shape for k, v in test_label.items()})
+            print("test set label shapes: ", {k: None if v is None else describe_data_shape(v) for k, v in test_label.items()})
         else:
             print("test set label shape: ", None)
     else:

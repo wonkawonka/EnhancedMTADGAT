@@ -14,6 +14,36 @@ from utils import *
 
 NASA_ENTITY_DATASETS = {"NASA", "NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"}
 
+
+def _to_tensor_sequence_container(sequence_data):
+    if is_sequence_container(sequence_data):
+        return [torch.from_numpy(np.asarray(seq, dtype=np.float32)).float() for seq in ensure_sequence_list(sequence_data)]
+    return torch.from_numpy(np.asarray(sequence_data, dtype=np.float32)).float()
+
+
+def _get_first_sequence_tensor(sequence_data):
+    if is_sequence_container(sequence_data):
+        sequence_list = ensure_sequence_list(sequence_data)
+        if not sequence_list:
+            raise ValueError("No sequence data available")
+        return sequence_list[0]
+    return sequence_data
+
+
+def _build_concat_window_dataset(sequence_data, window_size, target_dims):
+    sub_datasets = []
+    for seq in ensure_sequence_list(sequence_data):
+        if len(seq) <= window_size:
+            continue
+        sub_datasets.append(SlidingWindowDataset(seq, window_size, target_dims))
+
+    if not sub_datasets:
+        raise ValueError(f"No valid sequence is longer than lookback={window_size}")
+
+    if len(sub_datasets) == 1:
+        return sub_datasets[0]
+    return torch.utils.data.ConcatDataset(sub_datasets)
+
 def set_seed(seed=3407):
     """设置随机种子以确保实验可重现"""
     random.seed(seed)
@@ -358,10 +388,10 @@ if __name__ == "__main__":
         nasa_train_tensors = None
         bms_train_tensors = None
         if dataset in NASA_ENTITY_DATASETS and isinstance(x_train, dict):
-            nasa_train_tensors = {battery_name: torch.from_numpy(battery_data).float()
+            nasa_train_tensors = {battery_name: _to_tensor_sequence_container(battery_data)
                                   for battery_name, battery_data in x_train.items()}
             first_train_battery = next(iter(nasa_train_tensors))
-            x_train = nasa_train_tensors[first_train_battery]
+            x_train = _get_first_sequence_tensor(nasa_train_tensors[first_train_battery])
         elif dataset == "BMS" and isinstance(x_train, dict):
             bms_train_tensors = {cluster_name: torch.from_numpy(cluster_data).float()
                                  for cluster_name, cluster_data in x_train.items()}
@@ -372,10 +402,10 @@ if __name__ == "__main__":
         nasa_test_tensors = None
         bms_test_tensors = None
         if dataset in NASA_ENTITY_DATASETS and isinstance(x_test, dict):
-            nasa_test_tensors = {battery_name: torch.from_numpy(battery_data).float()
+            nasa_test_tensors = {battery_name: _to_tensor_sequence_container(battery_data)
                                  for battery_name, battery_data in x_test.items()}
             first_test_battery = next(iter(nasa_test_tensors))
-            x_test = nasa_test_tensors[first_test_battery]
+            x_test = _get_first_sequence_tensor(nasa_test_tensors[first_test_battery])
         elif dataset == "BMS" and isinstance(x_test, dict):
             bms_test_tensors = {cluster_name: torch.from_numpy(cluster_data).float()
                                 for cluster_name, cluster_data in x_test.items()}
@@ -397,11 +427,13 @@ if __name__ == "__main__":
             out_dim = len(target_dims)
 
         if dataset in NASA_ENTITY_DATASETS and nasa_train_tensors is not None:
-            train_sub_datasets = [
-                SlidingWindowDataset(battery_tensor, window_size, target_dims)
-                for battery_tensor in nasa_train_tensors.values()
-            ]
-            train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
+            train_sub_datasets = []
+            for battery_tensor in nasa_train_tensors.values():
+                train_sub_datasets.append(_build_concat_window_dataset(battery_tensor, window_size, target_dims))
+            if len(train_sub_datasets) == 1:
+                train_dataset = train_sub_datasets[0]
+            else:
+                train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
         elif dataset == "BMS" and bms_train_tensors is not None:
             train_sub_datasets = [
                 SlidingWindowDataset(cluster_tensor, window_size, target_dims)
@@ -473,7 +505,7 @@ if __name__ == "__main__":
             pin_memory = torch.cuda.is_available()
             battery_test_losses = {}
             for battery_name, battery_tensor in nasa_test_tensors.items():
-                battery_test_dataset = SlidingWindowDataset(battery_tensor, window_size, target_dims)
+                battery_test_dataset = _build_concat_window_dataset(battery_tensor, window_size, target_dims)
                 battery_test_loader = torch.utils.data.DataLoader(
                     battery_test_dataset,
                     batch_size=batch_size,
@@ -650,7 +682,7 @@ if __name__ == "__main__":
                 if isinstance(y_test, dict):
                     raw_label = y_test.get(battery_name)
                     if raw_label is not None:
-                        battery_label = raw_label[window_size:]
+                        battery_label = raw_label
 
                 train_reference = nasa_train_tensors if nasa_train_tensors is not None else x_train
                 predictor.predict_anomalies(train_reference, battery_tensor, battery_label)

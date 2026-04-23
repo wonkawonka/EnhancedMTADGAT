@@ -279,6 +279,66 @@ def _flatten_nasa_random_step(step_struct):
     return step_array.astype(np.float32, copy=False)
 
 
+def _build_nasa_random_segments(steps):
+    segments = []
+    current_segment_steps = []
+
+    for step_struct in steps:
+        flattened_step = _flatten_nasa_random_step(step_struct)
+        if flattened_step is None:
+            if current_segment_steps:
+                segments.append(np.vstack(current_segment_steps).astype(np.float32, copy=False))
+                current_segment_steps = []
+            continue
+
+        current_segment_steps.append(flattened_step)
+
+    if current_segment_steps:
+        segments.append(np.vstack(current_segment_steps).astype(np.float32, copy=False))
+
+    return [segment for segment in segments if len(segment) > 0]
+
+
+def _split_nasa_random_segments(segments, train_ratio=0.8):
+    if not segments:
+        raise ValueError("No NASA random-walk segments available for splitting")
+
+    total_length = sum(len(segment) for segment in segments)
+    if total_length <= 1:
+        raise ValueError("NASA random-walk data is too short to split")
+
+    train_target = max(1, int(total_length * train_ratio))
+    train_segments = []
+    test_segments = []
+    accumulated = 0
+
+    for segment in segments:
+        segment_len = len(segment)
+        if accumulated >= train_target:
+            test_segments.append(segment.astype(np.float32, copy=False))
+            continue
+
+        next_accumulated = accumulated + segment_len
+        if next_accumulated <= train_target:
+            train_segments.append(segment.astype(np.float32, copy=False))
+            accumulated = next_accumulated
+            continue
+
+        split_point = train_target - accumulated
+        if split_point > 0:
+            train_segments.append(segment[:split_point].astype(np.float32, copy=False))
+        if split_point < segment_len:
+            test_segments.append(segment[split_point:].astype(np.float32, copy=False))
+        accumulated = train_target
+
+    train_segments = [segment for segment in train_segments if len(segment) > 0]
+    test_segments = [segment for segment in test_segments if len(segment) > 0]
+    if not train_segments or not test_segments:
+        raise ValueError("NASA random-walk split failed to produce both train and test segments")
+
+    return train_segments, test_segments
+
+
 def _process_nasa_random_dataset(dataset_folder, output_folder, file_prefix, apply_sr_cleaning=False):
     mat_files = sorted([f for f in os.listdir(dataset_folder) if f.lower().endswith(".mat")])
     if not mat_files:
@@ -296,31 +356,23 @@ def _process_nasa_random_dataset(dataset_folder, output_folder, file_prefix, app
         battery_struct = mat_data["data"][0, 0]
         steps = battery_struct["step"][0]
 
-        selected_steps = []
-        for step_struct in steps:
-            flattened_step = _flatten_nasa_random_step(step_struct)
-            if flattened_step is not None:
-                selected_steps.append(flattened_step)
-
-        if not selected_steps:
+        segments = _build_nasa_random_segments(steps)
+        if not segments:
             print(f"[{file_prefix}][{battery_id}] No supported random-walk steps found, skipping.")
             continue
 
-        full_data = np.vstack(selected_steps).astype(np.float32)
-        split_index = int(len(full_data) * 0.8)
-        if split_index <= 0 or split_index >= len(full_data):
-            raise ValueError(
-                f"[{file_prefix}][{battery_id}] Invalid split index {split_index} for shape {full_data.shape}"
-            )
+        train_data, test_data = _split_nasa_random_segments(segments, train_ratio=0.8)
+        test_labels = [np.zeros(len(segment), dtype=np.int32) for segment in test_data]
 
-        train_data = full_data[:split_index]
-        test_data = full_data[split_index:]
-        test_labels = np.zeros(len(test_data), dtype=np.int32)
-
-        if apply_sr_cleaning and len(train_data) > 0:
-            print(f"[{file_prefix}][{battery_id}] Applying spectral residual cleaning to train data...")
-            train_data = apply_spectral_residual_cleaning(train_data, threshold=3.0)
-            print(f"[{file_prefix}][{battery_id}] Cleaning completed. Shape: {train_data.shape}")
+        if apply_sr_cleaning:
+            print(f"[{file_prefix}][{battery_id}] Applying spectral residual cleaning to train segments...")
+            cleaned_train_segments = []
+            for train_segment in train_data:
+                cleaned_train_segments.append(
+                    apply_spectral_residual_cleaning(train_segment, threshold=3.0).astype(np.float32, copy=False)
+                )
+            train_data = cleaned_train_segments
+            print(f"[{file_prefix}][{battery_id}] Cleaning completed. Segments: {len(train_data)}")
 
         with open(path.join(output_folder, f"{file_prefix}_{battery_id}_train.pkl"), "wb") as file:
             dump(train_data, file)
@@ -330,8 +382,10 @@ def _process_nasa_random_dataset(dataset_folder, output_folder, file_prefix, app
             dump(test_labels, file)
 
         print(
-            f"[{file_prefix}][{battery_id}] Saved arrays -> "
-            f"train: {train_data.shape}, test: {test_data.shape}, labels: {test_labels.shape}"
+            f"[{file_prefix}][{battery_id}] Saved segments -> "
+            f"train: {[segment.shape for segment in train_data]}, "
+            f"test: {[segment.shape for segment in test_data]}, "
+            f"labels: {[label.shape for label in test_labels]}"
         )
 
 
