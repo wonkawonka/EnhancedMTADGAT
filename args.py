@@ -32,7 +32,23 @@ def get_parser():
     # Transformer layers
     parser.add_argument("--trans_enc_layers", type=int, default=2, help="Transformer encoder的层数（这里是第一次改的gru前的transformer）")
     # -- Data params ---
-    parser.add_argument('--dataset', type=str.upper, default='NASA',choices=['SMD', 'SMAP', 'MSL', 'NASA', 'CALCE','CALCE2', 'BMS'],help='dataset name')
+    parser.add_argument(
+        '--dataset',
+        type=str.upper,
+        default='NASA',
+        choices=[
+            'SMD',
+            'SMAP',
+            'MSL',
+            'NASA',
+            'NASA_RANDOM_CHARGE',
+            'NASA_RANDOM_DISCHARGE',
+            'CALCE',
+            'CALCE2',
+            'BMS',
+        ],
+        help='dataset name'
+    )
     parser.add_argument("--group", type=str, default="1-1", help="指定SMD数据集中具体机器编号. <group_index>-<index>")
     parser.add_argument("--nasa_battery_id", type=str, default="", help="指定单个NASA电池ID，如 B0018")
     parser.add_argument("--nasa_train_batteries", type=str, default="", help="NASA训练电池ID列表，逗号分隔，如 B0005,B0006,B0007")

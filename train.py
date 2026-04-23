@@ -12,6 +12,8 @@ from prediction import Predictor
 from training import Trainer
 from utils import *
 
+NASA_ENTITY_DATASETS = {"NASA", "NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"}
+
 def set_seed(seed=3407):
     """设置随机种子以确保实验可重现"""
     random.seed(seed)
@@ -320,14 +322,23 @@ if __name__ == "__main__":
         elif dataset in ['MSL', 'SMAP']:
             output_path = f'output/{dataset}'
             (x_train, _), (x_test, y_test) = get_data(dataset, normalize=normalize)
-        elif dataset == 'NASA':
+        elif dataset in NASA_ENTITY_DATASETS:
             output_path = f'output/{dataset}'
-            (x_train, _), (x_test, y_test) = get_nasa_battery_data(
-                normalize=normalize,
-                nasa_battery_id=args.nasa_battery_id,
-                nasa_train_batteries=args.nasa_train_batteries,
-                nasa_test_batteries=args.nasa_test_batteries,
-            )
+            if dataset == "NASA":
+                (x_train, _), (x_test, y_test) = get_nasa_battery_data(
+                    normalize=normalize,
+                    nasa_battery_id=args.nasa_battery_id,
+                    nasa_train_batteries=args.nasa_train_batteries,
+                    nasa_test_batteries=args.nasa_test_batteries,
+                )
+            else:
+                (x_train, _), (x_test, y_test) = get_nasa_random_battery_data(
+                    dataset,
+                    normalize=normalize,
+                    nasa_battery_id=args.nasa_battery_id,
+                    nasa_train_batteries=args.nasa_train_batteries,
+                    nasa_test_batteries=args.nasa_test_batteries,
+                )
         elif dataset in ['CALCE', 'CALCE2']:
             output_path = f'output/{dataset}'
             (x_train, _), (x_test, y_test) = get_data(dataset, normalize=normalize)
@@ -346,7 +357,7 @@ if __name__ == "__main__":
 
         nasa_train_tensors = None
         bms_train_tensors = None
-        if dataset == "NASA" and isinstance(x_train, dict):
+        if dataset in NASA_ENTITY_DATASETS and isinstance(x_train, dict):
             nasa_train_tensors = {battery_name: torch.from_numpy(battery_data).float()
                                   for battery_name, battery_data in x_train.items()}
             first_train_battery = next(iter(nasa_train_tensors))
@@ -360,7 +371,7 @@ if __name__ == "__main__":
             x_train = torch.from_numpy(x_train).float()
         nasa_test_tensors = None
         bms_test_tensors = None
-        if dataset == "NASA" and isinstance(x_test, dict):
+        if dataset in NASA_ENTITY_DATASETS and isinstance(x_test, dict):
             nasa_test_tensors = {battery_name: torch.from_numpy(battery_data).float()
                                  for battery_name, battery_data in x_test.items()}
             first_test_battery = next(iter(nasa_test_tensors))
@@ -385,7 +396,7 @@ if __name__ == "__main__":
             print(f"Will forecast and reconstruct input features: {target_dims}")
             out_dim = len(target_dims)
 
-        if dataset == "NASA" and nasa_train_tensors is not None:
+        if dataset in NASA_ENTITY_DATASETS and nasa_train_tensors is not None:
             train_sub_datasets = [
                 SlidingWindowDataset(battery_tensor, window_size, target_dims)
                 for battery_tensor in nasa_train_tensors.values()
@@ -457,7 +468,7 @@ if __name__ == "__main__":
         plot_losses(trainer.losses, save_path=save_path, plot=False)
 
         # Check test loss
-        if dataset == "NASA" and nasa_test_tensors is not None:
+        if dataset in NASA_ENTITY_DATASETS and nasa_test_tensors is not None:
             num_workers = 2 if os.name == 'nt' else 4
             pin_memory = torch.cuda.is_available()
             battery_test_losses = {}
@@ -516,6 +527,8 @@ if __name__ == "__main__":
             "SMD-2": (0.9925, 0.001),
             "SMD-3": (0.9999, 0.001),
             "NASA": (0.99, 0.001),
+            "NASA_RANDOM_CHARGE": (0.99, 0.001),
+            "NASA_RANDOM_DISCHARGE": (0.99, 0.001),
             "CALCE": (0.95, 0.01),   # 为CALCE调整参数以适应无监督设置
             "CALCE2": (0.90, 0.01),   # 为CALCE2调整参数以适应无监督设置
             "BMS": (0.99, 0.001)      # BMS数据集参数
@@ -528,7 +541,18 @@ if __name__ == "__main__":
             q = args.q
 
         # Some suggestions for Epsilon args
-        reg_level_dict = {"SMAP": 0, "MSL": 0, "SMD-1": 1, "SMD-2": 1, "SMD-3": 1, "NASA": 0, "CALCE": 0, "BMS": 0}
+        reg_level_dict = {
+            "SMAP": 0,
+            "MSL": 0,
+            "SMD-1": 1,
+            "SMD-2": 1,
+            "SMD-3": 1,
+            "NASA": 0,
+            "NASA_RANDOM_CHARGE": 0,
+            "NASA_RANDOM_DISCHARGE": 0,
+            "CALCE": 0,
+            "BMS": 0,
+        }
         key = "SMD-" + args.group[0] if dataset == "SMD" else dataset
         reg_level = reg_level_dict[key]
 
@@ -607,6 +631,31 @@ if __name__ == "__main__":
                 print(f"NASA专用报告生成出错: {e}")
                 import traceback
                 traceback.print_exc()
+        elif dataset in {"NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"} and nasa_test_tensors is not None:
+            for battery_name, battery_tensor in nasa_test_tensors.items():
+                battery_save_path = save_path if len(nasa_test_tensors) == 1 else os.path.join(save_path, f"battery_{battery_name}")
+                if len(nasa_test_tensors) > 1:
+                    os.makedirs(battery_save_path, exist_ok=True)
+
+                battery_prediction_args = dict(prediction_args)
+                battery_prediction_args["save_path"] = battery_save_path
+                predictor = Predictor(
+                    best_model,
+                    window_size,
+                    n_features,
+                    battery_prediction_args,
+                )
+
+                battery_label = None
+                if isinstance(y_test, dict):
+                    raw_label = y_test.get(battery_name)
+                    if raw_label is not None:
+                        battery_label = raw_label[window_size:]
+
+                train_reference = nasa_train_tensors if nasa_train_tensors is not None else x_train
+                predictor.predict_anomalies(train_reference, battery_tensor, battery_label)
+
+            print(f"{dataset}按电池输出已生成（联合训练、分电池测试）")
         elif dataset == "BMS" and bms_test_tensors is not None:
             for cluster_name, cluster_tensor in bms_test_tensors.items():
                 cluster_save_path = os.path.join(save_path, cluster_name)

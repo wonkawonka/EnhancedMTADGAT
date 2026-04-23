@@ -54,6 +54,19 @@ BMS_FEATURE_NAMES = BMS_CLUSTER_MAIN_FEATURES + [
     "cell_t_range",
 ] + BMS_GROUP_CONTEXT_FEATURES
 
+NASA_RANDOM_STEP_COMMENTS = {
+    "discharge (random walk)",
+    "rest (random walk)",
+    "rest post random walk discharge",
+    "charge (after random walk discharge)",
+}
+
+NASA_RANDOM_STEP_TYPE_CODES = {
+    "C": 1.0,
+    "D": -1.0,
+    "R": 0.0,
+}
+
 
 def _sanitize_bms_entity_name(name):
     keep_chars = []
@@ -225,6 +238,103 @@ def interpolate_capacity_to_timesteps(cycle_capacities, cycle_lengths, cycle_typ
     return interpolated_capacities
 
 
+def _extract_matlab_scalar(value):
+    while isinstance(value, np.ndarray):
+        if value.size == 0:
+            return ""
+        value = value.flat[0]
+
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="ignore")
+    return value
+
+
+def _get_matlab_string(value):
+    return str(_extract_matlab_scalar(value)).strip()
+
+
+def _flatten_nasa_random_step(step_struct):
+    comment = _get_matlab_string(step_struct["comment"])
+    if comment not in NASA_RANDOM_STEP_COMMENTS:
+        return None
+
+    step_type = _get_matlab_string(step_struct["type"]).upper()
+    step_type_code = NASA_RANDOM_STEP_TYPE_CODES.get(step_type, 0.0)
+
+    voltage = np.asarray(step_struct["voltage"][0], dtype=np.float32).reshape(-1)
+    current = np.asarray(step_struct["current"][0], dtype=np.float32).reshape(-1)
+    temperature = np.asarray(step_struct["temperature"][0], dtype=np.float32).reshape(-1)
+
+    valid_length = min(len(voltage), len(current), len(temperature))
+    if valid_length <= 0:
+        return None
+
+    step_type_column = np.full(valid_length, step_type_code, dtype=np.float32)
+    step_array = np.column_stack([
+        step_type_column,
+        voltage[:valid_length],
+        current[:valid_length],
+        temperature[:valid_length],
+    ])
+    return step_array.astype(np.float32, copy=False)
+
+
+def _process_nasa_random_dataset(dataset_folder, output_folder, file_prefix, apply_sr_cleaning=False):
+    mat_files = sorted([f for f in os.listdir(dataset_folder) if f.lower().endswith(".mat")])
+    if not mat_files:
+        raise FileNotFoundError(f"No .mat files found in {dataset_folder}")
+
+    for filename in mat_files:
+        battery_id = filename.split(".mat")[0]
+        mat_path = os.path.join(dataset_folder, filename)
+        print(f"[{file_prefix}] Processing {filename}...")
+
+        mat_data = loadmat(mat_path)
+        if "data" not in mat_data:
+            raise KeyError(f"{mat_path} does not contain top-level 'data' struct")
+
+        battery_struct = mat_data["data"][0, 0]
+        steps = battery_struct["step"][0]
+
+        selected_steps = []
+        for step_struct in steps:
+            flattened_step = _flatten_nasa_random_step(step_struct)
+            if flattened_step is not None:
+                selected_steps.append(flattened_step)
+
+        if not selected_steps:
+            print(f"[{file_prefix}][{battery_id}] No supported random-walk steps found, skipping.")
+            continue
+
+        full_data = np.vstack(selected_steps).astype(np.float32)
+        split_index = int(len(full_data) * 0.8)
+        if split_index <= 0 or split_index >= len(full_data):
+            raise ValueError(
+                f"[{file_prefix}][{battery_id}] Invalid split index {split_index} for shape {full_data.shape}"
+            )
+
+        train_data = full_data[:split_index]
+        test_data = full_data[split_index:]
+        test_labels = np.zeros(len(test_data), dtype=np.int32)
+
+        if apply_sr_cleaning and len(train_data) > 0:
+            print(f"[{file_prefix}][{battery_id}] Applying spectral residual cleaning to train data...")
+            train_data = apply_spectral_residual_cleaning(train_data, threshold=3.0)
+            print(f"[{file_prefix}][{battery_id}] Cleaning completed. Shape: {train_data.shape}")
+
+        with open(path.join(output_folder, f"{file_prefix}_{battery_id}_train.pkl"), "wb") as file:
+            dump(train_data, file)
+        with open(path.join(output_folder, f"{file_prefix}_{battery_id}_test.pkl"), "wb") as file:
+            dump(test_data, file)
+        with open(path.join(output_folder, f"{file_prefix}_{battery_id}_test_label.pkl"), "wb") as file:
+            dump(test_labels, file)
+
+        print(
+            f"[{file_prefix}][{battery_id}] Saved arrays -> "
+            f"train: {train_data.shape}, test: {test_data.shape}, labels: {test_labels.shape}"
+        )
+
+
 def load_and_save(category, filename, dataset, dataset_folder, output_folder, apply_sr_cleaning=False):
     temp = np.genfromtxt(
         path.join(dataset_folder, category, filename),
@@ -322,6 +432,28 @@ def load_data(dataset, apply_sr_cleaning=False):
 
         for c in ["train", "test"]:
             concatenate_and_save(c)
+
+    elif dataset == "NASA_RANDOM_CHARGE":
+        dataset_folder = "datasets/NASA_RANDOM_CHARGE"
+        output_folder = "datasets/NASA_RANDOM_CHARGE/processed"
+        makedirs(output_folder, exist_ok=True)
+        _process_nasa_random_dataset(
+            dataset_folder,
+            output_folder,
+            file_prefix="NASA_RANDOM_CHARGE",
+            apply_sr_cleaning=apply_sr_cleaning,
+        )
+
+    elif dataset == "NASA_RANDOM_DISCHARGE":
+        dataset_folder = "datasets/NASA_RANDOM_DISCHARGE"
+        output_folder = "datasets/NASA_RANDOM_DISCHARGE/processed"
+        makedirs(output_folder, exist_ok=True)
+        _process_nasa_random_dataset(
+            dataset_folder,
+            output_folder,
+            file_prefix="NASA_RANDOM_DISCHARGE",
+            apply_sr_cleaning=apply_sr_cleaning,
+        )
 
     # TODO 自己数据集
     elif dataset == "BMS":

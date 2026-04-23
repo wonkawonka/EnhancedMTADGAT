@@ -42,6 +42,12 @@ BMS_FEATURE_NAMES = [
     "SYS_Tmin",
 ]
 
+NASA_ENTITY_DATASET_PREFIX = {
+    "NASA": "NASA",
+    "NASA_RANDOM_CHARGE": "NASA_RANDOM_CHARGE",
+    "NASA_RANDOM_DISCHARGE": "NASA_RANDOM_DISCHARGE",
+}
+
 
 def normalize_data(data, scaler=None):
     data = np.asarray(data, dtype=np.float32)
@@ -90,6 +96,9 @@ def get_data_dim(dataset):
         # NASA电池数据集的特征维度 (不包括时间戳)
         return 7  # cycle_number, voltage_measured, current_measured, 
                   # temperature_measured, current_charge, voltage_charge, capacity
+    elif dataset in ["NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"]:
+        # step_type_code, voltage, current, temperature
+        return 4
     elif dataset in ["CALCE", "CALCE2"]:
         # CALCE数据集是单特征时间序列
         return 1
@@ -115,6 +124,9 @@ def get_target_dims(dataset):
     elif dataset == "NASA":
         # 对于NASA电池数据集，我们主要关注容量预测（索引6，最后一列）
         return [6]  # capacity是最重要的特征，用于预测电池退化趋势
+    elif dataset in ["NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"]:
+        # 对于随机工况NASA数据，预测和重构所有时序特征
+        return None
     elif dataset in ["CALCE", "CALCE2"]:
         # 对于CALCE数据集，我们关注单个特征
         return [0]
@@ -167,24 +179,24 @@ def parse_entity_list(entity_input):
     raise ValueError("entity list input must be string, list, tuple, or None")
 
 
-def get_available_nasa_batteries(prefix):
-    battery_names = []
+def get_available_prefixed_entities(prefix, file_prefix):
+    entity_names = []
     for file_name in os.listdir(prefix):
-        if file_name.startswith("NASA_") and file_name.endswith("_train.pkl"):
-            battery_name = file_name.replace("NASA_", "").replace("_train.pkl", "")
-            battery_names.append(battery_name)
-    return sorted(battery_names)
+        if file_name.startswith(f"{file_prefix}_") and file_name.endswith("_train.pkl"):
+            entity_name = file_name.replace(f"{file_prefix}_", "").replace("_train.pkl", "")
+            entity_names.append(entity_name)
+    return sorted(entity_names)
 
 
-def load_nasa_processed_data(prefix, battery_name):
-    train_path = os.path.join(prefix, f"NASA_{battery_name}_train.pkl")
-    test_path = os.path.join(prefix, f"NASA_{battery_name}_test.pkl")
-    label_path = os.path.join(prefix, f"NASA_{battery_name}_test_label.pkl")
+def load_prefixed_processed_data(prefix, entity_name, file_prefix):
+    train_path = os.path.join(prefix, f"{file_prefix}_{entity_name}_train.pkl")
+    test_path = os.path.join(prefix, f"{file_prefix}_{entity_name}_test.pkl")
+    label_path = os.path.join(prefix, f"{file_prefix}_{entity_name}_test_label.pkl")
 
     if not os.path.exists(train_path):
-        raise FileNotFoundError(f"NASA train file not found for battery {battery_name}: {train_path}")
+        raise FileNotFoundError(f"{file_prefix} train file not found for entity {entity_name}: {train_path}")
     if not os.path.exists(test_path):
-        raise FileNotFoundError(f"NASA test file not found for battery {battery_name}: {test_path}")
+        raise FileNotFoundError(f"{file_prefix} test file not found for entity {entity_name}: {test_path}")
 
     with open(train_path, "rb") as f:
         train_data = pickle.load(f)
@@ -199,63 +211,89 @@ def load_nasa_processed_data(prefix, battery_name):
     return train_data, test_data, test_label
 
 
-def resolve_nasa_batteries(prefix, nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None):
-    available_batteries = get_available_nasa_batteries(prefix)
-    if not available_batteries:
-        raise FileNotFoundError(f"No processed NASA battery data found in {prefix}")
+def get_available_nasa_batteries(prefix):
+    return get_available_prefixed_entities(prefix, "NASA")
 
-    selected_single = str(nasa_battery_id).strip() if nasa_battery_id is not None else None
-    train_batteries = parse_entity_list(nasa_train_batteries)
-    test_batteries = parse_entity_list(nasa_test_batteries)
+
+def load_nasa_processed_data(prefix, battery_name):
+    return load_prefixed_processed_data(prefix, battery_name, "NASA")
+
+
+def resolve_prefixed_entities(prefix, file_prefix, single_entity=None, train_entities=None, test_entities=None):
+    available_entities = get_available_prefixed_entities(prefix, file_prefix)
+    if not available_entities:
+        raise FileNotFoundError(f"No processed {file_prefix} entity data found in {prefix}")
+
+    selected_single = str(single_entity).strip() if single_entity is not None else None
+    train_entities = parse_entity_list(train_entities)
+    test_entities = parse_entity_list(test_entities)
 
     if selected_single:
-        train_batteries = [selected_single]
-        test_batteries = [selected_single]
-    elif train_batteries is None and test_batteries is None:
-        train_batteries = [available_batteries[0]]
-        test_batteries = [available_batteries[0]]
-    elif train_batteries is None:
-        train_batteries = list(test_batteries)
-    elif test_batteries is None:
-        test_batteries = list(train_batteries)
+        train_entities = [selected_single]
+        test_entities = [selected_single]
+    elif train_entities is None and test_entities is None:
+        train_entities = [available_entities[0]]
+        test_entities = [available_entities[0]]
+    elif train_entities is None:
+        train_entities = list(test_entities)
+    elif test_entities is None:
+        test_entities = list(train_entities)
 
-    missing_batteries = [b for b in set(train_batteries + test_batteries) if b not in available_batteries]
-    if missing_batteries:
+    missing_entities = [b for b in set(train_entities + test_entities) if b not in available_entities]
+    if missing_entities:
         raise FileNotFoundError(
-            f"NASA batteries not found in processed data: {missing_batteries}. "
-            f"Available batteries: {available_batteries}"
+            f"{file_prefix} entities not found in processed data: {missing_entities}. "
+            f"Available entities: {available_entities}"
         )
 
-    return train_batteries, test_batteries
+    return train_entities, test_entities
 
 
-def get_nasa_battery_data(nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None,
-                          normalize=False, prefix="datasets/NASA/processed"):
-    train_batteries, test_batteries = resolve_nasa_batteries(
+def resolve_nasa_batteries(prefix, nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None):
+    return resolve_prefixed_entities(
         prefix,
-        nasa_battery_id=nasa_battery_id,
-        nasa_train_batteries=nasa_train_batteries,
-        nasa_test_batteries=nasa_test_batteries,
+        "NASA",
+        single_entity=nasa_battery_id,
+        train_entities=nasa_train_batteries,
+        test_entities=nasa_test_batteries,
     )
 
-    print(f"Using NASA train batteries: {train_batteries}")
-    print(f"Using NASA test batteries: {test_batteries}")
+
+def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None,
+                               normalize=False, prefix=None):
+    if dataset not in NASA_ENTITY_DATASET_PREFIX:
+        raise ValueError(f"Unsupported NASA-like dataset: {dataset}")
+
+    file_prefix = NASA_ENTITY_DATASET_PREFIX[dataset]
+    if prefix is None:
+        prefix = f"datasets/{dataset}/processed" if dataset != "NASA" else "datasets/NASA/processed"
+
+    train_batteries, test_batteries = resolve_prefixed_entities(
+        prefix,
+        file_prefix,
+        single_entity=nasa_battery_id,
+        train_entities=nasa_train_batteries,
+        test_entities=nasa_test_batteries,
+    )
+
+    print(f"Using {dataset} train batteries: {train_batteries}")
+    print(f"Using {dataset} test batteries: {test_batteries}")
 
     train_data_map = {}
     test_data_map = {}
     test_label_map = {}
 
     for battery_name in train_batteries:
-        battery_train_data, _, _ = load_nasa_processed_data(prefix, battery_name)
+        battery_train_data, _, _ = load_prefixed_processed_data(prefix, battery_name, file_prefix)
         train_data_map[battery_name] = np.asarray(battery_train_data, dtype=np.float32)
 
     for battery_name in test_batteries:
-        _, battery_test_data, battery_test_label = load_nasa_processed_data(prefix, battery_name)
+        _, battery_test_data, battery_test_label = load_prefixed_processed_data(prefix, battery_name, file_prefix)
         test_data_map[battery_name] = np.asarray(battery_test_data, dtype=np.float32)
         test_label_map[battery_name] = None if battery_test_label is None else np.asarray(battery_test_label)
 
     if all(label is None for label in test_label_map.values()):
-        print("NASA test labels are unavailable for the selected batteries; supervised metrics should be skipped.")
+        print(f"{dataset} test labels are unavailable for the selected batteries; supervised metrics should be skipped.")
 
     if normalize:
         concatenated_train = np.concatenate(list(train_data_map.values()), axis=0)
@@ -272,6 +310,30 @@ def get_nasa_battery_data(nasa_battery_id=None, nasa_train_batteries=None, nasa_
         test_data_map = normalized_test_map
 
     return (train_data_map, None), (test_data_map, test_label_map)
+
+
+def get_nasa_battery_data(nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None,
+                          normalize=False, prefix="datasets/NASA/processed"):
+    return get_nasa_like_battery_data(
+        "NASA",
+        nasa_battery_id=nasa_battery_id,
+        nasa_train_batteries=nasa_train_batteries,
+        nasa_test_batteries=nasa_test_batteries,
+        normalize=normalize,
+        prefix=prefix,
+    )
+
+
+def get_nasa_random_battery_data(dataset, nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None,
+                                 normalize=False, prefix=None):
+    return get_nasa_like_battery_data(
+        dataset,
+        nasa_battery_id=nasa_battery_id,
+        nasa_train_batteries=nasa_train_batteries,
+        nasa_test_batteries=nasa_test_batteries,
+        normalize=normalize,
+        prefix=prefix,
+    )
 
 
 def get_available_bms_clusters(prefix):
@@ -357,6 +419,10 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
         prefix += "/data/processed"
     elif dataset == "NASA":
         prefix += "/NASA/processed"
+    elif dataset == "NASA_RANDOM_CHARGE":
+        prefix += "/NASA_RANDOM_CHARGE/processed"
+    elif dataset == "NASA_RANDOM_DISCHARGE":
+        prefix += "/NASA_RANDOM_DISCHARGE/processed"
     elif dataset in ["CALCE", "CALCE2"]:
         prefix += "/CALCE/processed"
     elif dataset == "BMS":
@@ -374,14 +440,24 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
     print("test: ", test_start, test_end)
     x_dim = get_data_dim(dataset)
     
-    if dataset == "NASA":
-        (train_data_map, _), (test_data_map, test_label_map) = get_nasa_battery_data(
-            nasa_battery_id=nasa_battery_id,
-            nasa_train_batteries=nasa_train_batteries,
-            nasa_test_batteries=nasa_test_batteries,
-            normalize=False,
-            prefix=prefix,
-        )
+    if dataset in ["NASA", "NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"]:
+        if dataset == "NASA":
+            (train_data_map, _), (test_data_map, test_label_map) = get_nasa_battery_data(
+                nasa_battery_id=nasa_battery_id,
+                nasa_train_batteries=nasa_train_batteries,
+                nasa_test_batteries=nasa_test_batteries,
+                normalize=False,
+                prefix=prefix,
+            )
+        else:
+            (train_data_map, _), (test_data_map, test_label_map) = get_nasa_random_battery_data(
+                dataset,
+                nasa_battery_id=nasa_battery_id,
+                nasa_train_batteries=nasa_train_batteries,
+                nasa_test_batteries=nasa_test_batteries,
+                normalize=False,
+                prefix=prefix,
+            )
         train_data = np.concatenate(list(train_data_map.values()), axis=0)
         test_data = np.concatenate(list(test_data_map.values()), axis=0)
 
