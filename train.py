@@ -44,6 +44,55 @@ def _build_concat_window_dataset(sequence_data, window_size, target_dims):
         return sub_datasets[0]
     return torch.utils.data.ConcatDataset(sub_datasets)
 
+
+def _get_sequence_lengths(sequence_data):
+    if is_sequence_container(sequence_data):
+        return [len(seq) for seq in ensure_sequence_list(sequence_data)]
+    return [len(sequence_data)]
+
+
+def _count_sequence_windows(sequence_data, window_size):
+    return sum(max(seq_len - window_size, 0) for seq_len in _get_sequence_lengths(sequence_data))
+
+
+def _print_nasa_random_window_summary(split_name, data_map, window_size, val_split=None):
+    if not data_map:
+        return
+
+    print(f"[NASA_RANDOM] {split_name} summary (lookback={window_size})")
+
+    total_steps = 0
+    total_segments = 0
+    total_windows = 0
+    for battery_name in sorted(data_map):
+        sequence_data = data_map[battery_name]
+        segment_lengths = _get_sequence_lengths(sequence_data)
+        segment_count = len(segment_lengths)
+        step_count = sum(segment_lengths)
+        window_count = _count_sequence_windows(sequence_data, window_size)
+
+        total_steps += step_count
+        total_segments += segment_count
+        total_windows += window_count
+
+        print(
+            f"  [{battery_name}] steps={step_count}, segments={segment_count}, "
+            f"windows={window_count}"
+        )
+
+    print(
+        f"[NASA_RANDOM] {split_name} total: steps={total_steps}, "
+        f"segments={total_segments}, windows={total_windows}"
+    )
+
+    if split_name == "train" and val_split is not None and val_split > 0:
+        validation_windows = int(np.floor(val_split * total_windows))
+        effective_train_windows = total_windows - validation_windows
+        print(
+            f"[NASA_RANDOM] loader split: train_windows={effective_train_windows}, "
+            f"validation_windows={validation_windows}"
+        )
+
 def set_seed(seed=3407):
     """设置随机种子以确保实验可重现"""
     random.seed(seed)
@@ -368,6 +417,7 @@ if __name__ == "__main__":
                     nasa_battery_id=args.nasa_battery_id,
                     nasa_train_batteries=args.nasa_train_batteries,
                     nasa_test_batteries=args.nasa_test_batteries,
+                    nasa_random_split_mode=args.nasa_random_split_mode,
                 )
         elif dataset in ['CALCE', 'CALCE2']:
             output_path = f'output/{dataset}'
@@ -442,7 +492,13 @@ if __name__ == "__main__":
             train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
         else:
             train_dataset = SlidingWindowDataset(x_train, window_size, target_dims)
-        test_dataset = SlidingWindowDataset(x_test, window_size, target_dims)
+
+        if dataset in {"NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"} and nasa_train_tensors is not None:
+            _print_nasa_random_window_summary("train", nasa_train_tensors, window_size, val_split=val_split)
+            _print_nasa_random_window_summary("test", nasa_test_tensors, window_size)
+            test_dataset = None
+        else:
+            test_dataset = SlidingWindowDataset(x_test, window_size, target_dims)
 
         train_loader, val_loader, test_loader = create_data_loaders(
             train_dataset, batch_size, val_split, shuffle_dataset, test_dataset=test_dataset

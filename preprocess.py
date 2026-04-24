@@ -67,6 +67,10 @@ NASA_RANDOM_STEP_TYPE_CODES = {
     "R": 0.0,
 }
 
+NASA_RANDOM_DOWNSAMPLE_STRIDES = {
+    "NASA_RANDOM_DISCHARGE": 4,
+}
+
 
 def _sanitize_bms_entity_name(name):
     keep_chars = []
@@ -253,7 +257,7 @@ def _get_matlab_string(value):
     return str(_extract_matlab_scalar(value)).strip()
 
 
-def _flatten_nasa_random_step(step_struct):
+def _flatten_nasa_random_step(step_struct, step_stride=1):
     comment = _get_matlab_string(step_struct["comment"])
     if comment not in NASA_RANDOM_STEP_COMMENTS:
         return None
@@ -276,15 +280,19 @@ def _flatten_nasa_random_step(step_struct):
         current[:valid_length],
         temperature[:valid_length],
     ])
+
+    if step_stride > 1:
+        step_array = step_array[::step_stride]
+
     return step_array.astype(np.float32, copy=False)
 
 
-def _build_nasa_random_segments(steps):
+def _build_nasa_random_segments(steps, step_stride=1):
     segments = []
     current_segment_steps = []
 
     for step_struct in steps:
-        flattened_step = _flatten_nasa_random_step(step_struct)
+        flattened_step = _flatten_nasa_random_step(step_struct, step_stride=step_stride)
         if flattened_step is None:
             if current_segment_steps:
                 segments.append(np.vstack(current_segment_steps).astype(np.float32, copy=False))
@@ -344,6 +352,10 @@ def _process_nasa_random_dataset(dataset_folder, output_folder, file_prefix, app
     if not mat_files:
         raise FileNotFoundError(f"No .mat files found in {dataset_folder}")
 
+    step_stride = max(1, int(NASA_RANDOM_DOWNSAMPLE_STRIDES.get(file_prefix, 1)))
+    if step_stride > 1:
+        print(f"[{file_prefix}] Applying temporal downsampling with stride={step_stride}")
+
     for filename in mat_files:
         battery_id = filename.split(".mat")[0]
         mat_path = os.path.join(dataset_folder, filename)
@@ -356,12 +368,17 @@ def _process_nasa_random_dataset(dataset_folder, output_folder, file_prefix, app
         battery_struct = mat_data["data"][0, 0]
         steps = battery_struct["step"][0]
 
-        segments = _build_nasa_random_segments(steps)
+        segments = _build_nasa_random_segments(steps, step_stride=step_stride)
         if not segments:
             print(f"[{file_prefix}][{battery_id}] No supported random-walk steps found, skipping.")
             continue
 
-        train_data, test_data = _split_nasa_random_segments(segments, train_ratio=0.8)
+        # NASA_RANDOM uses entity-level splits at training time:
+        # whole batteries are assigned to either the train set or the test set.
+        # We therefore keep the full battery segments here instead of applying
+        # an additional 80/20 split within each battery.
+        train_data = [segment.astype(np.float32, copy=False) for segment in segments]
+        test_data = [segment.astype(np.float32, copy=False) for segment in segments]
         test_labels = [np.zeros(len(segment), dtype=np.int32) for segment in test_data]
 
         if apply_sr_cleaning:
