@@ -1,0 +1,64 @@
+{
+  "plan_name": "mtadgat_compare_template",
+  "common_args": {
+    "model_name": "mtad_gat",
+    "epochs": 30,
+    "bs": 256,
+    "lookback": 100,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_cuda": true,
+    "log_tensorboard": false,
+    "print_every": 1,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "msl_baseline",
+      "args": {
+        "dataset": "MSL",
+        "use_transformer": false,
+        "feature_att_trans": false,
+        "multi_scale_mode": "none"
+      }
+    },
+    {
+      "name": "msl_lite_transformer",
+      "args": {
+        "dataset": "MSL",
+        "use_transformer": true,
+        "feature_att_trans": false,
+        "multi_scale_mode": "none"
+      }
+    },
+    {
+      "name": "smap_baseline",
+      "args": {
+        "dataset": "SMAP",
+        "use_transformer": false,
+        "feature_att_trans": false,
+        "multi_scale_mode": "none"
+      }
+    },
+    {
+      "name": "random_baseline_rw1",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE",
+        "nasa_battery_id": "RW1",
+        "use_transformer": false,
+        "feature_att_trans": false,
+        "multi_scale_mode": "none"
+      }
+    },
+    {
+      "name": "bms_baseline",
+      "args": {
+        "dataset": "BMS",
+        "use_transformer": false,
+        "feature_att_trans": false,
+        "multi_scale_mode": "none"
+      }
+    }
+  ]
+}

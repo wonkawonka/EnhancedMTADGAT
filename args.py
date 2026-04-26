@@ -65,6 +65,12 @@ def get_parser():
     parser.add_argument("--spec_res", type=str2bool, default=False,help="特殊分辨率设置，目前未在代码中详细使用")
 
     # -- Model params ---
+    parser.add_argument(
+        "--model_name",
+        type=str,
+        default="mtad_gat",
+        help="模型名称。默认使用当前项目的 MTAD-GAT；后续接入其他 baseline 时也通过该参数切换",
+    )
     # 1D conv layer
     parser.add_argument("--kernel_size", type=int, default=7)
     # GAT layers

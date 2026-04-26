@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 from args import get_parser
-from mtad_gat import Enhanced_MTADGAT
+from model_factory import build_model
 from prediction import Predictor
 from training import Trainer
 from utils import *
@@ -212,30 +212,8 @@ def train_universal_model(args):
         print(f"Will forecast and reconstruct input features: {target_dims}")
         out_dim = len(target_dims)
     
-    # 创建模型
-    model = Enhanced_MTADGAT(
-        n_features,
-        window_size,
-        out_dim,
-        kernel_size=args.kernel_size,
-        use_gatv2=args.use_gatv2,
-        feat_gat_embed_dim=args.feat_gat_embed_dim,
-        time_gat_embed_dim=args.time_gat_embed_dim,
-        gru_n_layers=args.gru_n_layers,
-        gru_hid_dim=args.gru_hid_dim,
-        forecast_n_layers=args.fc_n_layers,
-        forecast_hid_dim=args.fc_hid_dim,
-        recon_n_layers=args.recon_n_layers,
-        recon_hid_dim=args.recon_hid_dim,
-        dropout=args.dropout,
-        alpha=args.alpha,
-        use_transformer=args.use_transformer,
-        attention_top_k=args.attention_top_k,
-        attention_sparse=args.attention_sparse,
-        feature_att_trans=args.feature_att_trans,
-        multi_scale_mode=args.multi_scale_mode,
-        multi_scale_dilations=[int(d) for d in args.multi_scale_dilations.split(',')]
-    )
+    # 创建模型。当前默认仍为 MTAD-GAT，后续 baseline 通过 model_factory 扩展。
+    model = build_model(args, n_features, window_size, out_dim)
 
     # 尝试使用 torch.compile 加速 (PyTorch 2.0+)
     if hasattr(torch, "compile"):
@@ -504,29 +482,7 @@ if __name__ == "__main__":
             train_dataset, batch_size, val_split, shuffle_dataset, test_dataset=test_dataset
         )
 
-        model = Enhanced_MTADGAT(
-            n_features,
-            window_size,
-            out_dim,
-            kernel_size=args.kernel_size,
-            use_gatv2=args.use_gatv2,
-            feat_gat_embed_dim=args.feat_gat_embed_dim,
-            time_gat_embed_dim=args.time_gat_embed_dim,
-            gru_n_layers=args.gru_n_layers,
-            gru_hid_dim=args.gru_hid_dim,
-            forecast_n_layers=args.fc_n_layers,
-            forecast_hid_dim=args.fc_hid_dim,
-            recon_n_layers=args.recon_n_layers,
-            recon_hid_dim=args.recon_hid_dim,
-            dropout=args.dropout,
-            alpha=args.alpha,
-            use_transformer=args.use_transformer,
-            attention_top_k=args.attention_top_k,
-            attention_sparse=args.attention_sparse,
-            feature_att_trans=args.feature_att_trans,
-            multi_scale_mode=args.multi_scale_mode,
-            multi_scale_dilations=[int(d) for d in args.multi_scale_dilations.split(',')]
-        )
+        model = build_model(args, n_features, window_size, out_dim)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=args.init_lr)
         forecast_criterion = nn.MSELoss()

@@ -3,7 +3,7 @@ import datetime
 import json
 
 from args import get_parser, str2bool
-from mtad_gat import Enhanced_MTADGAT
+from model_factory import build_model
 from prediction import Predictor
 from utils import *
 
@@ -148,28 +148,7 @@ if __name__ == "__main__":
     train_dataset = SlidingWindowDataset(x_train, window_size, target_dims)
     test_dataset = SlidingWindowDataset(x_test, window_size, target_dims)
 
-    model = Enhanced_MTADGAT(
-        n_features,
-        window_size,
-        out_dim,
-        kernel_size=model_args.kernel_size,
-        use_gatv2=model_args.use_gatv2,
-        feat_gat_embed_dim=model_args.feat_gat_embed_dim,
-        time_gat_embed_dim=model_args.time_gat_embed_dim,
-        gru_n_layers=model_args.gru_n_layers,
-        gru_hid_dim=model_args.gru_hid_dim,
-        forecast_n_layers=model_args.fc_n_layers,
-        forecast_hid_dim=model_args.fc_hid_dim,
-        recon_n_layers=model_args.recon_n_layers,
-        recon_hid_dim=model_args.recon_hid_dim,
-        dropout=model_args.dropout,
-        alpha=model_args.alpha,
-        use_transformer=model_args.use_transformer,
-        attention_top_k=model_args.attention_top_k,
-        feature_att_trans=model_args.feature_att_trans if hasattr(model_args, 'feature_att_trans') else False,
-        multi_scale_mode=model_args.multi_scale_mode if hasattr(model_args, 'multi_scale_mode') else 'basic',
-        multi_scale_dilations=[int(d) for d in model_args.multi_scale_dilations.split(',')] if hasattr(model_args, 'multi_scale_dilations') else [1, 2, 4]
-    )
+    model = build_model(model_args, n_features, window_size, out_dim)
 
     device = "cuda" if args.use_cuda and torch.cuda.is_available() else "cpu"
     load(model, f"{model_path}/model.pt", device=device)

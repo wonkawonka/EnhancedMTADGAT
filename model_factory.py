@@ -1,0 +1,47 @@
+from mtad_gat import Enhanced_MTADGAT
+
+
+def normalize_model_name(model_name):
+    return str(model_name or "mtad_gat").strip().lower().replace("-", "_")
+
+
+def get_available_model_names():
+    return ["mtad_gat"]
+
+
+def build_model(args, n_features, window_size, out_dim):
+    model_name = normalize_model_name(getattr(args, "model_name", "mtad_gat"))
+
+    if model_name == "mtad_gat":
+        return Enhanced_MTADGAT(
+            n_features,
+            window_size,
+            out_dim,
+            kernel_size=args.kernel_size,
+            use_gatv2=args.use_gatv2,
+            feat_gat_embed_dim=args.feat_gat_embed_dim,
+            time_gat_embed_dim=args.time_gat_embed_dim,
+            gru_n_layers=args.gru_n_layers,
+            gru_hid_dim=args.gru_hid_dim,
+            forecast_n_layers=args.fc_n_layers,
+            forecast_hid_dim=args.fc_hid_dim,
+            recon_n_layers=args.recon_n_layers,
+            recon_hid_dim=args.recon_hid_dim,
+            dropout=args.dropout,
+            alpha=args.alpha,
+            use_transformer=args.use_transformer,
+            attention_top_k=args.attention_top_k,
+            attention_sparse=getattr(args, "attention_sparse", False),
+            feature_att_trans=getattr(args, "feature_att_trans", False),
+            multi_scale_mode=getattr(args, "multi_scale_mode", "none"),
+            multi_scale_dilations=[
+                int(d) for d in getattr(args, "multi_scale_dilations", "1,2,4").split(",")
+            ],
+        )
+
+    supported = ", ".join(get_available_model_names())
+    raise ValueError(
+        f"Unsupported model_name='{model_name}'. "
+        f"Currently available: {supported}. "
+        f"Add new baselines in model_factory.py before using them in train/predict."
+    )
