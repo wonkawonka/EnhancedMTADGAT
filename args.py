@@ -31,6 +31,10 @@ def get_parser():
     parser.add_argument("--apply_sr_cleaning", type=str2bool, default=False,help="是否在预处理阶段应用谱残差异常检测和清洗（CALCE固定清洗）")
     # Transformer layers
     parser.add_argument("--trans_enc_layers", type=int, default=2, help="Transformer encoder的层数（这里是第一次改的gru前的transformer）")
+    parser.add_argument("--transformer_ff_mult", type=float, default=2.0, help="轻量 Transformer 的前馈层扩展倍数")
+    parser.add_argument("--transformer_norm_first", type=str2bool, default=True, help="轻量 Transformer 是否使用 Pre-LN")
+    parser.add_argument("--use_revin", type=str2bool, default=False, help="是否启用 RevIN 以缓解跨工况分布偏移")
+    parser.add_argument("--revin_affine", type=str2bool, default=True, help="RevIN 是否启用可学习仿射参数")
     # -- Data params ---
     parser.add_argument(
         '--dataset',
@@ -106,6 +110,16 @@ def get_parser():
     parser.add_argument("--scale_scores", type=str2bool, default=False, help="是否对异常分数进行归一化")
     parser.add_argument("--use_mov_av", type=str2bool, default=False,help="是否使用滑动平均来计算异常分数")
     parser.add_argument("--gamma", type=float, default=1,help="异常评分公式中的权重因子，用于平衡预测误差和重构误差")
+    parser.add_argument(
+        "--score_fusion_mode",
+        type=str,
+        default="fixed",
+        choices=["fixed", "quality_aware"],
+        help="异常分数融合方式: fixed=固定 pred+gamma*recon, quality_aware=质量感知融合",
+    )
+    parser.add_argument("--use_event_consistency", type=str2bool, default=False, help="是否启用双阈值与持续性约束的事件级异常判别")
+    parser.add_argument("--event_low_ratio", type=float, default=0.5, help="低阈值在训练分数中位数与高阈值之间的插值比例，取值越小越严格")
+    parser.add_argument("--event_min_length", type=int, default=3, help="保留异常事件所需的最小持续长度")
     parser.add_argument("--level", type=float, default=None,help="POT 方法中的初始阈值")
     parser.add_argument("--q", type=float, default=None,help="POT 方法中的后续误风险参数，表示可接受多大概率误报")
     parser.add_argument("--dynamic_pot", type=str2bool, default=False,help="是否使用动态阈值")

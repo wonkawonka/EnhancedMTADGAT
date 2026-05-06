@@ -213,7 +213,7 @@ def train_universal_model(args):
         out_dim = len(target_dims)
     
     # 创建模型。当前默认仍为 MTAD-GAT，后续 baseline 通过 model_factory 扩展。
-    model = build_model(args, n_features, window_size, out_dim)
+    model = build_model(args, n_features, window_size, out_dim, target_dims=target_dims)
 
     # 尝试使用 torch.compile 加速 (PyTorch 2.0+)
     if hasattr(torch, "compile"):
@@ -314,6 +314,10 @@ def train_universal_model(args):
                 'dynamic_pot': dynamic_pot,
                 "use_mov_av": args.use_mov_av,
                 "gamma": args.gamma,
+                "score_fusion_mode": args.score_fusion_mode,
+                "use_event_consistency": args.use_event_consistency,
+                "event_low_ratio": args.event_low_ratio,
+                "event_min_length": args.event_min_length,
                 "reg_level": reg_level,
                 "save_path": entity_output_path,  # 使用实体特定的输出路径
             }
@@ -482,7 +486,7 @@ if __name__ == "__main__":
             train_dataset, batch_size, val_split, shuffle_dataset, test_dataset=test_dataset
         )
 
-        model = build_model(args, n_features, window_size, out_dim)
+        model = build_model(args, n_features, window_size, out_dim, target_dims=target_dims)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=args.init_lr)
         forecast_criterion = nn.MSELoss()
@@ -610,6 +614,10 @@ if __name__ == "__main__":
             'dynamic_pot': args.dynamic_pot,
             "use_mov_av": args.use_mov_av,
             "gamma": args.gamma,
+            "score_fusion_mode": args.score_fusion_mode,
+            "use_event_consistency": args.use_event_consistency,
+            "event_low_ratio": args.event_low_ratio,
+            "event_min_length": args.event_min_length,
             "reg_level": reg_level,
             "save_path": save_path,
         }

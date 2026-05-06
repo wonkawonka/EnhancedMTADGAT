@@ -108,24 +108,38 @@ if __name__ == "__main__":
             nasa_train_batteries=model_args.nasa_train_batteries if hasattr(model_args, "nasa_train_batteries") else "",
             nasa_test_batteries=model_args.nasa_test_batteries if hasattr(model_args, "nasa_test_batteries") else "",
         )
+    elif dataset == "BMS":
+        (x_train, _), (x_test, y_test) = get_bms_cluster_data(normalize=normalize)
     else:
         (x_train, _), (x_test, y_test) = get_data(args.dataset, normalize=normalize)
 
     nasa_train_tensors = None
+    bms_train_tensors = None
     if dataset == "NASA" and isinstance(x_train, dict):
         nasa_train_tensors = {battery_name: torch.from_numpy(battery_data).float()
                               for battery_name, battery_data in x_train.items()}
         first_train_battery = next(iter(nasa_train_tensors))
         x_train = nasa_train_tensors[first_train_battery]
+    elif dataset == "BMS" and isinstance(x_train, dict):
+        bms_train_tensors = {cluster_name: torch.from_numpy(cluster_data).float()
+                             for cluster_name, cluster_data in x_train.items()}
+        first_train_cluster = next(iter(bms_train_tensors))
+        x_train = bms_train_tensors[first_train_cluster]
     else:
         x_train = torch.from_numpy(x_train).float()
 
     nasa_test_tensors = None
+    bms_test_tensors = None
     if dataset == "NASA" and isinstance(x_test, dict):
         nasa_test_tensors = {battery_name: torch.from_numpy(battery_data).float()
                              for battery_name, battery_data in x_test.items()}
         first_test_battery = next(iter(nasa_test_tensors))
         x_test = nasa_test_tensors[first_test_battery]
+    elif dataset == "BMS" and isinstance(x_test, dict):
+        bms_test_tensors = {cluster_name: torch.from_numpy(cluster_data).float()
+                            for cluster_name, cluster_data in x_test.items()}
+        first_test_cluster = next(iter(bms_test_tensors))
+        x_test = bms_test_tensors[first_test_cluster]
     else:
         x_test = torch.from_numpy(x_test).float()
     n_features = x_train.shape[1]
@@ -148,7 +162,7 @@ if __name__ == "__main__":
     train_dataset = SlidingWindowDataset(x_train, window_size, target_dims)
     test_dataset = SlidingWindowDataset(x_test, window_size, target_dims)
 
-    model = build_model(model_args, n_features, window_size, out_dim)
+    model = build_model(model_args, n_features, window_size, out_dim, target_dims=target_dims)
 
     device = "cuda" if args.use_cuda and torch.cuda.is_available() else "cpu"
     load(model, f"{model_path}/model.pt", device=device)
@@ -198,6 +212,10 @@ if __name__ == "__main__":
         'dynamic_pot': args.dynamic_pot,
         "use_mov_av": args.use_mov_av,
         "gamma": args.gamma,
+        "score_fusion_mode": args.score_fusion_mode,
+        "use_event_consistency": args.use_event_consistency,
+        "event_low_ratio": args.event_low_ratio,
+        "event_min_length": args.event_min_length,
         "reg_level": reg_level,
         "save_path": save_path,
     }
@@ -242,6 +260,44 @@ if __name__ == "__main__":
                 train_reference,
                 battery_tensor,
                 battery_label,
+                load_scores=args.load_scores,
+                save_output=args.save_output,
+            )
+    elif dataset == "BMS" and bms_test_tensors is not None:
+        train_reference = bms_train_tensors if bms_train_tensors is not None else x_train
+        for cluster_name, cluster_tensor in bms_test_tensors.items():
+            cluster_save_path = os.path.join(save_path, cluster_name)
+            os.makedirs(cluster_save_path, exist_ok=True)
+
+            cluster_prediction_args = dict(prediction_args)
+            cluster_prediction_args["save_path"] = cluster_save_path
+
+            cluster_summary_count = 0
+            for filename in os.listdir(cluster_save_path):
+                if filename.startswith("summary"):
+                    cluster_summary_count += 1
+            if cluster_summary_count == 0:
+                cluster_summary_name = "summary.txt"
+            else:
+                cluster_summary_name = f"summary_{cluster_summary_count}.txt"
+
+            predictor = Predictor(
+                model,
+                window_size,
+                n_features,
+                cluster_prediction_args,
+                summary_file_name=cluster_summary_name,
+            )
+            cluster_label = None
+            if isinstance(y_test, dict):
+                raw_label = y_test.get(cluster_name)
+                if raw_label is not None:
+                    cluster_label = raw_label[window_size:]
+
+            predictor.predict_anomalies(
+                train_reference,
+                cluster_tensor,
+                cluster_label,
                 load_scores=args.load_scores,
                 save_output=args.save_output,
             )

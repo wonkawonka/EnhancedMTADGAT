@@ -33,12 +33,44 @@ class Predictor:
         self.dynamic_pot = pred_args["dynamic_pot"]
         self.use_mov_av = pred_args["use_mov_av"]
         self.gamma = pred_args["gamma"]
+        self.score_fusion_mode = pred_args.get("score_fusion_mode", "fixed")
+        self.use_event_consistency = pred_args.get("use_event_consistency", False)
+        self.event_low_ratio = pred_args.get("event_low_ratio", 0.5)
+        self.event_min_length = pred_args.get("event_min_length", 3)
         self.reg_level = pred_args["reg_level"]
         self.save_path = pred_args["save_path"]
         self.batch_size = 256
         self.use_cuda = True
         self.pred_args = pred_args
         self.summary_file_name = summary_file_name
+
+    @staticmethod
+    def _branch_stability(error_series, eps=1e-6):
+        median = np.median(error_series)
+        mad = np.median(np.abs(error_series - median))
+        scale = np.median(np.abs(error_series)) + eps
+        return mad / scale
+
+    def _compute_fusion_weights(self, pred_errors, recon_errors):
+        if self.score_fusion_mode != "quality_aware":
+            pred_weights = np.ones(pred_errors.shape[1], dtype=np.float32)
+            recon_weights = np.full(pred_errors.shape[1], float(self.gamma), dtype=np.float32)
+            return pred_weights, recon_weights
+
+        pred_weights = []
+        recon_weights = []
+        for feature_idx in range(pred_errors.shape[1]):
+            pred_stability = self._branch_stability(pred_errors[:, feature_idx])
+            recon_stability = self._branch_stability(recon_errors[:, feature_idx])
+
+            pred_quality = 1.0 / (1e-6 + pred_stability)
+            recon_quality = float(self.gamma) / (1e-6 + recon_stability)
+            quality_sum = pred_quality + recon_quality + 1e-6
+
+            pred_weights.append(pred_quality / quality_sum)
+            recon_weights.append(recon_quality / quality_sum)
+
+        return np.asarray(pred_weights, dtype=np.float32), np.asarray(recon_weights, dtype=np.float32)
 
     @staticmethod
     def _to_serializable_dict(metrics):
@@ -50,8 +82,10 @@ class Predictor:
                 serializable[k] = float(v)
         return serializable
 
-    def _save_standard_reports(self, e_eval, p_eval, bf_eval, feature_thresholds, global_threshold):
+    def _save_standard_reports(self, e_eval, p_eval, bf_eval, feature_thresholds, global_threshold, extra_reports=None):
         summary = {"epsilon_result": e_eval, "pot_result": p_eval, "bf_result": bf_eval}
+        if extra_reports:
+            summary.update(extra_reports)
         with open(f"{self.save_path}/{self.summary_file_name}", "w") as f:
             json.dump(summary, f, indent=2)
 
@@ -62,8 +96,85 @@ class Predictor:
             "global_threshold": float(global_threshold),
             "feature_thresholds": {k: float(v) for k, v in feature_thresholds.items()},
         }
+        if extra_reports and "event_consistency_result" in extra_reports:
+            event_report = extra_reports["event_consistency_result"]
+            thresholds["event_high_threshold"] = float(event_report["high_threshold"])
+            thresholds["event_low_threshold"] = float(event_report["low_threshold"])
         with open(f"{self.save_path}/thresholds.json", "w") as f:
             json.dump(thresholds, f, indent=2)
+
+    @staticmethod
+    def _split_segment_slices(score_df):
+        if "Segment_ID" not in score_df.columns or len(score_df) == 0:
+            return [slice(0, len(score_df))]
+
+        segment_ids = score_df["Segment_ID"].to_numpy()
+        boundaries = np.where(segment_ids[1:] != segment_ids[:-1])[0] + 1
+        start = 0
+        slices = []
+        for boundary in boundaries:
+            slices.append(slice(start, boundary))
+            start = boundary
+        slices.append(slice(start, len(score_df)))
+        return slices
+
+    def _compute_event_low_threshold(self, train_scores, high_threshold):
+        ratio = float(np.clip(self.event_low_ratio, 0.0, 1.0))
+        train_median = float(np.median(train_scores))
+        if high_threshold <= train_median:
+            return float(high_threshold)
+        return float(train_median + ratio * (high_threshold - train_median))
+
+    def _apply_hysteresis_to_segment(self, scores, high_threshold, low_threshold):
+        preds = np.zeros(len(scores), dtype=np.int32)
+        event_start = None
+
+        for idx, score in enumerate(scores):
+            if event_start is None:
+                if score >= high_threshold:
+                    event_start = idx
+            elif score < low_threshold:
+                if idx - event_start >= max(1, int(self.event_min_length)):
+                    preds[event_start:idx] = 1
+                event_start = None
+
+        if event_start is not None and len(scores) - event_start >= max(1, int(self.event_min_length)):
+            preds[event_start:] = 1
+
+        return preds
+
+    def _apply_event_consistency(self, score_df, high_threshold, low_threshold):
+        refined = np.zeros(len(score_df), dtype=np.int32)
+        scores = score_df["A_Score_Global"].to_numpy(dtype=np.float32)
+        for segment_slice in self._split_segment_slices(score_df):
+            refined[segment_slice] = self._apply_hysteresis_to_segment(
+                scores[segment_slice],
+                high_threshold=high_threshold,
+                low_threshold=low_threshold,
+            )
+        return refined
+
+    @staticmethod
+    def _evaluate_binary_predictions(pred, true_anomalies):
+        metrics = {
+            "positive_count": int(np.sum(pred)),
+        }
+        if true_anomalies is None:
+            return metrics
+
+        pred_eval, latency = adjust_predicts(None, true_anomalies, 0.0, pred=pred.copy(), calc_latency=True)
+        point_metrics = calc_point2point(pred_eval, true_anomalies)
+        metrics.update({
+            "f1": float(point_metrics[0]),
+            "precision": float(point_metrics[1]),
+            "recall": float(point_metrics[2]),
+            "TP": float(point_metrics[3]),
+            "TN": float(point_metrics[4]),
+            "FP": float(point_metrics[5]),
+            "FN": float(point_metrics[6]),
+            "latency": float(latency),
+        })
+        return metrics
 
     @staticmethod
     def _add_segment_metadata(score_df, segment_id, segment_source_length, global_start_index):
@@ -306,26 +417,36 @@ class Predictor:
             df_dict[f"True_{i}"] = actual[:, i]
             pred_error = np.sqrt((preds[:, i] - actual[:, i]) ** 2)
             recon_error = np.sqrt((recons[:, i] - actual[:, i]) ** 2)
-            a_score = pred_error + self.gamma * recon_error
+            pred_errors[:, i] = pred_error
+            recon_errors[:, i] = recon_error
+            df_dict[f"Pred_Error_{i}"] = pred_error
+            df_dict[f"Recon_Error_{i}"] = recon_error
+
+        pred_weights, recon_weights = self._compute_fusion_weights(pred_errors, recon_errors)
+
+        for i in range(preds.shape[1]):
+            pred_error = pred_errors[:, i]
+            recon_error = recon_errors[:, i]
+            a_score = pred_weights[i] * pred_error + recon_weights[i] * recon_error
 
             if self.scale_scores:
                 q75, q25 = np.percentile(a_score, [75, 25])
                 iqr = q75 - q25
                 median = np.median(a_score)
-                a_score = (a_score - median) / (1+iqr)
+                a_score = (a_score - median) / (1 + iqr)
 
             anomaly_scores[:, i] = a_score
-            pred_errors[:, i] = pred_error
-            recon_errors[:, i] = recon_error
-            df_dict[f"Pred_Error_{i}"] = pred_error
-            df_dict[f"Recon_Error_{i}"] = recon_error
             df_dict[f"A_Score_{i}"] = a_score
+            df_dict[f"Pred_Weight_{i}"] = np.full_like(a_score, pred_weights[i], dtype=np.float32)
+            df_dict[f"Recon_Weight_{i}"] = np.full_like(a_score, recon_weights[i], dtype=np.float32)
 
         df = pd.DataFrame(df_dict)
         df['Pred_Error_Global'] = np.mean(pred_errors, axis=1)
         df['Recon_Error_Global'] = np.mean(recon_errors, axis=1)
         anomaly_scores = np.mean(anomaly_scores, 1)
         df['A_Score_Global'] = anomaly_scores
+        df['Pred_Weight_Global'] = float(np.mean(pred_weights))
+        df['Recon_Weight_Global'] = float(np.mean(recon_weights))
 
         return df
 
@@ -436,6 +557,8 @@ class Predictor:
             smoothing_window = int(self.batch_size * self.window_size * 0.05)
             train_anomaly_scores = pd.DataFrame(train_anomaly_scores).ewm(span=smoothing_window).mean().values.flatten()
             test_anomaly_scores = pd.DataFrame(test_anomaly_scores).ewm(span=smoothing_window).mean().values.flatten()
+            train_pred_df["A_Score_Global"] = train_anomaly_scores
+            test_pred_df["A_Score_Global"] = test_anomaly_scores
 
         # Find threshold and predict anomalies at feature-level (for plotting and diagnosis purposes)
         out_dim = self.n_features if self.target_dims is None else len(self.target_dims)
@@ -484,7 +607,30 @@ class Predictor:
         p_eval = self._to_serializable_dict(p_eval)
         bf_eval = self._to_serializable_dict(bf_eval)
         global_epsilon = e_eval["threshold"] if "threshold" in e_eval else np.percentile(train_anomaly_scores, 95)
-        self._save_standard_reports(e_eval, p_eval, bf_eval, feature_thresholds, global_epsilon)
+        event_low_threshold = self._compute_event_low_threshold(train_anomaly_scores, global_epsilon)
+
+        raw_train_preds = (train_anomaly_scores >= global_epsilon).astype(int)
+        raw_test_preds = (test_anomaly_scores >= global_epsilon).astype(int)
+        event_train_preds = self._apply_event_consistency(train_pred_df, global_epsilon, event_low_threshold)
+        event_test_preds = self._apply_event_consistency(test_pred_df, global_epsilon, event_low_threshold)
+
+        event_report = {
+            "enabled": bool(self.use_event_consistency),
+            "high_threshold": float(global_epsilon),
+            "low_threshold": float(event_low_threshold),
+            "low_ratio": float(self.event_low_ratio),
+            "min_event_length": int(self.event_min_length),
+            "raw_result": self._evaluate_binary_predictions(raw_test_preds, true_anomalies),
+            "event_result": self._evaluate_binary_predictions(event_test_preds, true_anomalies),
+        }
+        self._save_standard_reports(
+            e_eval,
+            p_eval,
+            bf_eval,
+            feature_thresholds,
+            global_epsilon,
+            extra_reports={"event_consistency_result": event_report},
+        )
 
         # Save anomaly predictions made using epsilon method (could be changed to pot or bf-method)
         if save_output:
@@ -492,8 +638,16 @@ class Predictor:
                 test_pred_df["A_True_Global"] = true_anomalies
             train_pred_df["Thresh_Global"] = global_epsilon
             test_pred_df["Thresh_Global"] = global_epsilon
-            train_pred_df[f"A_Pred_Global"] = (train_anomaly_scores >= global_epsilon).astype(int)
-            test_preds_global = (test_anomaly_scores >= global_epsilon).astype(int)
+            train_pred_df["Thresh_Global_Low"] = event_low_threshold
+            test_pred_df["Thresh_Global_Low"] = event_low_threshold
+            train_pred_df["A_Pred_Global_Raw"] = raw_train_preds
+            test_pred_df["A_Pred_Global_Raw"] = raw_test_preds
+            train_pred_df["A_Pred_Global_Event"] = event_train_preds
+            test_pred_df["A_Pred_Global_Event"] = event_test_preds
+
+            train_pred_df[f"A_Pred_Global"] = event_train_preds if self.use_event_consistency else raw_train_preds
+            test_preds_global = event_test_preds.copy() if self.use_event_consistency else raw_test_preds.copy()
+
             # Adjust predictions according to evaluation strategy
             if true_anomalies is not None:
                 test_preds_global = adjust_predicts(None, true_anomalies, global_epsilon, pred=test_preds_global)

@@ -5,6 +5,67 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class RevIN(nn.Module):
+    """Reversible instance normalization for time-series windows."""
+
+    def __init__(self, num_features, eps=1e-5, affine=True):
+        super(RevIN, self).__init__()
+        self.num_features = num_features
+        self.eps = eps
+        self.affine = affine
+
+        if affine:
+            self.affine_weight = nn.Parameter(torch.ones(1, 1, num_features))
+            self.affine_bias = nn.Parameter(torch.zeros(1, 1, num_features))
+
+    @staticmethod
+    def _normalize_target_dims(target_dims):
+        if isinstance(target_dims, int):
+            return [target_dims]
+        return target_dims
+
+    def _slice_stats(self, stats, target_dims):
+        target_dims = self._normalize_target_dims(target_dims)
+        if target_dims is None:
+            return stats["mean"], stats["stdev"]
+        return stats["mean"][:, :, target_dims], stats["stdev"][:, :, target_dims]
+
+    def _slice_affine(self, target_dims):
+        target_dims = self._normalize_target_dims(target_dims)
+        if target_dims is None:
+            return self.affine_weight, self.affine_bias
+        return self.affine_weight[:, :, target_dims], self.affine_bias[:, :, target_dims]
+
+    def forward(self, x, mode, stats=None, target_dims=None):
+        if mode == "norm":
+            mean = x.mean(dim=1, keepdim=True)
+            stdev = torch.sqrt(torch.var(x, dim=1, keepdim=True, unbiased=False) + self.eps)
+            x = (x - mean) / stdev
+            if self.affine:
+                x = x * self.affine_weight + self.affine_bias
+            return x, {"mean": mean, "stdev": stdev}
+
+        if mode == "denorm":
+            if stats is None:
+                raise ValueError("RevIN denorm requires normalization statistics")
+
+            mean, stdev = self._slice_stats(stats, target_dims)
+            squeeze_time_dim = x.ndim == 2
+            if squeeze_time_dim:
+                x = x.unsqueeze(1)
+
+            if self.affine:
+                affine_weight, affine_bias = self._slice_affine(target_dims)
+                x = (x - affine_bias) / (affine_weight + self.eps)
+            x = x * stdev + mean
+
+            if squeeze_time_dim:
+                x = x.squeeze(1)
+            return x
+
+        raise ValueError(f"Unsupported RevIN mode: {mode}")
+
+
 class ConvLayer(nn.Module):
     """1-D Convolution layer to extract high-level features of each time-series input
     :param n_features: Number of input features/nodes
@@ -133,7 +194,18 @@ class FeatureAttentionLayer(nn.Module):
     :param use_bias: whether to include a bias term in the attention layer
     """
 
-    def __init__(self, n_features, window_size, dropout, alpha, embed_dim=None, use_gatv2=True, use_bias=True,attention_sparse=True,attention_top_k=10):
+    def __init__(
+        self,
+        n_features,
+        window_size,
+        dropout,
+        alpha,
+        embed_dim=None,
+        use_gatv2=True,
+        use_bias=True,
+        attention_sparse=True,
+        attention_top_k=10,
+    ):
         super(FeatureAttentionLayer, self).__init__()
         self.n_features = n_features
         self.window_size = window_size
@@ -198,6 +270,7 @@ class FeatureAttentionLayer(nn.Module):
             topk_values, topk_indices = torch.topk(e, top_k, dim=2)
             sparse_e = torch.full_like(e, float('-inf'))
             sparse_e.scatter_(2, topk_indices, topk_values)
+            e = sparse_e
 
         # Attention weights，softmax over feature dimension
         attention = torch.softmax(e, dim=2)

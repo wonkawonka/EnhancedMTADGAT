@@ -9,7 +9,7 @@ def get_available_model_names():
     return ["mtad_gat"]
 
 
-def build_model(args, n_features, window_size, out_dim):
+def build_model(args, n_features, window_size, out_dim, target_dims=None):
     model_name = normalize_model_name(getattr(args, "model_name", "mtad_gat"))
 
     if model_name == "mtad_gat":
@@ -30,6 +30,9 @@ def build_model(args, n_features, window_size, out_dim):
             dropout=args.dropout,
             alpha=args.alpha,
             use_transformer=args.use_transformer,
+            trans_enc_layers=getattr(args, "trans_enc_layers", 2),
+            transformer_ff_mult=getattr(args, "transformer_ff_mult", 2.0),
+            transformer_norm_first=getattr(args, "transformer_norm_first", True),
             attention_top_k=args.attention_top_k,
             attention_sparse=getattr(args, "attention_sparse", False),
             feature_att_trans=getattr(args, "feature_att_trans", False),
@@ -37,6 +40,9 @@ def build_model(args, n_features, window_size, out_dim):
             multi_scale_dilations=[
                 int(d) for d in getattr(args, "multi_scale_dilations", "1,2,4").split(",")
             ],
+            use_revin=getattr(args, "use_revin", False),
+            revin_affine=getattr(args, "revin_affine", True),
+            target_dims=target_dims,
         )
 
     supported = ", ".join(get_available_model_names())

@@ -82,6 +82,14 @@ def _sanitize_bms_entity_name(name):
     return "".join(keep_chars).strip("_")
 
 
+def _get_bms_series_name(bundle_prefix_name):
+    prefix = str(bundle_prefix_name)
+    marker = "_StartDate_"
+    if marker in prefix:
+        prefix = prefix.split(marker, 1)[0]
+    return _sanitize_bms_entity_name(prefix)
+
+
 def _load_bms_excel(file_path, sheet_name=0):
     df = pd.read_excel(file_path, sheet_name=sheet_name)
     if "Date" not in df.columns:
@@ -135,10 +143,14 @@ def _build_bms_cluster_feature_frame(stat_df, volt_summary_df, temp_summary_df, 
     feature_df = merged_df[BMS_FEATURE_NAMES].apply(pd.to_numeric, errors="coerce")
     feature_df = feature_df.interpolate(limit_direction="both")
     feature_df = feature_df.ffill().bfill().fillna(0.0)
-    return feature_df.astype(np.float32)
+    feature_df = feature_df.astype(np.float32)
+    return pd.concat([merged_df[["Date"]], feature_df], axis=1)
 
 
 def _save_bms_processed_splits(output_folder, entity_name, feature_df, apply_sr_cleaning=False):
+    if isinstance(feature_df, pd.DataFrame) and "Date" in feature_df.columns:
+        feature_df = feature_df.drop(columns=["Date"])
+
     feature_array = np.asarray(feature_df, dtype=np.float32)
 
     if apply_sr_cleaning:
@@ -159,6 +171,22 @@ def _save_bms_processed_splits(output_folder, entity_name, feature_df, apply_sr_
         dump(test_labels, file)
 
     return train_data, test_data, test_labels
+
+
+def _cleanup_existing_bms_processed_files(output_folder):
+    removed_count = 0
+    for filename in listdir(output_folder):
+        if (
+            filename == "BMS_train.pkl"
+            or filename == "BMS_test.pkl"
+            or filename == "BMS_test_label.pkl"
+            or (filename.startswith("BMS_") and filename.endswith(".pkl"))
+        ):
+            os.remove(path.join(output_folder, filename))
+            removed_count += 1
+    if removed_count > 0:
+        print(f"[BMS] Removed {removed_count} legacy processed file(s) from {output_folder}")
+    return removed_count
 
 
 def interpolate_capacity_to_timesteps(cycle_capacities, cycle_lengths, cycle_types):
@@ -531,6 +559,7 @@ def load_data(dataset, apply_sr_cleaning=False):
         dataset_folder = "datasets/BMS"
         output_folder = "datasets/BMS/processed"
         makedirs(output_folder, exist_ok=True)
+        _cleanup_existing_bms_processed_files(output_folder)
         print(f"[BMS] Dataset folder: {dataset_folder}")
         print(f"[BMS] Output folder: {output_folder}")
         print(f"[BMS] Spectral residual cleaning: {apply_sr_cleaning}")
@@ -557,10 +586,9 @@ def load_data(dataset, apply_sr_cleaning=False):
 
         print(f"[BMS] Detected {len(grouped_files)} candidate bundle(s)")
 
-        merged_train_list = []
-        merged_test_list = []
-        merged_label_list = []
         bms_start_time = time.perf_counter()
+        cluster_frame_map = {}
+        processed_bundle_cluster_count = 0
 
         for bundle_idx, (prefix_name, file_map) in enumerate(sorted(grouped_files.items()), start=1):
             required_keys = {"group", "stat", "temp", "volt"}
@@ -608,24 +636,14 @@ def load_data(dataset, apply_sr_cleaning=False):
                     f"Feature frame shape: {feature_df.shape}"
                 )
 
-                cluster_entity_name = f"BMS_{bundle_name}_cluster{sheet_name}"
+                series_name = _get_bms_series_name(prefix_name)
+                cluster_entity_name = f"BMS_{series_name}_cluster{sheet_name}"
+                cluster_frame_map.setdefault(cluster_entity_name, []).append(feature_df)
+                processed_bundle_cluster_count += 1
                 print(
                     f"[BMS][{bundle_idx}/{len(grouped_files)}][Sheet {sheet_idx}/{len(common_sheets)}] "
-                    f"Saving processed splits for {cluster_entity_name}..."
-                )
-                train_data, test_data, test_labels = _save_bms_processed_splits(
-                    output_folder,
-                    cluster_entity_name,
-                    feature_df,
-                    apply_sr_cleaning=apply_sr_cleaning,
-                )
-
-                merged_train_list.append(train_data)
-                merged_test_list.append(test_data)
-                merged_label_list.append(test_labels)
-                print(
-                    f"[BMS][{bundle_idx}/{len(grouped_files)}][Sheet {sheet_idx}/{len(common_sheets)}] "
-                    f"Saved {cluster_entity_name}: train {train_data.shape}, test {test_data.shape}"
+                    f"Queued segment for {cluster_entity_name}, current segments: "
+                    f"{len(cluster_frame_map[cluster_entity_name])}"
                 )
                 sheet_elapsed = time.perf_counter() - sheet_start_time
                 print(
@@ -638,22 +656,36 @@ def load_data(dataset, apply_sr_cleaning=False):
                 f"[BMS][{bundle_idx}/{len(grouped_files)}] Bundle completed in {bundle_elapsed:.2f}s"
             )
 
-        if not merged_train_list:
+        if not cluster_frame_map:
             raise FileNotFoundError("未找到可用于构建 BMS 特征的数据文件组合")
 
-        print("[BMS] Concatenating merged train/test splits across all processed clusters...")
-        merged_train = np.concatenate(merged_train_list, axis=0)
-        merged_test = np.concatenate(merged_test_list, axis=0)
-        merged_labels = np.concatenate(merged_label_list, axis=0)
+        print(
+            f"[BMS] Aggregating {processed_bundle_cluster_count} daily cluster segment(s) into "
+            f"{len(cluster_frame_map)} continuous cluster sequence(s)..."
+        )
+        saved_cluster_count = 0
+        for cluster_entity_name, feature_frames in sorted(cluster_frame_map.items()):
+            concat_df = pd.concat(feature_frames, axis=0, ignore_index=True)
+            concat_df["Date"] = pd.to_datetime(concat_df["Date"], errors="coerce")
+            concat_df = concat_df.dropna(subset=["Date"]).sort_values("Date")
+            concat_df = concat_df.drop_duplicates(subset=["Date"], keep="last").reset_index(drop=True)
+            train_data, test_data, test_labels = _save_bms_processed_splits(
+                output_folder,
+                cluster_entity_name,
+                concat_df,
+                apply_sr_cleaning=apply_sr_cleaning,
+            )
+            saved_cluster_count += 1
+            print(
+                f"[BMS] Saved continuous cluster {cluster_entity_name}: "
+                f"segments={len(feature_frames)}, total_steps={len(concat_df)}, "
+                f"train={train_data.shape}, test={test_data.shape}, labels={test_labels.shape}"
+            )
 
-        with open(path.join(output_folder, "BMS_train.pkl"), "wb") as file:
-            dump(merged_train, file)
-        with open(path.join(output_folder, "BMS_test.pkl"), "wb") as file:
-            dump(merged_test, file)
-        with open(path.join(output_folder, "BMS_test_label.pkl"), "wb") as file:
-            dump(merged_labels, file)
-
-        print(f"Saved merged BMS data: train {merged_train.shape}, test {merged_test.shape}")
+        print(
+            f"[BMS] Saved {saved_cluster_count} continuous cluster split(s); "
+            f"merged BMS pkl files are no longer generated."
+        )
         print(f"[BMS] Total elapsed: {time.perf_counter() - bms_start_time:.2f}s")
     # TODO 主要还是预测容量的异常，但是其他数据可以作为特征
     elif dataset == "NASA":

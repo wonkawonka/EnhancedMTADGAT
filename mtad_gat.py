@@ -8,7 +8,9 @@ from modules import (
     TemporalAttentionLayer,
     GRULayer,
     Forecasting_Model,
-    ReconstructionModel, PositionalEncoding,
+    ReconstructionModel,
+    PositionalEncoding,
+    RevIN,
 )
 
 
@@ -54,15 +56,24 @@ class Enhanced_MTADGAT(nn.Module):
             alpha=0.2,
             use_transformer=True,
             trans_enc_layers=2,
+            transformer_ff_mult=2.0,
+            transformer_norm_first=True,
             attention_top_k=10,
             attention_sparse=False,
             feature_att_trans=False,
             multi_scale_mode='basic',
-            multi_scale_dilations=[1, 2, 4]
+            multi_scale_dilations=[1, 2, 4],
+            use_revin=False,
+            revin_affine=True,
+            target_dims=None,
     ):
         super(Enhanced_MTADGAT, self).__init__()
 
         self.feature_att_trans = feature_att_trans
+        self.use_revin = use_revin
+        self.target_dims = target_dims
+        if self.use_revin:
+            self.revin = RevIN(n_features, affine=revin_affine)
         
         # 多尺度卷积（根据mode选择）
         if multi_scale_mode in ['basic', 'progressive']:
@@ -70,7 +81,17 @@ class Enhanced_MTADGAT(nn.Module):
         else:
             self.conv = ConvLayer(n_features, kernel_size)
         # 图注意力层
-        self.feature_gat = FeatureAttentionLayer(n_features, window_size, dropout, alpha, feat_gat_embed_dim, use_gatv2, attention_sparse, attention_top_k)
+        self.feature_gat = FeatureAttentionLayer(
+            n_features,
+            window_size,
+            dropout,
+            alpha,
+            embed_dim=feat_gat_embed_dim,
+            use_gatv2=use_gatv2,
+            use_bias=True,
+            attention_sparse=attention_sparse,
+            attention_top_k=attention_top_k,
+        )
         
         # 仅在不使用简化模型时包含时间注意力层
         if not feature_att_trans:
@@ -82,7 +103,15 @@ class Enhanced_MTADGAT(nn.Module):
             d_model = 2 * n_features  # 仅特征注意力输出 + 卷积输出
             self.pos_encoder = PositionalEncoding(d_model, dropout)
             nhead = find_largest_valid_nhead(d_model)
-            encoder_layer = nn.TransformerEncoderLayer(d_model, nhead, batch_first=True)
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=d_model,
+                nhead=nhead,
+                dim_feedforward=max(d_model, int(d_model * transformer_ff_mult)),
+                dropout=dropout,
+                batch_first=True,
+                norm_first=transformer_norm_first,
+                activation="gelu",
+            )
             self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=trans_enc_layers)
             # 投影到预测/重构模型所需的维度
             self.trans_proj = nn.Linear(d_model, gru_hid_dim)
@@ -93,7 +122,15 @@ class Enhanced_MTADGAT(nn.Module):
             if use_transformer:
                 self.pos_encoder = PositionalEncoding(d_model, dropout)
                 nhead = find_largest_valid_nhead(d_model)
-                encoder_layer = nn.TransformerEncoderLayer(d_model, nhead, batch_first=True)
+                encoder_layer = nn.TransformerEncoderLayer(
+                    d_model=d_model,
+                    nhead=nhead,
+                    dim_feedforward=max(d_model, int(d_model * transformer_ff_mult)),
+                    dropout=dropout,
+                    batch_first=True,
+                    norm_first=transformer_norm_first,
+                    activation="gelu",
+                )
                 self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=trans_enc_layers)
                 self.trans_proj = nn.Linear(d_model, gru_hid_dim)  # d_model -> 150
             # TODO 注意当特征只有几个的时候需要调整一下
@@ -106,6 +143,10 @@ class Enhanced_MTADGAT(nn.Module):
 
     def forward(self, x):
         # x shape (b, n, k): b - batch size, n - window size, k - number of features
+
+        revin_stats = None
+        if self.use_revin:
+            x, revin_stats = self.revin(x, mode="norm")
 
         x = self.conv(x)
 
@@ -140,6 +181,10 @@ class Enhanced_MTADGAT(nn.Module):
 
         predictions = self.forecasting_model(h_end)
         recons = self.recon_model(h_end)
+
+        if self.use_revin:
+            predictions = self.revin(predictions, mode="denorm", stats=revin_stats, target_dims=self.target_dims)
+            recons = self.revin(recons, mode="denorm", stats=revin_stats, target_dims=self.target_dims)
 
         return predictions, recons
 
