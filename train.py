@@ -135,6 +135,10 @@ def get_run_id(args):
     return auto_name
 
 
+def is_c4_model(model_name):
+    return str(model_name or "mtad_gat").strip().lower().replace("-", "_") == "mtad_gat_c4"
+
+
 def train_universal_model(args):
     """
     训练通用模型（使用训练实体数据训练一个通用模型，然后在测试实体上分别测试）
@@ -318,6 +322,8 @@ def train_universal_model(args):
                 "use_event_consistency": args.use_event_consistency,
                 "event_low_ratio": args.event_low_ratio,
                 "event_min_length": args.event_min_length,
+                "use_hier_consistency": bool(args.use_hier_consistency or is_c4_model(args.model_name)),
+                "hier_score_weight": args.hier_score_weight,
                 "reg_level": reg_level,
                 "save_path": entity_output_path,  # 使用实体特定的输出路径
             }
@@ -618,6 +624,8 @@ if __name__ == "__main__":
             "use_event_consistency": args.use_event_consistency,
             "event_low_ratio": args.event_low_ratio,
             "event_min_length": args.event_min_length,
+            "use_hier_consistency": bool(args.use_hier_consistency or is_c4_model(args.model_name)),
+            "hier_score_weight": args.hier_score_weight,
             "reg_level": reg_level,
             "save_path": save_path,
         }

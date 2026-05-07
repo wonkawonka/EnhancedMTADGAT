@@ -1,15 +1,24 @@
 {
-  "plan_name": "mtadgat_compare_template",
+  "plan_name": "mtadgat_full_experiments",
   "common_args": {
     "model_name": "mtad_gat",
     "epochs": 30,
     "bs": 256,
     "lookback": 100,
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
     "use_revin": false,
+    "use_regime_condition": false,
+    "regime_emb_dim": 32,
+    "regime_condition_mode": "fusion",
+    "regime_stat_features": "mean,std,last,delta",
     "score_fusion_mode": "fixed",
     "use_event_consistency": false,
     "event_low_ratio": 0.5,
     "event_min_length": 3,
+    "use_hier_consistency": false,
+    "hier_score_weight": 0.5,
     "normalize": true,
     "init_lr": 0.001,
     "dropout": 0.3,
@@ -20,49 +29,191 @@
   },
   "experiments": [
     {
-      "name": "msl_baseline",
-      "args": {
-        "dataset": "MSL",
-        "use_transformer": false,
-        "feature_att_trans": false,
-        "multi_scale_mode": "none"
-      }
-    },
-    {
-      "name": "msl_lite_transformer",
-      "args": {
-        "dataset": "MSL",
-        "use_transformer": true,
-        "feature_att_trans": false,
-        "multi_scale_mode": "none"
-      }
-    },
-    {
-      "name": "smap_baseline",
+      "name": "smap_mtadgat_baseline",
       "args": {
         "dataset": "SMAP",
-        "use_transformer": false,
-        "feature_att_trans": false,
-        "multi_scale_mode": "none"
+        "model_name": "mtad_gat"
       }
     },
     {
-      "name": "random_baseline_rw1",
+      "name": "smap_c3_full",
+      "args": {
+        "dataset": "SMAP",
+        "model_name": "mtad_gat_c3",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": true
+      }
+    },
+    {
+      "name": "smap_c3_no_regime",
+      "args": {
+        "dataset": "SMAP",
+        "model_name": "mtad_gat",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": true
+      }
+    },
+    {
+      "name": "msl_mtadgat_baseline",
+      "args": {
+        "dataset": "MSL",
+        "model_name": "mtad_gat"
+      }
+    },
+    {
+      "name": "msl_c3_full",
+      "args": {
+        "dataset": "MSL",
+        "model_name": "mtad_gat_c3",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": true
+      }
+    },
+    {
+      "name": "msl_c3_no_regime",
+      "args": {
+        "dataset": "MSL",
+        "model_name": "mtad_gat",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": true
+      }
+    },
+    {
+      "name": "nasa_random_mtadgat_baseline_rw1",
       "args": {
         "dataset": "NASA_RANDOM_DISCHARGE",
         "nasa_battery_id": "RW1",
-        "use_transformer": false,
-        "feature_att_trans": false,
-        "multi_scale_mode": "none"
+        "model_name": "mtad_gat"
       }
     },
     {
-      "name": "bms_baseline",
+      "name": "nasa_random_c3_full_rw1",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE",
+        "nasa_battery_id": "RW1",
+        "model_name": "mtad_gat_c3",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": true
+      }
+    },
+    {
+      "name": "nasa_random_c3_no_regime_rw1",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE",
+        "nasa_battery_id": "RW1",
+        "model_name": "mtad_gat",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": true
+      }
+    },
+    {
+      "name": "bms_mtadgat_baseline",
       "args": {
         "dataset": "BMS",
-        "use_transformer": false,
-        "feature_att_trans": false,
-        "multi_scale_mode": "none"
+        "model_name": "mtad_gat"
+      }
+    },
+    {
+      "name": "bms_c3_full",
+      "args": {
+        "dataset": "BMS",
+        "model_name": "mtad_gat_c3",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": true
+      }
+    },
+    {
+      "name": "bms_c3_no_regime",
+      "args": {
+        "dataset": "BMS",
+        "model_name": "mtad_gat",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": true
+      }
+    },
+    {
+      "name": "bms_c3_no_revin",
+      "args": {
+        "dataset": "BMS",
+        "model_name": "mtad_gat_c3",
+        "use_transformer": true,
+        "use_revin": false,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": true
+      }
+    },
+    {
+      "name": "bms_c3_fixed_fusion",
+      "args": {
+        "dataset": "BMS",
+        "model_name": "mtad_gat_c3",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "fixed",
+        "use_event_consistency": true
+      }
+    },
+    {
+      "name": "bms_c3_no_event",
+      "args": {
+        "dataset": "BMS",
+        "model_name": "mtad_gat_c3",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": false
+      }
+    },
+    {
+      "name": "bms_c4_full",
+      "args": {
+        "dataset": "BMS",
+        "model_name": "mtad_gat_c4",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": true,
+        "hier_score_weight": 0.5
+      }
+    },
+    {
+      "name": "bms_c4_low_hier_weight",
+      "args": {
+        "dataset": "BMS",
+        "model_name": "mtad_gat_c4",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": true,
+        "hier_score_weight": 0.3
+      }
+    },
+    {
+      "name": "bms_c4_high_hier_weight",
+      "args": {
+        "dataset": "BMS",
+        "model_name": "mtad_gat_c4",
+        "use_transformer": true,
+        "use_revin": true,
+        "score_fusion_mode": "quality_aware",
+        "use_event_consistency": true,
+        "hier_score_weight": 0.8
       }
     }
   ]

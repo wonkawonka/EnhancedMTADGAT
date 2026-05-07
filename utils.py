@@ -40,6 +40,23 @@ BMS_FEATURE_NAMES = [
     "SYS_Vmin",
     "SYS_Tmax",
     "SYS_Tmin",
+    "hier_vmax_sys_gap",
+    "hier_vmin_sys_gap",
+    "hier_tmax_sys_gap",
+    "hier_tmin_sys_gap",
+    "hier_soh_sys_gap",
+    "hier_cell_v_range_ratio",
+    "hier_cell_t_range_ratio",
+]
+
+BMS_HIERARCHICAL_FEATURE_NAMES = [
+    "hier_vmax_sys_gap",
+    "hier_vmin_sys_gap",
+    "hier_tmax_sys_gap",
+    "hier_tmin_sys_gap",
+    "hier_soh_sys_gap",
+    "hier_cell_v_range_ratio",
+    "hier_cell_t_range_ratio",
 ]
 
 NASA_ENTITY_DATASET_PREFIX = {
@@ -67,6 +84,14 @@ def normalize_data(data, scaler=None):
 
 def get_bms_feature_names():
     return list(BMS_FEATURE_NAMES)
+
+
+def get_bms_hierarchical_feature_names():
+    return list(BMS_HIERARCHICAL_FEATURE_NAMES)
+
+
+def get_bms_hierarchical_feature_indices():
+    return [BMS_FEATURE_NAMES.index(feature_name) for feature_name in BMS_HIERARCHICAL_FEATURE_NAMES]
 
 
 def adjust_anomaly_scores(scores, dataset, is_train, window_size):
@@ -105,7 +130,7 @@ def get_data_dim(dataset):
         # CALCE数据集是单特征时间序列
         return 1
     elif dataset == "BMS":
-        # BMS当前使用28维特征，维度与 BMS_FEATURE_NAMES 保持同步
+        # BMS当前特征维度与 BMS_FEATURE_NAMES 保持同步
         return len(BMS_FEATURE_NAMES)
     else:
         raise ValueError("unknown dataset " + str(dataset))

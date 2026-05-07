@@ -37,6 +37,13 @@ class Predictor:
         self.use_event_consistency = pred_args.get("use_event_consistency", False)
         self.event_low_ratio = pred_args.get("event_low_ratio", 0.5)
         self.event_min_length = pred_args.get("event_min_length", 3)
+        self.use_hier_consistency = pred_args.get("use_hier_consistency", False)
+        self.hier_score_weight = float(pred_args.get("hier_score_weight", 0.5))
+        self.hier_feature_names = []
+        self.hier_feature_indices = []
+        if self.dataset == "BMS":
+            self.hier_feature_names = get_bms_hierarchical_feature_names()
+            self.hier_feature_indices = get_bms_hierarchical_feature_indices()
         self.reg_level = pred_args["reg_level"]
         self.save_path = pred_args["save_path"]
         self.batch_size = 256
@@ -443,7 +450,15 @@ class Predictor:
         df = pd.DataFrame(df_dict)
         df['Pred_Error_Global'] = np.mean(pred_errors, axis=1)
         df['Recon_Error_Global'] = np.mean(recon_errors, axis=1)
-        anomaly_scores = np.mean(anomaly_scores, 1)
+        base_anomaly_scores = np.mean(anomaly_scores, axis=1)
+        df['A_Score_Global_Base'] = base_anomaly_scores
+        if self.use_hier_consistency and self.dataset == "BMS" and self.hier_feature_indices:
+            hier_feature_scores = np.mean(anomaly_scores[:, self.hier_feature_indices], axis=1)
+            df["Hier_Consistency_Score"] = hier_feature_scores
+            anomaly_scores = base_anomaly_scores + self.hier_score_weight * hier_feature_scores
+        else:
+            df["Hier_Consistency_Score"] = np.zeros_like(base_anomaly_scores, dtype=np.float32)
+            anomaly_scores = base_anomaly_scores
         df['A_Score_Global'] = anomaly_scores
         df['Pred_Weight_Global'] = float(np.mean(pred_weights))
         df['Recon_Weight_Global'] = float(np.mean(recon_weights))
@@ -623,13 +638,21 @@ class Predictor:
             "raw_result": self._evaluate_binary_predictions(raw_test_preds, true_anomalies),
             "event_result": self._evaluate_binary_predictions(event_test_preds, true_anomalies),
         }
+        hier_report = {
+            "enabled": bool(self.use_hier_consistency and self.dataset == "BMS" and self.hier_feature_indices),
+            "weight": float(self.hier_score_weight),
+            "feature_names": list(self.hier_feature_names),
+        }
         self._save_standard_reports(
             e_eval,
             p_eval,
             bf_eval,
             feature_thresholds,
             global_epsilon,
-            extra_reports={"event_consistency_result": event_report},
+            extra_reports={
+                "event_consistency_result": event_report,
+                "hier_consistency_result": hier_report,
+            },
         )
 
         # Save anomaly predictions made using epsilon method (could be changed to pot or bf-method)

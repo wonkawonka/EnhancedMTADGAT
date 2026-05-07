@@ -45,6 +45,16 @@ BMS_GROUP_CONTEXT_FEATURES = [
     "SYS_Tmin",
 ]
 
+BMS_HIERARCHICAL_FEATURE_NAMES = [
+    "hier_vmax_sys_gap",
+    "hier_vmin_sys_gap",
+    "hier_tmax_sys_gap",
+    "hier_tmin_sys_gap",
+    "hier_soh_sys_gap",
+    "hier_cell_v_range_ratio",
+    "hier_cell_t_range_ratio",
+]
+
 BMS_FEATURE_NAMES = BMS_CLUSTER_MAIN_FEATURES + [
     "cell_v_std",
     "cell_v_range",
@@ -52,7 +62,7 @@ BMS_FEATURE_NAMES = BMS_CLUSTER_MAIN_FEATURES + [
     "cell_v_min_dev_from_mean",
     "cell_t_std",
     "cell_t_range",
-] + BMS_GROUP_CONTEXT_FEATURES
+] + BMS_GROUP_CONTEXT_FEATURES + BMS_HIERARCHICAL_FEATURE_NAMES
 
 NASA_RANDOM_STEP_COMMENTS = {
     "discharge (random walk)",
@@ -143,6 +153,14 @@ def _build_bms_cluster_feature_frame(stat_df, volt_summary_df, temp_summary_df, 
     feature_df = merged_df[BMS_FEATURE_NAMES].apply(pd.to_numeric, errors="coerce")
     feature_df = feature_df.interpolate(limit_direction="both")
     feature_df = feature_df.ffill().bfill().fillna(0.0)
+    eps = 1e-6
+    feature_df["hier_vmax_sys_gap"] = feature_df["BMSnVmax"] - feature_df["SYS_Vmax"]
+    feature_df["hier_vmin_sys_gap"] = feature_df["BMSnVmin"] - feature_df["SYS_Vmin"]
+    feature_df["hier_tmax_sys_gap"] = feature_df["BMSnTmax"] - feature_df["SYS_Tmax"]
+    feature_df["hier_tmin_sys_gap"] = feature_df["BMSnTmin"] - feature_df["SYS_Tmin"]
+    feature_df["hier_soh_sys_gap"] = feature_df["BMSnSOH"] - feature_df["SYS_SOH"]
+    feature_df["hier_cell_v_range_ratio"] = feature_df["cell_v_range"] / (np.abs(feature_df["BMSnVmean"]) + eps)
+    feature_df["hier_cell_t_range_ratio"] = feature_df["cell_t_range"] / (np.abs(feature_df["BMSnTmean"]) + eps)
     feature_df = feature_df.astype(np.float32)
     return pd.concat([merged_df[["Date"]], feature_df], axis=1)
 

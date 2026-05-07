@@ -6,13 +6,17 @@ def normalize_model_name(model_name):
 
 
 def get_available_model_names():
-    return ["mtad_gat"]
+    return ["mtad_gat", "mtad_gat_c3", "mtad_gat_c4"]
 
 
 def build_model(args, n_features, window_size, out_dim, target_dims=None):
     model_name = normalize_model_name(getattr(args, "model_name", "mtad_gat"))
 
-    if model_name == "mtad_gat":
+    if model_name in {"mtad_gat", "mtad_gat_c3", "mtad_gat_c4"}:
+        use_regime_condition = bool(getattr(args, "use_regime_condition", False))
+        if model_name in {"mtad_gat_c3", "mtad_gat_c4"}:
+            use_regime_condition = True
+
         return Enhanced_MTADGAT(
             n_features,
             window_size,
@@ -43,6 +47,14 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
             use_revin=getattr(args, "use_revin", False),
             revin_affine=getattr(args, "revin_affine", True),
             target_dims=target_dims,
+            use_regime_condition=use_regime_condition,
+            regime_emb_dim=getattr(args, "regime_emb_dim", 32),
+            regime_condition_mode=getattr(args, "regime_condition_mode", "fusion"),
+            regime_stat_features=[
+                stat.strip()
+                for stat in getattr(args, "regime_stat_features", "mean,std,last,delta").split(",")
+                if stat.strip()
+            ],
         )
 
     supported = ", ".join(get_available_model_names())

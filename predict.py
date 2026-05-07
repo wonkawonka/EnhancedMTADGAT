@@ -7,6 +7,11 @@ from model_factory import build_model
 from prediction import Predictor
 from utils import *
 
+
+def is_c4_model(model_name):
+    return str(model_name or "mtad_gat").strip().lower().replace("-", "_") == "mtad_gat_c4"
+
+
 if __name__ == "__main__":
 
     parser = get_parser()
@@ -216,6 +221,8 @@ if __name__ == "__main__":
         "use_event_consistency": args.use_event_consistency,
         "event_low_ratio": args.event_low_ratio,
         "event_min_length": args.event_min_length,
+        "use_hier_consistency": bool(args.use_hier_consistency or is_c4_model(getattr(model_args, "model_name", "mtad_gat"))),
+        "hier_score_weight": args.hier_score_weight,
         "reg_level": reg_level,
         "save_path": save_path,
     }

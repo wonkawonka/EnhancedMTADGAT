@@ -66,6 +66,58 @@ class RevIN(nn.Module):
         raise ValueError(f"Unsupported RevIN mode: {mode}")
 
 
+class WindowRegimeEncoder(nn.Module):
+    """Encode a sliding window into a compact regime embedding."""
+
+    def __init__(self, n_features, emb_dim=32, hidden_dim=None, stat_features=None):
+        super(WindowRegimeEncoder, self).__init__()
+        if stat_features is None:
+            stat_features = ["mean", "std", "last", "delta"]
+
+        self.n_features = n_features
+        self.stat_features = list(stat_features)
+        input_dim = len(self.stat_features) * n_features
+        hidden_dim = hidden_dim or max(emb_dim, min(128, input_dim))
+
+        self.mlp = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, emb_dim),
+        )
+
+    def forward(self, x):
+        stats = []
+        for stat_name in self.stat_features:
+            if stat_name == "mean":
+                stats.append(x.mean(dim=1))
+            elif stat_name == "std":
+                stats.append(torch.std(x, dim=1, unbiased=False))
+            elif stat_name == "last":
+                stats.append(x[:, -1, :])
+            elif stat_name == "delta":
+                stats.append(x[:, -1, :] - x[:, 0, :])
+            else:
+                raise ValueError(f"Unsupported regime stat feature: {stat_name}")
+
+        regime_input = torch.cat(stats, dim=1)
+        return self.mlp(regime_input)
+
+
+class FiLMConditioner(nn.Module):
+    """Generate feature-wise affine modulation parameters from regime embedding."""
+
+    def __init__(self, emb_dim, target_dim):
+        super(FiLMConditioner, self).__init__()
+        self.proj = nn.Linear(emb_dim, target_dim * 2)
+        self.target_dim = target_dim
+
+    def forward(self, regime_embedding):
+        gamma, beta = torch.chunk(self.proj(regime_embedding), 2, dim=-1)
+        gamma = torch.tanh(gamma)
+        beta = torch.tanh(beta)
+        return gamma, beta
+
+
 class ConvLayer(nn.Module):
     """1-D Convolution layer to extract high-level features of each time-series input
     :param n_features: Number of input features/nodes

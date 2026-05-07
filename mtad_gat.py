@@ -11,6 +11,8 @@ from modules import (
     ReconstructionModel,
     PositionalEncoding,
     RevIN,
+    WindowRegimeEncoder,
+    FiLMConditioner,
 )
 
 
@@ -66,14 +68,38 @@ class Enhanced_MTADGAT(nn.Module):
             use_revin=False,
             revin_affine=True,
             target_dims=None,
+            use_regime_condition=False,
+            regime_emb_dim=32,
+            regime_condition_mode="fusion",
+            regime_stat_features=None,
     ):
         super(Enhanced_MTADGAT, self).__init__()
 
         self.feature_att_trans = feature_att_trans
         self.use_revin = use_revin
         self.target_dims = target_dims
+        self.use_regime_condition = use_regime_condition
+        self.regime_condition_mode = regime_condition_mode
         if self.use_revin:
             self.revin = RevIN(n_features, affine=revin_affine)
+
+        if self.use_regime_condition:
+            if regime_stat_features is None:
+                regime_stat_features = ["mean", "std", "last", "delta"]
+            self.regime_encoder = WindowRegimeEncoder(
+                n_features,
+                emb_dim=regime_emb_dim,
+                stat_features=regime_stat_features,
+            )
+            if regime_condition_mode == "feature_gat":
+                self.feat_conditioner = FiLMConditioner(regime_emb_dim, n_features)
+            elif regime_condition_mode == "temporal_gat":
+                self.temp_conditioner = FiLMConditioner(regime_emb_dim, n_features)
+            elif regime_condition_mode == "fusion":
+                fusion_dim = 2 * n_features if feature_att_trans else 3 * n_features
+                self.fusion_conditioner = FiLMConditioner(regime_emb_dim, fusion_dim)
+            else:
+                raise ValueError(f"Unsupported regime_condition_mode: {regime_condition_mode}")
         
         # 多尺度卷积（根据mode选择）
         if multi_scale_mode in ['basic', 'progressive']:
@@ -148,14 +174,22 @@ class Enhanced_MTADGAT(nn.Module):
         if self.use_revin:
             x, revin_stats = self.revin(x, mode="norm")
 
+        regime_embedding = None
+        if self.use_regime_condition:
+            regime_embedding = self.regime_encoder(x)
+
         x = self.conv(x)
 
         h_feat = self.feature_gat(x)
+        if self.use_regime_condition and self.regime_condition_mode == "feature_gat":
+            h_feat = self._apply_condition(h_feat, regime_embedding, self.feat_conditioner)
         
         # 根据模型配置进行处理
         if self.feature_att_trans:
             # 简化模型：仅特征注意力 + transformer
             h_cat = torch.cat([x, h_feat], dim=2)  # (b, n, 2k)
+            if self.use_regime_condition and self.regime_condition_mode == "fusion":
+                h_cat = self._apply_condition(h_cat, regime_embedding, self.fusion_conditioner)
             
             # 应用transformer
             h_cat = self.pos_encoder(h_cat)
@@ -165,7 +199,11 @@ class Enhanced_MTADGAT(nn.Module):
         else:
             # 标准模型：特征注意力 + 时间注意力 + 可选GRU/Transformer
             h_temp = self.temporal_gat(x)
+            if self.use_regime_condition and self.regime_condition_mode == "temporal_gat":
+                h_temp = self._apply_condition(h_temp, regime_embedding, self.temp_conditioner)
             h_cat = torch.cat([x, h_feat, h_temp], dim=2)  # (b, n, 3k)
+            if self.use_regime_condition and self.regime_condition_mode == "fusion":
+                h_cat = self._apply_condition(h_cat, regime_embedding, self.fusion_conditioner)
 
             if self.use_transformer:
                 # transformer_out = self.transformer_encoder(h_cat.permute(1, 0, 2))
@@ -187,6 +225,13 @@ class Enhanced_MTADGAT(nn.Module):
             recons = self.revin(recons, mode="denorm", stats=revin_stats, target_dims=self.target_dims)
 
         return predictions, recons
+
+    @staticmethod
+    def _apply_condition(hidden_state, regime_embedding, conditioner):
+        gamma, beta = conditioner(regime_embedding)
+        gamma = gamma.unsqueeze(1)
+        beta = beta.unsqueeze(1)
+        return hidden_state * (1.0 + gamma) + beta
 
 
 def find_largest_valid_nhead(d_model, max_nhead=8):

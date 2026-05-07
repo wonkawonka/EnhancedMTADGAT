@@ -35,6 +35,23 @@ def get_parser():
     parser.add_argument("--transformer_norm_first", type=str2bool, default=True, help="轻量 Transformer 是否使用 Pre-LN")
     parser.add_argument("--use_revin", type=str2bool, default=False, help="是否启用 RevIN 以缓解跨工况分布偏移")
     parser.add_argument("--revin_affine", type=str2bool, default=True, help="RevIN 是否启用可学习仿射参数")
+    parser.add_argument("--use_regime_condition", type=str2bool, default=False, help="是否启用工况感知关系建模")
+    parser.add_argument("--regime_emb_dim", type=int, default=32, help="工况嵌入维度")
+    parser.add_argument(
+        "--regime_condition_mode",
+        type=str,
+        default="fusion",
+        choices=["feature_gat", "temporal_gat", "fusion"],
+        help="工况条件化注入位置: feature_gat=特征关系, temporal_gat=时间关系, fusion=拼接表征",
+    )
+    parser.add_argument(
+        "--regime_stat_features",
+        type=str,
+        default="mean,std,last,delta",
+        help="用于构造工况嵌入的窗口统计量，逗号分隔",
+    )
+    parser.add_argument("--use_hier_consistency", type=str2bool, default=False, help="是否启用 BMS 层级一致性异常增强")
+    parser.add_argument("--hier_score_weight", type=float, default=0.5, help="层级一致性分数在最终异常分数中的增强权重")
     # -- Data params ---
     parser.add_argument(
         '--dataset',
@@ -73,7 +90,7 @@ def get_parser():
         "--model_name",
         type=str,
         default="mtad_gat",
-        help="模型名称。默认使用当前项目的 MTAD-GAT；后续接入其他 baseline 时也通过该参数切换",
+        help="模型名称。mtad_gat 为 baseline，mtad_gat_c3 为第三章模型，mtad_gat_c4 为第四章层级一致性增强版本",
     )
     # 1D conv layer
     parser.add_argument("--kernel_size", type=int, default=7)
