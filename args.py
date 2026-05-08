@@ -40,9 +40,9 @@ def get_parser():
     parser.add_argument(
         "--regime_condition_mode",
         type=str,
-        default="fusion",
-        choices=["feature_gat", "temporal_gat", "fusion"],
-        help="工况条件化注入位置: feature_gat=特征关系, temporal_gat=时间关系, fusion=拼接表征",
+        default="transformer_residual",
+        choices=["transformer_residual", "feature_gat", "temporal_gat", "fusion"],
+        help="工况条件化注入位置: transformer_residual=工况感知的Transformer残差增强, 其余为旧版注入方式",
     )
     parser.add_argument(
         "--regime_stat_features",
@@ -50,8 +50,8 @@ def get_parser():
         default="mean,std,last,delta",
         help="用于构造工况嵌入的窗口统计量，逗号分隔",
     )
-    parser.add_argument("--use_hier_consistency", type=str2bool, default=False, help="是否启用 BMS 层级一致性异常增强")
-    parser.add_argument("--hier_score_weight", type=float, default=0.5, help="层级一致性分数在最终异常分数中的增强权重")
+    parser.add_argument("--use_hier_consistency", type=str2bool, default=False, help="是否启用 BMS 层级残差双分支异常检测")
+    parser.add_argument("--hier_score_weight", type=float, default=0.5, help="残差分支在最终异常分数融合中的权重")
     # -- Data params ---
     parser.add_argument(
         '--dataset',

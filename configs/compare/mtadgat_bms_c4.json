@@ -1,12 +1,12 @@
 {
   "plan_name": "mtadgat_bms_c4",
-  "_comment": "第四章 BMS 深化实验计划：专门比较 baseline、c3 和 c4，并补充层级一致性权重敏感性实验。",
-  "_usage": "建议在 BMS 预处理完成且主结果可复现后运行本文件；主要服务于第四章主表、案例分析和权重敏感性分析。",
+  "_comment": "第四章 BMS 深化实验计划：专门比较 baseline、c3 和 c4，并补充层级残差双分支权重敏感性实验。",
+  "_usage": "建议在 BMS 预处理完成且主结果可复现后运行本文件；主要服务于第四章主表、案例分析和主分支/残差分支融合权重分析。",
   "_experiment_mapping": [
     "bms_mtadgat_baseline：原始 MTAD-GAT baseline。",
     "bms_c3_full：第三章完整模型，用于作为第四章的直接前置模型。",
-    "bms_c4_full：第四章完整模型，在 c3 上增加层级一致性增强。",
-    "bms_c4_low_hier_weight / bms_c4_high_hier_weight：第四章层级一致性分数权重敏感性实验。"
+    "bms_c4_full：第四章完整模型，在 c3 上增加层级残差双分支检测。",
+    "bms_c4_low_hier_weight / bms_c4_high_hier_weight：第四章残差分支融合权重敏感性实验。"
   ],
   "_kaggle_tip": "run_id 已固定；若某个实验之前已完整训练并写出 model.pt，配合 --skip-existing 可直接跳过。",
   "common_args": {
@@ -21,7 +21,7 @@
     "use_revin": true,
     "use_regime_condition": false,
     "regime_emb_dim": 32,
-    "regime_condition_mode": "fusion",
+    "regime_condition_mode": "transformer_residual",
     "regime_stat_features": "mean,std,last,delta",
     "score_fusion_mode": "quality_aware",
     "use_event_consistency": true,
@@ -53,7 +53,7 @@
     },
     {
       "name": "bms_c3_full",
-      "comment": "BMS 第四章前置模型：第三章完整模型，不启用层级一致性增强。",
+      "comment": "BMS 第四章前置模型：第三章完整模型，不启用层级残差双分支。",
       "args": {
         "model_name": "mtad_gat_c3",
         "use_hier_consistency": false,
@@ -62,7 +62,7 @@
     },
     {
       "name": "bms_c4_full",
-      "comment": "BMS 第四章完整模型：在 c3 上增加层级一致性增强，作为主结果。",
+      "comment": "BMS 第四章完整模型：在 c3 上增加层级残差双分支检测，作为主结果。",
       "args": {
         "model_name": "mtad_gat_c4",
         "hier_score_weight": 0.5,
@@ -71,7 +71,7 @@
     },
     {
       "name": "bms_c4_low_hier_weight",
-      "comment": "BMS 第四章权重敏感性实验：较低层级一致性分数权重。",
+      "comment": "BMS 第四章权重敏感性实验：较低残差分支融合权重。",
       "args": {
         "model_name": "mtad_gat_c4",
         "hier_score_weight": 0.3,
@@ -80,7 +80,7 @@
     },
     {
       "name": "bms_c4_high_hier_weight",
-      "comment": "BMS 第四章权重敏感性实验：较高层级一致性分数权重。",
+      "comment": "BMS 第四章权重敏感性实验：较高残差分支融合权重。",
       "args": {
         "model_name": "mtad_gat_c4",
         "hier_score_weight": 0.8,

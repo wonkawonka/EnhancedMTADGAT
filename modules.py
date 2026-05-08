@@ -118,6 +118,17 @@ class FiLMConditioner(nn.Module):
         return gamma, beta
 
 
+class RegimeResidualGate(nn.Module):
+    """Generate regime-aware gates for transformer residual enhancement."""
+
+    def __init__(self, emb_dim, target_dim):
+        super(RegimeResidualGate, self).__init__()
+        self.proj = nn.Linear(emb_dim, target_dim)
+
+    def forward(self, regime_embedding):
+        return torch.sigmoid(self.proj(regime_embedding))
+
+
 class ConvLayer(nn.Module):
     """1-D Convolution layer to extract high-level features of each time-series input
     :param n_features: Number of input features/nodes

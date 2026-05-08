@@ -20,7 +20,7 @@
     "use_revin": true,
     "use_regime_condition": false,
     "regime_emb_dim": 32,
-    "regime_condition_mode": "fusion",
+    "regime_condition_mode": "transformer_residual",
     "regime_stat_features": "mean,std,last,delta",
     "score_fusion_mode": "quality_aware",
     "use_event_consistency": true,

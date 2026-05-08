@@ -13,6 +13,7 @@ from modules import (
     RevIN,
     WindowRegimeEncoder,
     FiLMConditioner,
+    RegimeResidualGate,
 )
 
 
@@ -70,16 +71,23 @@ class Enhanced_MTADGAT(nn.Module):
             target_dims=None,
             use_regime_condition=False,
             regime_emb_dim=32,
-            regime_condition_mode="fusion",
+            regime_condition_mode="transformer_residual",
             regime_stat_features=None,
     ):
         super(Enhanced_MTADGAT, self).__init__()
 
         self.feature_att_trans = feature_att_trans
+        self.use_transformer = use_transformer
         self.use_revin = use_revin
         self.target_dims = target_dims
         self.use_regime_condition = use_regime_condition
         self.regime_condition_mode = regime_condition_mode
+        self.use_regime_transformer_residual = (
+            self.use_regime_condition
+            and self.use_transformer
+            and not self.feature_att_trans
+            and self.regime_condition_mode == "transformer_residual"
+        )
         if self.use_revin:
             self.revin = RevIN(n_features, affine=revin_affine)
 
@@ -91,7 +99,9 @@ class Enhanced_MTADGAT(nn.Module):
                 emb_dim=regime_emb_dim,
                 stat_features=regime_stat_features,
             )
-            if regime_condition_mode == "feature_gat":
+            if self.use_regime_transformer_residual:
+                self.regime_residual_gate = RegimeResidualGate(regime_emb_dim, gru_hid_dim)
+            elif regime_condition_mode == "feature_gat":
                 self.feat_conditioner = FiLMConditioner(regime_emb_dim, n_features)
             elif regime_condition_mode == "temporal_gat":
                 self.temp_conditioner = FiLMConditioner(regime_emb_dim, n_features)
@@ -143,8 +153,8 @@ class Enhanced_MTADGAT(nn.Module):
             self.trans_proj = nn.Linear(d_model, gru_hid_dim)
         else:
             d_model = 3 * n_features
-            # 是否在GRU前加transformer encoder
-            self.use_transformer = use_transformer
+            # GRU remains the main sequential state model; transformer only provides residual context.
+            self.gru = GRULayer(d_model, gru_hid_dim, gru_n_layers, dropout)
             if use_transformer:
                 self.pos_encoder = PositionalEncoding(d_model, dropout)
                 nhead = find_largest_valid_nhead(d_model)
@@ -158,10 +168,7 @@ class Enhanced_MTADGAT(nn.Module):
                     activation="gelu",
                 )
                 self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=trans_enc_layers)
-                self.trans_proj = nn.Linear(d_model, gru_hid_dim)  # d_model -> 150
-            # TODO 注意当特征只有几个的时候需要调整一下
-            else:
-                self.gru = GRULayer(d_model, gru_hid_dim, gru_n_layers, dropout)
+                self.trans_proj = nn.Linear(d_model, gru_hid_dim)
                 
         self.forecasting_model = Forecasting_Model(gru_hid_dim, forecast_hid_dim, out_dim, forecast_n_layers, dropout)
         self.recon_model = ReconstructionModel(window_size, gru_hid_dim, recon_hid_dim, out_dim, recon_n_layers,
@@ -197,7 +204,7 @@ class Enhanced_MTADGAT(nn.Module):
             h_end = trans_out.mean(dim=1)  # (b, d)
             h_end = self.trans_proj(h_end)  # (b, gru_hid_dim)
         else:
-            # 标准模型：特征注意力 + 时间注意力 + 可选GRU/Transformer
+            # 标准模型：GRU负责主状态递推，Transformer仅提供长程上下文残差补偿。
             h_temp = self.temporal_gat(x)
             if self.use_regime_condition and self.regime_condition_mode == "temporal_gat":
                 h_temp = self._apply_condition(h_temp, regime_embedding, self.temp_conditioner)
@@ -205,15 +212,17 @@ class Enhanced_MTADGAT(nn.Module):
             if self.use_regime_condition and self.regime_condition_mode == "fusion":
                 h_cat = self._apply_condition(h_cat, regime_embedding, self.fusion_conditioner)
 
+            _, h_gru = self.gru(h_cat)
+            h_end = h_gru
             if self.use_transformer:
-                # transformer_out = self.transformer_encoder(h_cat.permute(1, 0, 2))
-                # h_end = transformer_out.mean(dim=0)  # [b, d]
                 h_cat = self.pos_encoder(h_cat)  # 添加位置信息
                 trans_out = self.transformer_encoder(h_cat)
-                h_end = trans_out.mean(dim=1)  # (b, d)
-                h_end = self.trans_proj(h_end)  # (b, 150)
-            else:
-                _, h_end = self.gru(h_cat)
+                h_trans = self.trans_proj(trans_out.mean(dim=1))
+                if self.use_regime_transformer_residual:
+                    residual_gate = self.regime_residual_gate(regime_embedding)
+                    h_end = h_gru + residual_gate * h_trans
+                else:
+                    h_end = h_gru + h_trans
                 
         h_end = h_end.view(x.shape[0], -1)  # Hidden state for last timestamp
 

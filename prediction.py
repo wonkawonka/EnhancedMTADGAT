@@ -39,9 +39,13 @@ class Predictor:
         self.event_min_length = pred_args.get("event_min_length", 3)
         self.use_hier_consistency = pred_args.get("use_hier_consistency", False)
         self.hier_score_weight = float(pred_args.get("hier_score_weight", 0.5))
+        self.main_branch_feature_names = []
+        self.main_branch_feature_indices = []
         self.hier_feature_names = []
         self.hier_feature_indices = []
         if self.dataset == "BMS":
+            self.main_branch_feature_names = get_bms_main_branch_feature_names()
+            self.main_branch_feature_indices = get_bms_main_branch_feature_indices()
             self.hier_feature_names = get_bms_hierarchical_feature_names()
             self.hier_feature_indices = get_bms_hierarchical_feature_indices()
         self.reg_level = pred_args["reg_level"]
@@ -450,16 +454,28 @@ class Predictor:
         df = pd.DataFrame(df_dict)
         df['Pred_Error_Global'] = np.mean(pred_errors, axis=1)
         df['Recon_Error_Global'] = np.mean(recon_errors, axis=1)
-        base_anomaly_scores = np.mean(anomaly_scores, axis=1)
-        df['A_Score_Global_Base'] = base_anomaly_scores
+
+        global_base_scores = np.mean(anomaly_scores, axis=1)
+        main_branch_scores = global_base_scores
+        residual_branch_scores = np.zeros_like(global_base_scores, dtype=np.float32)
+        final_anomaly_scores = global_base_scores
+
         if self.use_hier_consistency and self.dataset == "BMS" and self.hier_feature_indices:
-            hier_feature_scores = np.mean(anomaly_scores[:, self.hier_feature_indices], axis=1)
-            df["Hier_Consistency_Score"] = hier_feature_scores
-            anomaly_scores = base_anomaly_scores + self.hier_score_weight * hier_feature_scores
-        else:
-            df["Hier_Consistency_Score"] = np.zeros_like(base_anomaly_scores, dtype=np.float32)
-            anomaly_scores = base_anomaly_scores
-        df['A_Score_Global'] = anomaly_scores
+            if self.main_branch_feature_indices:
+                main_branch_scores = np.mean(anomaly_scores[:, self.main_branch_feature_indices], axis=1)
+            residual_branch_scores = np.mean(anomaly_scores[:, self.hier_feature_indices], axis=1)
+            residual_weight = float(np.clip(self.hier_score_weight, 0.0, 1.0))
+            final_anomaly_scores = (
+                (1.0 - residual_weight) * main_branch_scores
+                + residual_weight * residual_branch_scores
+            )
+        df['A_Score_Global_Base'] = global_base_scores
+        df["A_Score_Main_Branch"] = main_branch_scores
+        df["A_Score_Residual_Branch"] = residual_branch_scores
+        df["Hier_Consistency_Score"] = residual_branch_scores
+        df["Main_Branch_Weight"] = float(1.0 - np.clip(self.hier_score_weight, 0.0, 1.0)) if self.use_hier_consistency else 1.0
+        df["Residual_Branch_Weight"] = float(np.clip(self.hier_score_weight, 0.0, 1.0)) if self.use_hier_consistency else 0.0
+        df['A_Score_Global'] = final_anomaly_scores
         df['Pred_Weight_Global'] = float(np.mean(pred_weights))
         df['Recon_Weight_Global'] = float(np.mean(recon_weights))
 

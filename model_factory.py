@@ -49,7 +49,7 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
             target_dims=target_dims,
             use_regime_condition=use_regime_condition,
             regime_emb_dim=getattr(args, "regime_emb_dim", 32),
-            regime_condition_mode=getattr(args, "regime_condition_mode", "fusion"),
+            regime_condition_mode=getattr(args, "regime_condition_mode", "transformer_residual"),
             regime_stat_features=[
                 stat.strip()
                 for stat in getattr(args, "regime_stat_features", "mean,std,last,delta").split(",")

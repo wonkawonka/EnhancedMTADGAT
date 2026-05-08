@@ -94,6 +94,16 @@ def get_bms_hierarchical_feature_indices():
     return [BMS_FEATURE_NAMES.index(feature_name) for feature_name in BMS_HIERARCHICAL_FEATURE_NAMES]
 
 
+def get_bms_main_branch_feature_names():
+    residual_names = set(BMS_HIERARCHICAL_FEATURE_NAMES)
+    return [feature_name for feature_name in BMS_FEATURE_NAMES if feature_name not in residual_names]
+
+
+def get_bms_main_branch_feature_indices():
+    residual_indices = set(get_bms_hierarchical_feature_indices())
+    return [idx for idx in range(len(BMS_FEATURE_NAMES)) if idx not in residual_indices]
+
+
 def adjust_anomaly_scores(scores, dataset, is_train, window_size):
     """
     调整异常分数
