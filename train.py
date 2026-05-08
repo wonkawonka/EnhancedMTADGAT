@@ -139,6 +139,15 @@ def is_c4_model(model_name):
     return str(model_name or "mtad_gat").strip().lower().replace("-", "_") == "mtad_gat_c4"
 
 
+def maybe_resume_trainer(trainer, args):
+    if not getattr(args, "resume", False):
+        return False
+    resumed = trainer.resume_from_checkpoint()
+    if not resumed:
+        print(f"No checkpoint found under {trainer.dload}, starting from scratch.")
+    return resumed
+
+
 def train_universal_model(args):
     """
     训练通用模型（使用训练实体数据训练一个通用模型，然后在测试实体上分别测试）
@@ -251,6 +260,7 @@ def train_universal_model(args):
         log_tensorboard,
         args_summary
     )
+    maybe_resume_trainer(trainer, args)
     
     # 开始轮流训练 - 每个epoch使用不同实体的数据
     trainer.fit_round_robin(train_entity_data, window_size, target_dims, val_split, shuffle_dataset)
@@ -261,8 +271,9 @@ def train_universal_model(args):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     
-    # 保存模型
-    trainer.save("model.pt")
+    # 如果训练过程中尚未写出最佳模型，则补存一次当前模型
+    if not os.path.isfile(f"{save_path}/model.pt"):
+        trainer.save("model.pt")
     
     # 为每个测试实体进行预测并保存在独立的文件夹中
     for entity_name in test_entities:
@@ -516,6 +527,7 @@ if __name__ == "__main__":
             log_tensorboard,
             args_summary
         )
+        maybe_resume_trainer(trainer, args)
 
         trainer.fit(train_loader, val_loader)
 

@@ -91,6 +91,9 @@ class Trainer:
             "val_recon": [],
         }
         self.epoch_times = []
+        self.start_epoch = 0
+        self.best_val_loss = None
+        self.checkpoint_name = "last_checkpoint.pt"
 
         if self.device == "cuda":
             self.model.cuda()
@@ -107,16 +110,19 @@ class Trainer:
         :param val_loader: validation loader of input data
         """
 
-        init_train_loss = self.evaluate(train_loader)
-        print(f"Init total train loss: {init_train_loss[2]:5f}")
+        if self.start_epoch == 0:
+            init_train_loss = self.evaluate(train_loader)
+            print(f"Init total train loss: {init_train_loss[2]:5f}")
 
-        if val_loader is not None:
-            init_val_loss = self.evaluate(val_loader)
-            print(f"Init total val loss: {init_val_loss[2]:.5f}")
+            if val_loader is not None:
+                init_val_loss = self.evaluate(val_loader)
+                print(f"Init total val loss: {init_val_loss[2]:.5f}")
+        else:
+            print(f"Resuming training from epoch {self.start_epoch + 1}/{self.n_epochs}")
 
         print(f"Training model for {self.n_epochs} epochs..")
         train_start = time.time()
-        for epoch in range(self.n_epochs):
+        for epoch in range(self.start_epoch, self.n_epochs):
             epoch_start = time.time()
             self.model.train()
             forecast_b_losses = []
@@ -173,7 +179,8 @@ class Trainer:
                 self.losses["val_recon"].append(recon_val_loss)
                 self.losses["val_total"].append(total_val_loss)
 
-                if total_val_loss <= self.losses["val_total"][-1]:
+                if self.best_val_loss is None or total_val_loss <= self.best_val_loss:
+                    self.best_val_loss = total_val_loss
                     self.save(f"model.pt")
 
             if self.log_tensorboard:
@@ -181,6 +188,8 @@ class Trainer:
 
             epoch_time = time.time() - epoch_start
             self.epoch_times.append(epoch_time)
+            self.start_epoch = epoch + 1
+            self.save_checkpoint()
 
             if epoch % self.print_every == 0:
                 s = (
@@ -267,12 +276,56 @@ class Trainer:
         PATH = os.path.join(self.dload, file_name)
         torch.save(self.model.state_dict(), PATH)
 
+    def save_checkpoint(self, file_name=None):
+        if file_name is None:
+            file_name = self.checkpoint_name
+        if not os.path.exists(self.dload):
+            os.makedirs(self.dload)
+        path = os.path.join(self.dload, file_name)
+        checkpoint = {
+            "epoch": int(self.start_epoch),
+            "model_state_dict": self.model.state_dict(),
+            "optimizer_state_dict": self.optimizer.state_dict(),
+            "scaler_state_dict": self.scaler.state_dict(),
+            "losses": self.losses,
+            "epoch_times": self.epoch_times,
+            "best_val_loss": self.best_val_loss,
+            "n_epochs": self.n_epochs,
+        }
+        torch.save(checkpoint, path)
+
     def load(self, PATH):
         """
         Loads the model's parameters from the path mentioned
         :param PATH: Should contain pickle file
         """
         self.model.load_state_dict(torch.load(PATH, map_location=self.device))
+
+    def resume_from_checkpoint(self, file_name=None):
+        if file_name is None:
+            file_name = self.checkpoint_name
+        path = os.path.join(self.dload, file_name)
+        if not os.path.isfile(path):
+            return False
+
+        checkpoint = torch.load(path, map_location=self.device)
+        self.model.load_state_dict(checkpoint["model_state_dict"])
+        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        for state in self.optimizer.state.values():
+            for key, value in state.items():
+                if isinstance(value, torch.Tensor):
+                    state[key] = value.to(self.device)
+
+        scaler_state_dict = checkpoint.get("scaler_state_dict")
+        if scaler_state_dict is not None:
+            self.scaler.load_state_dict(scaler_state_dict)
+
+        self.losses = checkpoint.get("losses", self.losses)
+        self.epoch_times = checkpoint.get("epoch_times", [])
+        self.best_val_loss = checkpoint.get("best_val_loss")
+        self.start_epoch = int(checkpoint.get("epoch", 0))
+        print(f"Loaded checkpoint from {path} (epoch={self.start_epoch})")
+        return True
 
     def write_loss(self, epoch):
         for key, value in self.losses.items():
@@ -330,7 +383,10 @@ class Trainer:
             entity_loaders.append((entity_name, train_loader, val_loader))
         
         # 轮流训练
-        for epoch in range(self.n_epochs):
+        if self.start_epoch > 0:
+            print(f"Resuming round-robin training from epoch {self.start_epoch + 1}/{self.n_epochs}")
+
+        for epoch in range(self.start_epoch, self.n_epochs):
             epoch_start = time.time()
             print(f"[Epoch {epoch + 1}] Starting round-robin training")
             
@@ -396,7 +452,8 @@ class Trainer:
                 self.losses["val_total"].append(total_val_loss)
 
                 # 如果是最好的模型则保存
-                if len(self.losses["val_total"]) == 1 or total_val_loss <= min(self.losses["val_total"]):
+                if self.best_val_loss is None or total_val_loss <= self.best_val_loss:
+                    self.best_val_loss = total_val_loss
                     self.save(f"model.pt")
                     print(f"[Epoch {epoch + 1}] New best model saved with val loss: {total_val_loss}")
 
@@ -405,6 +462,8 @@ class Trainer:
 
             epoch_time = time.time() - epoch_start
             self.epoch_times.append(epoch_time)
+            self.start_epoch = epoch + 1
+            self.save_checkpoint()
 
             if epoch % self.print_every == 0:
                 s = (

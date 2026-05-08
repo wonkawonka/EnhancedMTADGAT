@@ -40,6 +40,10 @@ def resolve_output_dir(project_root, dataset, group, run_id):
     return project_root / "output" / dataset / run_id
 
 
+def resolve_checkpoint_path(output_dir):
+    return output_dir / "last_checkpoint.pt"
+
+
 def build_train_command(project_root, python_executable, merged_args):
     cmd = [python_executable, str(project_root / "train.py")]
     for key, value in merged_args.items():
@@ -101,6 +105,11 @@ def parse_args():
         "--dry-run",
         action="store_true",
         help="Only print resolved commands without executing training.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume unfinished experiments from last_checkpoint.pt when available.",
     )
     return parser.parse_args()
 
@@ -165,6 +174,9 @@ def main():
             group=merged_args.get("group", "1-1"),
             run_id=run_id,
         )
+        checkpoint_path = resolve_checkpoint_path(output_dir)
+        if args.resume:
+            merged_args["resume"] = True
         command = build_train_command(project_root, args.python, merged_args)
         log_path = logs_dir / f"{name}.log"
         result = {
@@ -172,6 +184,7 @@ def main():
             "dataset": str(dataset).upper(),
             "run_id": run_id,
             "output_dir": str(output_dir),
+            "checkpoint_path": str(checkpoint_path),
             "log_path": str(log_path),
             "args": merged_args,
             "command": command,
@@ -187,6 +200,8 @@ def main():
             continue
 
         print(f"\n[{idx}/{len(selected_experiments)}] {name}")
+        if args.resume and checkpoint_path.exists():
+            print(f"[RESUME] {name} -> {checkpoint_path}")
         print(" ".join(command))
 
         if args.dry_run:
