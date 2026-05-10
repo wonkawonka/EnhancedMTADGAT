@@ -3,13 +3,9 @@ import datetime
 import json
 
 from args import get_parser, str2bool
-from model_factory import build_model
+from model_factory import build_model, resolve_model_args
 from prediction import Predictor
 from utils import *
-
-
-def is_c4_model(model_name):
-    return str(model_name or "mtad_gat").strip().lower().replace("-", "_") == "mtad_gat_c4"
 
 
 if __name__ == "__main__":
@@ -20,6 +16,7 @@ if __name__ == "__main__":
     parser.add_argument("--load_scores", type=str2bool, default=False, help="To use already computed anomaly scores")
     parser.add_argument("--save_output", type=str2bool, default=False)
     args = parser.parse_args()
+    resolve_model_args(args)
     print(args)
 
     dataset = args.dataset
@@ -82,6 +79,7 @@ if __name__ == "__main__":
     model_args_path = f"{model_path}/config.txt"
     with open(model_args_path, "r") as f:
         model_args.__dict__ = json.load(f)
+    resolve_model_args(model_args)
     window_size = model_args.lookback
 
     # Check that model is trained on specified dataset
@@ -221,7 +219,7 @@ if __name__ == "__main__":
         "use_event_consistency": args.use_event_consistency,
         "event_low_ratio": args.event_low_ratio,
         "event_min_length": args.event_min_length,
-        "use_hier_consistency": bool(args.use_hier_consistency or is_c4_model(getattr(model_args, "model_name", "mtad_gat"))),
+        "use_hier_consistency": model_args.use_hier_consistency,
         "hier_score_weight": args.hier_score_weight,
         "reg_level": reg_level,
         "save_path": save_path,

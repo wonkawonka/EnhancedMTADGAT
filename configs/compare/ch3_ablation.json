@@ -3,7 +3,7 @@
   "_comment": "第三章消融实验计划：重点验证工况感知关系建模及其配套增强模块的贡献。",
   "_usage": "建议在主结果跑完后再运行本文件；主要服务于第三章消融表和模块贡献分析。",
   "_experiment_mapping": [
-    "smap_c3_no_regime / msl_c3_no_regime / nasa_random_c3_no_regime_rw1 / bms_c3_no_regime：关闭 c3 核心创新，仅保留其他增强，用于验证工况感知关系建模本身的贡献。",
+    "smap_mtadgat_plus_c3_common_no_regime / msl_mtadgat_plus_c3_common_no_regime / nasa_random_rw1_mtadgat_plus_c3_common_no_regime / bms_mtadgat_plus_c3_common_no_regime：关闭工况感知门控，仅保留 MTAD-GAT + Transformer + RevIN + 质量感知融合 + 事件一致性，用于验证 c3 核心创新本身的贡献。",
     "bms_c3_no_revin：关闭 RevIN，用于验证跨工况归一化增强的作用。",
     "bms_c3_fixed_fusion：关闭质量感知融合，退回固定融合，用于验证分数融合策略的作用。",
     "bms_c3_no_event：关闭事件一致性，用于验证双阈值与持续性约束的作用。"
@@ -18,7 +18,7 @@
     "feature_att_trans": false,
     "multi_scale_mode": "none",
     "use_revin": true,
-    "use_regime_condition": false,
+    "use_regime_condition": true,
     "regime_emb_dim": 32,
     "regime_condition_mode": "transformer_residual",
     "regime_stat_features": "mean,std,last,delta",
@@ -38,39 +38,43 @@
   },
   "experiments": [
     {
-      "name": "smap_c3_no_regime",
-      "comment": "SMAP 消融：去掉第三章核心创新，只保留 Transformer、RevIN、融合和事件判别。",
+      "name": "smap_mtadgat_plus_c3_common_no_regime",
+      "comment": "SMAP 消融：关闭工况感知门控，仅保留 MTAD-GAT + Transformer + RevIN + 质量感知融合 + 事件一致性。",
       "args": {
         "dataset": "SMAP",
         "model_name": "mtad_gat",
+        "use_regime_condition": false,
         "run_id": "abl_smap_no_regime"
       }
     },
     {
-      "name": "msl_c3_no_regime",
-      "comment": "MSL 消融：去掉工况感知关系建模，验证 c3 核心贡献。",
+      "name": "msl_mtadgat_plus_c3_common_no_regime",
+      "comment": "MSL 消融：关闭工况感知门控，仅保留 MTAD-GAT + Transformer + RevIN + 质量感知融合 + 事件一致性，验证 c3 核心贡献。",
       "args": {
         "dataset": "MSL",
         "model_name": "mtad_gat",
+        "use_regime_condition": false,
         "run_id": "abl_msl_no_regime"
       }
     },
     {
-      "name": "nasa_random_c3_no_regime_rw1",
-      "comment": "NASA_RANDOM_DISCHARGE 的 RW1 消融：去掉工况感知关系建模，重点看随机工况下性能回落。",
+      "name": "nasa_random_rw1_mtadgat_plus_c3_common_no_regime",
+      "comment": "NASA_RANDOM_DISCHARGE 的 RW1 消融：关闭工况感知门控，仅保留 MTAD-GAT + Transformer + RevIN + 质量感知融合 + 事件一致性，重点看随机工况下性能回落。",
       "args": {
         "dataset": "NASA_RANDOM_DISCHARGE",
         "nasa_battery_id": "RW1",
         "model_name": "mtad_gat",
+        "use_regime_condition": false,
         "run_id": "abl_nasa_random_rw1_no_regime"
       }
     },
     {
-      "name": "bms_c3_no_regime",
-      "comment": "BMS 消融：去掉第三章核心创新，验证 c3 在真实电池场景中的价值。",
+      "name": "bms_mtadgat_plus_c3_common_no_regime",
+      "comment": "BMS 消融：关闭工况感知门控，仅保留 MTAD-GAT + Transformer + RevIN + 质量感知融合 + 事件一致性，验证 c3 在真实电池场景中的价值。",
       "args": {
         "dataset": "BMS",
         "model_name": "mtad_gat",
+        "use_regime_condition": false,
         "run_id": "abl_bms_no_regime"
       }
     },

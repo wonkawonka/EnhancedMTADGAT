@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 from args import get_parser
-from model_factory import build_model
+from model_factory import build_model, resolve_model_args
 from prediction import Predictor
 from training import Trainer
 from utils import *
@@ -133,10 +133,6 @@ def get_run_id(args):
         prefix = "_".join(comment.split())
         return f"{prefix}_{auto_name}"
     return auto_name
-
-
-def is_c4_model(model_name):
-    return str(model_name or "mtad_gat").strip().lower().replace("-", "_") == "mtad_gat_c4"
 
 
 def maybe_resume_trainer(trainer, args):
@@ -333,7 +329,7 @@ def train_universal_model(args):
                 "use_event_consistency": args.use_event_consistency,
                 "event_low_ratio": args.event_low_ratio,
                 "event_min_length": args.event_min_length,
-                "use_hier_consistency": bool(args.use_hier_consistency or is_c4_model(args.model_name)),
+                "use_hier_consistency": args.use_hier_consistency,
                 "hier_score_weight": args.hier_score_weight,
                 "reg_level": reg_level,
                 "save_path": entity_output_path,  # 使用实体特定的输出路径
@@ -365,6 +361,7 @@ def train_universal_model(args):
 if __name__ == "__main__":
     parser = get_parser()
     args = parser.parse_args()
+    resolve_model_args(args)
     
     # 设置随机种子以确保实验可重现性
     set_seed(args.seed)
@@ -634,7 +631,7 @@ if __name__ == "__main__":
             "use_event_consistency": args.use_event_consistency,
             "event_low_ratio": args.event_low_ratio,
             "event_min_length": args.event_min_length,
-            "use_hier_consistency": bool(args.use_hier_consistency or is_c4_model(args.model_name)),
+            "use_hier_consistency": args.use_hier_consistency,
             "hier_score_weight": args.hier_score_weight,
             "reg_level": reg_level,
             "save_path": save_path,
