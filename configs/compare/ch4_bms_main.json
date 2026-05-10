@@ -1,0 +1,48 @@
+{
+  "plan_name": "ch4_bms_main",
+  "_comment": "第四章 BMS 主结果计划：只保留第四章新增的 c4 主结果。BMS 上的 baseline 和 c3 结果直接复用第三章主结果计划。",
+  "_usage": "建议在第三章主结果跑通后运行本文件；主要服务于第四章 BMS 主表和案例分析，不再重复跑 BMS baseline/c3，也不再包含 RANDOM 电池域补充验证。第四章消融请使用 ch4_bms_ablation.json。",
+  "_experiment_mapping": [
+    "bms_c4_full：第四章完整模型，在 c3 上增加层级残差双分支检测。"
+  ],
+  "_kaggle_tip": "run_id 已固定；若某个实验之前已完整训练并写出 model.pt，配合 --skip-existing 可直接跳过。",
+  "common_args": {
+    "dataset": "BMS",
+    "model_name": "mtad_gat_c4",
+    "epochs": 30,
+    "bs": 256,
+    "lookback": 100,
+    "use_transformer": true,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": true,
+    "use_regime_condition": false,
+    "regime_emb_dim": 32,
+    "regime_condition_mode": "transformer_residual",
+    "regime_stat_features": "mean,std,last,delta",
+    "score_fusion_mode": "quality_aware",
+    "use_event_consistency": true,
+    "event_low_ratio": 0.5,
+    "event_min_length": 3,
+    "use_hier_consistency": true,
+    "hier_score_weight": 0.5,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_cuda": true,
+    "log_tensorboard": false,
+    "print_every": 1,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "bms_c4_full",
+      "comment": "BMS 第四章完整模型：在 c3 上增加层级残差双分支检测，作为主结果。",
+      "args": {
+        "model_name": "mtad_gat_c4",
+        "hier_score_weight": 0.5,
+        "run_id": "c4cmp_bms_c4"
+      }
+    }
+  ]
+}

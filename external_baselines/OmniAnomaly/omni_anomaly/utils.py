@@ -1,11 +1,29 @@
 # -*- coding: utf-8 -*-
 import os
 import pickle
+from pathlib import Path
 
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 prefix = "processed"
+
+
+def resolve_prefix_and_stem(dataset):
+    if dataset in {'SMAP', 'MSL'}:
+        return PROJECT_ROOT / 'datasets' / 'data' / 'processed', dataset
+    if str(dataset).startswith('machine'):
+        return PROJECT_ROOT / 'datasets' / 'ServerMachineDataset' / 'processed', str(dataset)
+    if str(dataset).startswith('NASA_RANDOM_CHARGE_'):
+        return PROJECT_ROOT / 'datasets' / 'NASA_RANDOM_CHARGE' / 'processed', str(dataset)
+    if str(dataset).startswith('NASA_RANDOM_DISCHARGE_'):
+        return PROJECT_ROOT / 'datasets' / 'NASA_RANDOM_DISCHARGE' / 'processed', str(dataset)
+    if str(dataset).startswith('NASA_'):
+        return PROJECT_ROOT / 'datasets' / 'NASA' / 'processed', str(dataset)
+    if str(dataset).startswith('BMS_'):
+        return PROJECT_ROOT / 'datasets' / 'BMS' / 'processed', str(dataset)
+    return Path(prefix), dataset
 
 
 def save_z(z, filename='z'):
@@ -33,6 +51,13 @@ def get_data_dim(dataset):
         return 55
     elif str(dataset).startswith('machine'):
         return 38
+    elif str(dataset).startswith(('NASA_RANDOM_CHARGE_', 'NASA_RANDOM_DISCHARGE_', 'NASA_')):
+        return 4
+    elif str(dataset).startswith('BMS_'):
+        data_prefix, file_stem = resolve_prefix_and_stem(dataset)
+        with open(os.path.join(str(data_prefix), file_stem + '_train.pkl'), "rb") as f:
+            train_data = np.asarray(pickle.load(f))
+        return int(train_data.shape[-1])
     else:
         raise ValueError('unknown dataset '+str(dataset))
 
@@ -55,18 +80,19 @@ def get_data(dataset, max_train_size=None, max_test_size=None, print_log=True, d
     print('load data of:', dataset)
     print("train: ", train_start, train_end)
     print("test: ", test_start, test_end)
+    data_prefix, file_stem = resolve_prefix_and_stem(dataset)
     x_dim = get_data_dim(dataset)
-    f = open(os.path.join(prefix, dataset + '_train.pkl'), "rb")
+    f = open(os.path.join(str(data_prefix), file_stem + '_train.pkl'), "rb")
     train_data = pickle.load(f).reshape((-1, x_dim))[train_start:train_end, :]
     f.close()
     try:
-        f = open(os.path.join(prefix, dataset + '_test.pkl'), "rb")
+        f = open(os.path.join(str(data_prefix), file_stem + '_test.pkl'), "rb")
         test_data = pickle.load(f).reshape((-1, x_dim))[test_start:test_end, :]
         f.close()
     except (KeyError, FileNotFoundError):
         test_data = None
     try:
-        f = open(os.path.join(prefix, dataset + "_test_label.pkl"), "rb")
+        f = open(os.path.join(str(data_prefix), file_stem + "_test_label.pkl"), "rb")
         test_label = pickle.load(f).reshape((-1))[test_start:test_end]
         f.close()
     except (KeyError, FileNotFoundError):

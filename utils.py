@@ -265,6 +265,14 @@ def flatten_label_container(label_data):
     return np.asarray(label_data)
 
 
+def is_placeholder_zero_label(label_data):
+    flattened = flatten_label_container(label_data)
+    if flattened is None:
+        return True
+    flattened = np.asarray(flattened)
+    return flattened.size == 0 or np.all(flattened == 0)
+
+
 def split_sequence_container_by_ratio(sequence_data, train_ratio=0.8):
     sequences = [np.asarray(seq, dtype=np.float32) for seq in ensure_sequence_list(sequence_data)]
     if not sequences:
@@ -429,7 +437,7 @@ def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteri
         split_train_data, split_test_data = split_sequence_container_by_ratio(battery_full_data, train_ratio=0.8)
         train_data_map[battery_name] = split_train_data
         test_data_map[battery_name] = split_test_data
-        test_label_map[battery_name] = [np.zeros(len(seq), dtype=np.int32) for seq in split_test_data]
+        test_label_map[battery_name] = None
         print(f"Using {dataset} split mode: single_battery_split ({battery_name}, 80/20)")
     else:
         if dataset in NASA_RANDOM_DATASETS:
@@ -453,7 +461,7 @@ def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteri
             else:
                 test_data_map[battery_name] = np.asarray(battery_test_data, dtype=np.float32)
 
-            if battery_test_label is None:
+            if battery_test_label is None or is_placeholder_zero_label(battery_test_label):
                 test_label_map[battery_name] = None
             elif is_sequence_container(battery_test_label):
                 test_label_map[battery_name] = [
@@ -535,6 +543,8 @@ def load_bms_cluster_processed_data(prefix, cluster_name):
     if os.path.exists(label_path):
         with open(label_path, "rb") as f:
             test_label = pickle.load(f)
+        if is_placeholder_zero_label(test_label):
+            test_label = None
 
     return train_data, test_data, test_label
 

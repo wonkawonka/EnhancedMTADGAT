@@ -1,0 +1,370 @@
+{
+  "plan_name": "ch3_external_baselines",
+  "_comment": "第三章外部基线计划。统一直接读取主仓 `datasets/**/processed`，不再需要额外导出数据。为避免和第四章重复，BMS 外部基线统一放到 `ch4_bms_external_baselines.json`。论文主表中，只有 SMAP 和 MSL 作为带标签二分类指标数据集；NASA_RANDOM_DISCHARGE 主要用于无标签分数、阈值和案例分析。",
+  "_usage": "建议先 dry-run 检查命令：python run_external_baselines.py --plan configs/compare/ch3_external_baselines.json --dry-run",
+  "_ready_now": [
+    "TranAD 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
+    "Anomaly-Transformer 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
+    "OmniAnomaly 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
+    "GDN 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。"
+  ],
+  "_pending_now": [
+    "BMS 外部基线已移到 ch4_bms_external_baselines.json，避免第三章和第四章重复执行。",
+    "OmniAnomaly 真正运行仍需要单独的 TensorFlow 1.x + tfsnippet 环境。",
+    "LSTM-AE 当前还没有按论文现用数据集完成适配，因此未纳入本计划。"
+  ],
+  "_thesis_scope_note": "本计划用于第三章外部对比，覆盖 SMAP、MSL 和 NASA_RANDOM_DISCHARGE。这里只把 SMAP、MSL 作为主标签指标数据集；BMS 的外部对比统一复用第四章 BMS-only 计划。",
+  "common_env": {
+    "PYTHONIOENCODING": "utf-8"
+  },
+  "experiments": [
+    {
+      "name": "tranad_smap_ch3",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "args": {
+        "dataset": "SMAP",
+        "model": "TranAD"
+      },
+      "flags": [
+        "retrain"
+      ],
+      "skip_if_exists": "checkpoints/TranAD_SMAP/model.ckpt"
+    },
+    {
+      "name": "anomaly_transformer_smap_ch3",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "SMAP",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch3_smap",
+        "input_c": 25,
+        "output_c": 25,
+        "num_epochs": 10,
+        "batch_size": 256,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      },
+      "skip_if_exists": "checkpoints/ch3_smap/SMAP_checkpoint.pth"
+    },
+    {
+      "name": "omnianomaly_smap_ch3",
+      "baseline": "OmniAnomaly",
+      "script": "main.py",
+      "args": {
+        "dataset": "SMAP",
+        "max_epoch": 10,
+        "result_dir": "result/ch3_smap",
+        "save_dir": "model/ch3_smap"
+      },
+      "skip_if_exists": "result/ch3_smap"
+    },
+    {
+      "name": "gdn_smap_ch3",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "smap",
+        "-device": "cpu",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-save_path_pattern": "ch3_gdn_smap"
+      },
+      "skip_if_exists": "pretrained/ch3_gdn_smap"
+    },
+    {
+      "name": "tranad_msl_ch3",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "args": {
+        "dataset": "MSL",
+        "model": "TranAD"
+      },
+      "flags": [
+        "retrain"
+      ],
+      "skip_if_exists": "checkpoints/TranAD_MSL/model.ckpt"
+    },
+    {
+      "name": "anomaly_transformer_msl_ch3",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "MSL",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch3_msl",
+        "input_c": 55,
+        "output_c": 55,
+        "num_epochs": 10,
+        "batch_size": 256,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      },
+      "skip_if_exists": "checkpoints/ch3_msl/MSL_checkpoint.pth"
+    },
+    {
+      "name": "omnianomaly_msl_ch3",
+      "baseline": "OmniAnomaly",
+      "script": "main.py",
+      "args": {
+        "dataset": "MSL",
+        "max_epoch": 10,
+        "result_dir": "result/ch3_msl",
+        "save_dir": "model/ch3_msl"
+      },
+      "skip_if_exists": "result/ch3_msl"
+    },
+    {
+      "name": "gdn_msl_ch3",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "msl",
+        "-device": "cpu",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-save_path_pattern": "ch3_gdn_msl"
+      },
+      "skip_if_exists": "pretrained/ch3_gdn_msl"
+    },
+    {
+      "name": "tranad_nasa_random_discharge_rw1_ch3",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW1",
+        "model": "TranAD"
+      },
+      "flags": [
+        "retrain"
+      ],
+      "skip_if_exists": "checkpoints/TranAD_NASA_RANDOM_DISCHARGE_RW1/model.ckpt"
+    },
+    {
+      "name": "anomaly_transformer_nasa_random_discharge_rw1_ch3",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW1",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch3_nasa_random_discharge_rw1",
+        "input_c": 4,
+        "output_c": 4,
+        "num_epochs": 10,
+        "batch_size": 256,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      },
+      "skip_if_exists": "checkpoints/ch3_nasa_random_discharge_rw1/NASA_RANDOM_DISCHARGE_RW1_checkpoint.pth"
+    },
+    {
+      "name": "omnianomaly_nasa_random_discharge_rw1_ch3",
+      "baseline": "OmniAnomaly",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW1",
+        "max_epoch": 10,
+        "result_dir": "result/ch3_nasa_random_discharge_rw1",
+        "save_dir": "model/ch3_nasa_random_discharge_rw1"
+      },
+      "skip_if_exists": "result/ch3_nasa_random_discharge_rw1"
+    },
+    {
+      "name": "gdn_nasa_random_discharge_rw1_ch3",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "NASA_RANDOM_DISCHARGE_RW1",
+        "-device": "cpu",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-save_path_pattern": "ch3_gdn_nasa_random_discharge_rw1"
+      },
+      "skip_if_exists": "pretrained/ch3_gdn_nasa_random_discharge_rw1"
+    },
+    {
+      "name": "tranad_nasa_random_discharge_rw2_ch3",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW2",
+        "model": "TranAD"
+      },
+      "flags": [
+        "retrain"
+      ],
+      "skip_if_exists": "checkpoints/TranAD_NASA_RANDOM_DISCHARGE_RW2/model.ckpt"
+    },
+    {
+      "name": "anomaly_transformer_nasa_random_discharge_rw2_ch3",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW2",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch3_nasa_random_discharge_rw2",
+        "input_c": 4,
+        "output_c": 4,
+        "num_epochs": 10,
+        "batch_size": 256,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      },
+      "skip_if_exists": "checkpoints/ch3_nasa_random_discharge_rw2/NASA_RANDOM_DISCHARGE_RW2_checkpoint.pth"
+    },
+    {
+      "name": "omnianomaly_nasa_random_discharge_rw2_ch3",
+      "baseline": "OmniAnomaly",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW2",
+        "max_epoch": 10,
+        "result_dir": "result/ch3_nasa_random_discharge_rw2",
+        "save_dir": "model/ch3_nasa_random_discharge_rw2"
+      },
+      "skip_if_exists": "result/ch3_nasa_random_discharge_rw2"
+    },
+    {
+      "name": "gdn_nasa_random_discharge_rw2_ch3",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "NASA_RANDOM_DISCHARGE_RW2",
+        "-device": "cpu",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-save_path_pattern": "ch3_gdn_nasa_random_discharge_rw2"
+      },
+      "skip_if_exists": "pretrained/ch3_gdn_nasa_random_discharge_rw2"
+    },
+    {
+      "name": "tranad_nasa_random_discharge_rw7_ch3",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW7",
+        "model": "TranAD"
+      },
+      "flags": [
+        "retrain"
+      ],
+      "skip_if_exists": "checkpoints/TranAD_NASA_RANDOM_DISCHARGE_RW7/model.ckpt"
+    },
+    {
+      "name": "anomaly_transformer_nasa_random_discharge_rw7_ch3",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW7",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch3_nasa_random_discharge_rw7",
+        "input_c": 4,
+        "output_c": 4,
+        "num_epochs": 10,
+        "batch_size": 256,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      },
+      "skip_if_exists": "checkpoints/ch3_nasa_random_discharge_rw7/NASA_RANDOM_DISCHARGE_RW7_checkpoint.pth"
+    },
+    {
+      "name": "omnianomaly_nasa_random_discharge_rw7_ch3",
+      "baseline": "OmniAnomaly",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW7",
+        "max_epoch": 10,
+        "result_dir": "result/ch3_nasa_random_discharge_rw7",
+        "save_dir": "model/ch3_nasa_random_discharge_rw7"
+      },
+      "skip_if_exists": "result/ch3_nasa_random_discharge_rw7"
+    },
+    {
+      "name": "gdn_nasa_random_discharge_rw7_ch3",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "NASA_RANDOM_DISCHARGE_RW7",
+        "-device": "cpu",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-save_path_pattern": "ch3_gdn_nasa_random_discharge_rw7"
+      },
+      "skip_if_exists": "pretrained/ch3_gdn_nasa_random_discharge_rw7"
+    },
+    {
+      "name": "tranad_nasa_random_discharge_rw8_ch3",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW8",
+        "model": "TranAD"
+      },
+      "flags": [
+        "retrain"
+      ],
+      "skip_if_exists": "checkpoints/TranAD_NASA_RANDOM_DISCHARGE_RW8/model.ckpt"
+    },
+    {
+      "name": "anomaly_transformer_nasa_random_discharge_rw8_ch3",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW8",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch3_nasa_random_discharge_rw8",
+        "input_c": 4,
+        "output_c": 4,
+        "num_epochs": 10,
+        "batch_size": 256,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      },
+      "skip_if_exists": "checkpoints/ch3_nasa_random_discharge_rw8/NASA_RANDOM_DISCHARGE_RW8_checkpoint.pth"
+    },
+    {
+      "name": "omnianomaly_nasa_random_discharge_rw8_ch3",
+      "baseline": "OmniAnomaly",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW8",
+        "max_epoch": 10,
+        "result_dir": "result/ch3_nasa_random_discharge_rw8",
+        "save_dir": "model/ch3_nasa_random_discharge_rw8"
+      },
+      "skip_if_exists": "result/ch3_nasa_random_discharge_rw8"
+    },
+    {
+      "name": "gdn_nasa_random_discharge_rw8_ch3",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "NASA_RANDOM_DISCHARGE_RW8",
+        "-device": "cpu",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-save_path_pattern": "ch3_gdn_nasa_random_discharge_rw8"
+      },
+      "skip_if_exists": "pretrained/ch3_gdn_nasa_random_discharge_rw8"
+    }
+  ]
+}

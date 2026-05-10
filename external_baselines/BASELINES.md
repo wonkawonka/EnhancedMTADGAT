@@ -54,25 +54,25 @@
 主项目新增了统一外部基线运行脚本：
 
 ```bash
-python run_external_baselines.py --plan configs/compare/external_baselines_template.json --dry-run
+python run_external_baselines.py --plan configs/compare/ch3_external_baselines.json --dry-run
 ```
 
 正式运行：
 
 ```bash
-python run_external_baselines.py --plan configs/compare/external_baselines_template.json
+python run_external_baselines.py --plan configs/compare/ch3_external_baselines.json
 ```
 
 只运行部分实验：
 
 ```bash
-python run_external_baselines.py --plan configs/compare/external_baselines_template.json --only gdn_cpu_demo,tranad_smd_demo
+python run_external_baselines.py --plan configs/compare/ch3_external_baselines.json --only gdn_cpu_demo,tranad_smd_demo
 ```
 
 如果某个实验已经生成目标目录，可配合：
 
 ```bash
-python run_external_baselines.py --plan configs/compare/external_baselines_template.json --skip-existing
+python run_external_baselines.py --plan configs/compare/ch3_external_baselines.json --skip-existing
 ```
 
 ## 计划文件格式

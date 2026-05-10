@@ -1,0 +1,368 @@
+{
+  "plan_name": "ch4_bms_external_baselines",
+  "_comment": "第四章 BMS-only 外部基线计划。统一直接读取主仓 BMS processed 的 cluster 划分。论文口径中，BMS 主要作为无标签电池场景来做分数、阈值和案例分析，而不是主标签 F1 对比。",
+  "_usage": "建议先 dry-run 检查命令：python run_external_baselines.py --plan configs/compare/ch4_bms_external_baselines.json --dry-run",
+  "_ready_now": [
+    "TranAD 已支持直接读取主仓 BMS cluster 的 processed 数据。",
+    "Anomaly-Transformer 已支持直接读取主仓 BMS cluster 的 processed 数据。",
+    "OmniAnomaly 已支持直接读取主仓 BMS cluster 的 processed 数据。",
+    "GDN 已支持直接读取主仓 BMS cluster 的 processed 数据。"
+  ],
+  "_pending_now": [
+    "OmniAnomaly 真正运行仍需要单独的 TensorFlow 1.x + tfsnippet 环境。"
+  ],
+  "_thesis_scope_note": "本计划只服务于第四章 BMS 外部基线对比，不包含 RANDOM。",
+  "common_env": {
+    "PYTHONIOENCODING": "utf-8"
+  },
+  "experiments": [
+    {
+      "name": "tranad_bms_b14_3_2_cluster1_ch4",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster1",
+        "model": "TranAD"
+      },
+      "flags": [
+        "retrain"
+      ],
+      "skip_if_exists": "checkpoints/TranAD_BMS_B14_3_2_cluster1/model.ckpt"
+    },
+    {
+      "name": "anomaly_transformer_bms_b14_3_2_cluster1_ch4",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster1",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch4_bms_b14_3_2_cluster1",
+        "input_c": 35,
+        "output_c": 35,
+        "num_epochs": 10,
+        "batch_size": 256,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      },
+      "skip_if_exists": "checkpoints/ch4_bms_b14_3_2_cluster1/BMS_B14_3_2_cluster1_checkpoint.pth"
+    },
+    {
+      "name": "omnianomaly_bms_b14_3_2_cluster1_ch4",
+      "baseline": "OmniAnomaly",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster1",
+        "max_epoch": 10,
+        "result_dir": "result/ch4_bms_b14_3_2_cluster1",
+        "save_dir": "model/ch4_bms_b14_3_2_cluster1"
+      },
+      "skip_if_exists": "result/ch4_bms_b14_3_2_cluster1"
+    },
+    {
+      "name": "gdn_bms_b14_3_2_cluster1_ch4",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "BMS_B14_3_2_cluster1",
+        "-device": "cpu",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-save_path_pattern": "ch4_gdn_bms_b14_3_2_cluster1"
+      },
+      "skip_if_exists": "pretrained/ch4_gdn_bms_b14_3_2_cluster1"
+    },
+    {
+      "name": "tranad_bms_b14_3_2_cluster2_ch4",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster2",
+        "model": "TranAD"
+      },
+      "flags": [
+        "retrain"
+      ],
+      "skip_if_exists": "checkpoints/TranAD_BMS_B14_3_2_cluster2/model.ckpt"
+    },
+    {
+      "name": "anomaly_transformer_bms_b14_3_2_cluster2_ch4",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster2",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch4_bms_b14_3_2_cluster2",
+        "input_c": 35,
+        "output_c": 35,
+        "num_epochs": 10,
+        "batch_size": 256,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      },
+      "skip_if_exists": "checkpoints/ch4_bms_b14_3_2_cluster2/BMS_B14_3_2_cluster2_checkpoint.pth"
+    },
+    {
+      "name": "omnianomaly_bms_b14_3_2_cluster2_ch4",
+      "baseline": "OmniAnomaly",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster2",
+        "max_epoch": 10,
+        "result_dir": "result/ch4_bms_b14_3_2_cluster2",
+        "save_dir": "model/ch4_bms_b14_3_2_cluster2"
+      },
+      "skip_if_exists": "result/ch4_bms_b14_3_2_cluster2"
+    },
+    {
+      "name": "gdn_bms_b14_3_2_cluster2_ch4",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "BMS_B14_3_2_cluster2",
+        "-device": "cpu",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-save_path_pattern": "ch4_gdn_bms_b14_3_2_cluster2"
+      },
+      "skip_if_exists": "pretrained/ch4_gdn_bms_b14_3_2_cluster2"
+    },
+    {
+      "name": "tranad_bms_b14_3_2_cluster3_ch4",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster3",
+        "model": "TranAD"
+      },
+      "flags": [
+        "retrain"
+      ],
+      "skip_if_exists": "checkpoints/TranAD_BMS_B14_3_2_cluster3/model.ckpt"
+    },
+    {
+      "name": "anomaly_transformer_bms_b14_3_2_cluster3_ch4",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster3",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch4_bms_b14_3_2_cluster3",
+        "input_c": 35,
+        "output_c": 35,
+        "num_epochs": 10,
+        "batch_size": 256,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      },
+      "skip_if_exists": "checkpoints/ch4_bms_b14_3_2_cluster3/BMS_B14_3_2_cluster3_checkpoint.pth"
+    },
+    {
+      "name": "omnianomaly_bms_b14_3_2_cluster3_ch4",
+      "baseline": "OmniAnomaly",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster3",
+        "max_epoch": 10,
+        "result_dir": "result/ch4_bms_b14_3_2_cluster3",
+        "save_dir": "model/ch4_bms_b14_3_2_cluster3"
+      },
+      "skip_if_exists": "result/ch4_bms_b14_3_2_cluster3"
+    },
+    {
+      "name": "gdn_bms_b14_3_2_cluster3_ch4",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "BMS_B14_3_2_cluster3",
+        "-device": "cpu",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-save_path_pattern": "ch4_gdn_bms_b14_3_2_cluster3"
+      },
+      "skip_if_exists": "pretrained/ch4_gdn_bms_b14_3_2_cluster3"
+    },
+    {
+      "name": "tranad_bms_b14_3_2_cluster4_ch4",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster4",
+        "model": "TranAD"
+      },
+      "flags": [
+        "retrain"
+      ],
+      "skip_if_exists": "checkpoints/TranAD_BMS_B14_3_2_cluster4/model.ckpt"
+    },
+    {
+      "name": "anomaly_transformer_bms_b14_3_2_cluster4_ch4",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster4",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch4_bms_b14_3_2_cluster4",
+        "input_c": 35,
+        "output_c": 35,
+        "num_epochs": 10,
+        "batch_size": 256,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      },
+      "skip_if_exists": "checkpoints/ch4_bms_b14_3_2_cluster4/BMS_B14_3_2_cluster4_checkpoint.pth"
+    },
+    {
+      "name": "omnianomaly_bms_b14_3_2_cluster4_ch4",
+      "baseline": "OmniAnomaly",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster4",
+        "max_epoch": 10,
+        "result_dir": "result/ch4_bms_b14_3_2_cluster4",
+        "save_dir": "model/ch4_bms_b14_3_2_cluster4"
+      },
+      "skip_if_exists": "result/ch4_bms_b14_3_2_cluster4"
+    },
+    {
+      "name": "gdn_bms_b14_3_2_cluster4_ch4",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "BMS_B14_3_2_cluster4",
+        "-device": "cpu",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-save_path_pattern": "ch4_gdn_bms_b14_3_2_cluster4"
+      },
+      "skip_if_exists": "pretrained/ch4_gdn_bms_b14_3_2_cluster4"
+    },
+    {
+      "name": "tranad_bms_b14_3_2_cluster5_ch4",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster5",
+        "model": "TranAD"
+      },
+      "flags": [
+        "retrain"
+      ],
+      "skip_if_exists": "checkpoints/TranAD_BMS_B14_3_2_cluster5/model.ckpt"
+    },
+    {
+      "name": "anomaly_transformer_bms_b14_3_2_cluster5_ch4",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster5",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch4_bms_b14_3_2_cluster5",
+        "input_c": 35,
+        "output_c": 35,
+        "num_epochs": 10,
+        "batch_size": 256,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      },
+      "skip_if_exists": "checkpoints/ch4_bms_b14_3_2_cluster5/BMS_B14_3_2_cluster5_checkpoint.pth"
+    },
+    {
+      "name": "omnianomaly_bms_b14_3_2_cluster5_ch4",
+      "baseline": "OmniAnomaly",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster5",
+        "max_epoch": 10,
+        "result_dir": "result/ch4_bms_b14_3_2_cluster5",
+        "save_dir": "model/ch4_bms_b14_3_2_cluster5"
+      },
+      "skip_if_exists": "result/ch4_bms_b14_3_2_cluster5"
+    },
+    {
+      "name": "gdn_bms_b14_3_2_cluster5_ch4",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "BMS_B14_3_2_cluster5",
+        "-device": "cpu",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-save_path_pattern": "ch4_gdn_bms_b14_3_2_cluster5"
+      },
+      "skip_if_exists": "pretrained/ch4_gdn_bms_b14_3_2_cluster5"
+    },
+    {
+      "name": "tranad_bms_b14_3_2_cluster6_ch4",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster6",
+        "model": "TranAD"
+      },
+      "flags": [
+        "retrain"
+      ],
+      "skip_if_exists": "checkpoints/TranAD_BMS_B14_3_2_cluster6/model.ckpt"
+    },
+    {
+      "name": "anomaly_transformer_bms_b14_3_2_cluster6_ch4",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster6",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch4_bms_b14_3_2_cluster6",
+        "input_c": 35,
+        "output_c": 35,
+        "num_epochs": 10,
+        "batch_size": 256,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      },
+      "skip_if_exists": "checkpoints/ch4_bms_b14_3_2_cluster6/BMS_B14_3_2_cluster6_checkpoint.pth"
+    },
+    {
+      "name": "omnianomaly_bms_b14_3_2_cluster6_ch4",
+      "baseline": "OmniAnomaly",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster6",
+        "max_epoch": 10,
+        "result_dir": "result/ch4_bms_b14_3_2_cluster6",
+        "save_dir": "model/ch4_bms_b14_3_2_cluster6"
+      },
+      "skip_if_exists": "result/ch4_bms_b14_3_2_cluster6"
+    },
+    {
+      "name": "gdn_bms_b14_3_2_cluster6_ch4",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "BMS_B14_3_2_cluster6",
+        "-device": "cpu",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-save_path_pattern": "ch4_gdn_bms_b14_3_2_cluster6"
+      },
+      "skip_if_exists": "pretrained/ch4_gdn_bms_b14_3_2_cluster6"
+    }
+  ]
+}

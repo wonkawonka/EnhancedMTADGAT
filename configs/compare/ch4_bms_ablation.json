@@ -1,0 +1,71 @@
+{
+  "plan_name": "ch4_bms_ablation",
+  "_comment": "第四章 BMS 消融实验计划：围绕 c4 的层级残差双分支设计做消融，重点回答是否必须启用层级分支，以及残差分支权重变化对结果的影响。",
+  "_usage": "建议在第四章主结果跑完后再运行本文件；主要服务于第四章消融表和机制分析。",
+  "_experiment_mapping": [
+    "bms_c3_reference：第四章消融参考项，直接复用第三章 BMS c3 结果，不需要在本计划里重复运行。",
+    "bms_c4_no_hier：关闭层级残差双分支，等价于在 c4 配置下退回仅主分支，用于验证层级分支是否必要。",
+    "bms_c4_low_hier_weight / bms_c4_high_hier_weight：残差分支融合权重敏感性实验。"
+  ],
+  "_kaggle_tip": "如果你只跑论文主线，本文件可以后置；只有在写第四章消融表时才需要运行。",
+  "common_args": {
+    "dataset": "BMS",
+    "model_name": "mtad_gat_c4",
+    "epochs": 30,
+    "bs": 256,
+    "lookback": 100,
+    "use_transformer": true,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": true,
+    "use_regime_condition": false,
+    "regime_emb_dim": 32,
+    "regime_condition_mode": "transformer_residual",
+    "regime_stat_features": "mean,std,last,delta",
+    "score_fusion_mode": "quality_aware",
+    "use_event_consistency": true,
+    "event_low_ratio": 0.5,
+    "event_min_length": 3,
+    "use_hier_consistency": true,
+    "hier_score_weight": 0.5,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_cuda": true,
+    "log_tensorboard": false,
+    "print_every": 1,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "bms_c4_no_hier",
+      "comment": "第四章消融：关闭层级残差双分支，只保留主分支，验证层级一致性增强是否必要。",
+      "args": {
+        "model_name": "mtad_gat_c4",
+        "use_hier_consistency": false,
+        "hier_score_weight": 0.0,
+        "run_id": "ch4abl_bms_no_hier"
+      }
+    },
+    {
+      "name": "bms_c4_low_hier_weight",
+      "comment": "第四章消融：较低残差分支融合权重。",
+      "args": {
+        "model_name": "mtad_gat_c4",
+        "use_hier_consistency": true,
+        "hier_score_weight": 0.3,
+        "run_id": "ch4abl_bms_c4_w03"
+      }
+    },
+    {
+      "name": "bms_c4_high_hier_weight",
+      "comment": "第四章消融：较高残差分支融合权重。",
+      "args": {
+        "model_name": "mtad_gat_c4",
+        "use_hier_consistency": true,
+        "hier_score_weight": 0.8,
+        "run_id": "ch4abl_bms_c4_w08"
+      }
+    }
+  ]
+}
