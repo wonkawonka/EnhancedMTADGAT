@@ -273,47 +273,6 @@ def is_placeholder_zero_label(label_data):
     return flattened.size == 0 or np.all(flattened == 0)
 
 
-def split_sequence_container_by_ratio(sequence_data, train_ratio=0.8):
-    sequences = [np.asarray(seq, dtype=np.float32) for seq in ensure_sequence_list(sequence_data)]
-    if not sequences:
-        raise ValueError("No sequence data available for splitting")
-
-    total_length = sum(len(seq) for seq in sequences)
-    if total_length <= 1:
-        raise ValueError("Sequence data is too short to split")
-
-    train_target = max(1, int(total_length * train_ratio))
-    train_parts = []
-    test_parts = []
-    accumulated = 0
-
-    for seq in sequences:
-        seq_len = len(seq)
-        if accumulated >= train_target:
-            test_parts.append(seq.astype(np.float32, copy=False))
-            continue
-
-        next_accumulated = accumulated + seq_len
-        if next_accumulated <= train_target:
-            train_parts.append(seq.astype(np.float32, copy=False))
-            accumulated = next_accumulated
-            continue
-
-        split_point = train_target - accumulated
-        if split_point > 0:
-            train_parts.append(seq[:split_point].astype(np.float32, copy=False))
-        if split_point < seq_len:
-            test_parts.append(seq[split_point:].astype(np.float32, copy=False))
-        accumulated = train_target
-
-    train_parts = [seq for seq in train_parts if len(seq) > 0]
-    test_parts = [seq for seq in test_parts if len(seq) > 0]
-    if not train_parts or not test_parts:
-        raise ValueError("Sequence split failed to produce both train and test parts")
-
-    return train_parts, test_parts
-
-
 def describe_data_shape(data):
     if is_sequence_container(data):
         return [tuple(np.asarray(seq).shape) for seq in ensure_sequence_list(data)]
@@ -401,7 +360,7 @@ def resolve_nasa_batteries(prefix, nasa_battery_id=None, nasa_train_batteries=No
 
 
 def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None,
-                               normalize=False, prefix=None, nasa_random_split_mode="fold"):
+                               normalize=False, prefix=None):
     if dataset not in NASA_ENTITY_DATASET_PREFIX:
         raise ValueError(f"Unsupported NASA-like dataset: {dataset}")
 
@@ -424,51 +383,43 @@ def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteri
     test_data_map = {}
     test_label_map = {}
 
-    if dataset in NASA_RANDOM_DATASETS and nasa_random_split_mode == "single_battery_split":
+    if dataset in NASA_RANDOM_DATASETS:
         selected_batteries = sorted(set(train_batteries + test_batteries))
-        if len(selected_batteries) != 1:
+        print(f"Using {dataset} processed split batteries: {selected_batteries}")
+
+    for battery_name in train_batteries:
+        battery_train_data, _, _ = load_prefixed_processed_data(prefix, battery_name, file_prefix)
+        if is_sequence_container(battery_train_data):
+            train_data_map[battery_name] = [
+                np.asarray(seq, dtype=np.float32) for seq in ensure_sequence_list(battery_train_data)
+            ]
+        else:
+            train_data_map[battery_name] = np.asarray(battery_train_data, dtype=np.float32)
+
+    for battery_name in test_batteries:
+        _, battery_test_data, battery_test_label = load_prefixed_processed_data(prefix, battery_name, file_prefix)
+        has_processed_test = battery_test_data is not None and len(battery_test_data) > 0
+        if not has_processed_test:
             raise ValueError(
-                "single_battery_split mode requires exactly one NASA_RANDOM battery. "
-                "Use --nasa_battery_id to select it."
+                f"{dataset} battery {battery_name} is missing a valid processed test split. "
+                "All dataset splits must be generated during preprocessing."
             )
 
-        battery_name = selected_batteries[0]
-        battery_full_data, _, _ = load_prefixed_processed_data(prefix, battery_name, file_prefix)
-        split_train_data, split_test_data = split_sequence_container_by_ratio(battery_full_data, train_ratio=0.8)
-        train_data_map[battery_name] = split_train_data
-        test_data_map[battery_name] = split_test_data
-        test_label_map[battery_name] = None
-        print(f"Using {dataset} split mode: single_battery_split ({battery_name}, 80/20)")
-    else:
-        if dataset in NASA_RANDOM_DATASETS:
-            print(f"Using {dataset} split mode: fold")
+        if is_sequence_container(battery_test_data):
+            test_data_map[battery_name] = [
+                np.asarray(seq, dtype=np.float32) for seq in ensure_sequence_list(battery_test_data)
+            ]
+        else:
+            test_data_map[battery_name] = np.asarray(battery_test_data, dtype=np.float32)
 
-        for battery_name in train_batteries:
-            battery_train_data, _, _ = load_prefixed_processed_data(prefix, battery_name, file_prefix)
-            if is_sequence_container(battery_train_data):
-                train_data_map[battery_name] = [
-                    np.asarray(seq, dtype=np.float32) for seq in ensure_sequence_list(battery_train_data)
-                ]
-            else:
-                train_data_map[battery_name] = np.asarray(battery_train_data, dtype=np.float32)
-
-        for battery_name in test_batteries:
-            _, battery_test_data, battery_test_label = load_prefixed_processed_data(prefix, battery_name, file_prefix)
-            if is_sequence_container(battery_test_data):
-                test_data_map[battery_name] = [
-                    np.asarray(seq, dtype=np.float32) for seq in ensure_sequence_list(battery_test_data)
-                ]
-            else:
-                test_data_map[battery_name] = np.asarray(battery_test_data, dtype=np.float32)
-
-            if battery_test_label is None or is_placeholder_zero_label(battery_test_label):
-                test_label_map[battery_name] = None
-            elif is_sequence_container(battery_test_label):
-                test_label_map[battery_name] = [
-                    np.asarray(seq_label) for seq_label in ensure_sequence_list(battery_test_label)
-                ]
-            else:
-                test_label_map[battery_name] = np.asarray(battery_test_label)
+        if battery_test_label is None or is_placeholder_zero_label(battery_test_label):
+            test_label_map[battery_name] = None
+        elif is_sequence_container(battery_test_label):
+            test_label_map[battery_name] = [
+                np.asarray(seq_label) for seq_label in ensure_sequence_list(battery_test_label)
+            ]
+        else:
+            test_label_map[battery_name] = np.asarray(battery_test_label)
 
     if all(label is None for label in test_label_map.values()):
         print(f"{dataset} test labels are unavailable for the selected batteries; supervised metrics should be skipped.")
@@ -503,7 +454,7 @@ def get_nasa_battery_data(nasa_battery_id=None, nasa_train_batteries=None, nasa_
 
 
 def get_nasa_random_battery_data(dataset, nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None,
-                                 normalize=False, prefix=None, nasa_random_split_mode="fold"):
+                                 normalize=False, prefix=None):
     return get_nasa_like_battery_data(
         dataset,
         nasa_battery_id=nasa_battery_id,
@@ -511,7 +462,6 @@ def get_nasa_random_battery_data(dataset, nasa_battery_id=None, nasa_train_batte
         nasa_test_batteries=nasa_test_batteries,
         normalize=normalize,
         prefix=prefix,
-        nasa_random_split_mode=nasa_random_split_mode,
     )
 
 

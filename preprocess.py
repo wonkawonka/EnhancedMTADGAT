@@ -419,23 +419,18 @@ def _process_nasa_random_dataset(dataset_folder, output_folder, file_prefix, app
             print(f"[{file_prefix}][{battery_id}] No supported random-walk steps found, skipping.")
             continue
 
-        # NASA_RANDOM uses entity-level splits at training time:
-        # whole batteries are assigned to either the train set or the test set.
-        # We therefore keep the full battery segments here instead of applying
-        # an additional 80/20 split within each battery.
-        train_data = [segment.astype(np.float32, copy=False) for segment in segments]
-        test_data = [segment.astype(np.float32, copy=False) for segment in segments]
-        test_labels = [np.zeros(len(segment), dtype=np.int32) for segment in test_data]
+        # Keep NASA_RANDOM consistent with the project's processed-data contract:
+        # each battery is split into train/test during preprocessing, and runtime
+        # code only reuses the saved processed files.
+        train_segments, test_segments = _split_nasa_random_segments(segments, train_ratio=0.8)
+        train_data = np.vstack(train_segments).astype(np.float32, copy=False)
+        test_data = np.vstack(test_segments).astype(np.float32, copy=False)
+        test_labels = np.zeros(len(test_data), dtype=np.int32)
 
         if apply_sr_cleaning:
-            print(f"[{file_prefix}][{battery_id}] Applying spectral residual cleaning to train segments...")
-            cleaned_train_segments = []
-            for train_segment in train_data:
-                cleaned_train_segments.append(
-                    apply_spectral_residual_cleaning(train_segment, threshold=3.0).astype(np.float32, copy=False)
-                )
-            train_data = cleaned_train_segments
-            print(f"[{file_prefix}][{battery_id}] Cleaning completed. Segments: {len(train_data)}")
+            print(f"[{file_prefix}][{battery_id}] Applying spectral residual cleaning to train split...")
+            train_data = apply_spectral_residual_cleaning(train_data, threshold=3.0).astype(np.float32, copy=False)
+            print(f"[{file_prefix}][{battery_id}] Cleaning completed. Train shape: {train_data.shape}")
 
         with open(path.join(output_folder, f"{file_prefix}_{battery_id}_train.pkl"), "wb") as file:
             dump(train_data, file)
@@ -446,9 +441,9 @@ def _process_nasa_random_dataset(dataset_folder, output_folder, file_prefix, app
 
         print(
             f"[{file_prefix}][{battery_id}] Saved segments -> "
-            f"train: {[segment.shape for segment in train_data]}, "
-            f"test: {[segment.shape for segment in test_data]}, "
-            f"labels: {[label.shape for label in test_labels]}"
+            f"train: {train_data.shape}, "
+            f"test: {test_data.shape}, "
+            f"labels: {test_labels.shape}"
         )
 
 
@@ -572,7 +567,6 @@ def load_data(dataset, apply_sr_cleaning=False):
             apply_sr_cleaning=apply_sr_cleaning,
         )
 
-    # TODO 自己数据集
     elif dataset == "BMS":
         dataset_folder = "datasets/BMS"
         output_folder = "datasets/BMS/processed"
@@ -705,7 +699,6 @@ def load_data(dataset, apply_sr_cleaning=False):
             f"merged BMS pkl files are no longer generated."
         )
         print(f"[BMS] Total elapsed: {time.perf_counter() - bms_start_time:.2f}s")
-    # TODO 主要还是预测容量的异常，但是其他数据可以作为特征
     elif dataset == "NASA":
         dataset_folder = "datasets/NASA/"
         output_folder = "datasets/NASA/processed"
@@ -1003,7 +996,6 @@ def load_data(dataset, apply_sr_cleaning=False):
 
             print(f"[NASA][{battery_id}] Saved processed files to {output_folder}")
 
-    # TODO 异常标签按曲率计算
     elif dataset == "CALCE":
         # 处理CALCE数据集
         dataset_folder = "datasets/CALCE/Dataset1"

@@ -52,8 +52,8 @@ def get_score_rising_stage(scores):
 
 def parse_experiment_metadata(exp_dir):
     name = exp_dir.name
-    fold_match = re.search(r"fold_(rw\d+)", name)
-    fold = fold_match.group(1) if fold_match else None
+    battery_match = re.search(r"(?:fold_)?(rw\d+)", name, flags=re.IGNORECASE)
+    battery_id = battery_match.group(1).upper() if battery_match else None
     feattrans = "feattrans-on" in name
     multi_scale = "_basic_" in name or "_ms_" in name
 
@@ -67,7 +67,7 @@ def parse_experiment_metadata(exp_dir):
 
     return {
         "experiment_name": name,
-        "fold": fold,
+        "battery_id": battery_id,
         "transformer_group": transformer_group,
         "feattrans_enabled": feattrans,
         "multi_scale_enabled": multi_scale,
@@ -184,7 +184,7 @@ def main():
     summary_df = pd.DataFrame(summaries)
     if not summary_df.empty:
         summary_df = summary_df.sort_values(
-            by=["transformer_group", "fold", "multi_scale_enabled", "experiment_name"],
+            by=["transformer_group", "battery_id", "multi_scale_enabled", "experiment_name"],
             na_position="last",
         )
         summary_df.to_csv(root_dir / "random_case_comparison.csv", index=False, encoding="utf-8-sig")

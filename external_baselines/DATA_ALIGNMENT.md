@@ -57,7 +57,8 @@ python prepare_external_baseline_data.py
 说明：
 
 - `SMAP / MSL` 可以直接对齐。
-- `BMS / NASA / RANDOM / CALCE` 若要用于 `Anomaly-Transformer`，还需要改它的 `data_loader.py`，新增自定义数据集分支。
+- 当前仓内已经补了主仓 `processed` 直读分支，可读取 `NASA / NASA_RANDOM / BMS` 命名的数据集。
+- `CALCE` 仍未接入该仓的自定义数据集分支。
 
 ### 2. TranAD
 
@@ -83,7 +84,8 @@ python prepare_external_baseline_data.py
 说明：
 
 - `SMAP / MSL / SMD` 可以直接对齐。
-- `BMS / NASA / RANDOM / CALCE` 还不能直接跑，需要补 `src/constants.py` 中的数据集超参和 `main.py` 的数据集命名逻辑。
+- 当前仓内已经补了 `NASA / NASA_RANDOM / BMS` 的主仓 `processed` 直读逻辑。
+- `CALCE` 仍不在当前适配范围内。
 
 ### 3. OmniAnomaly
 
@@ -107,7 +109,8 @@ python prepare_external_baseline_data.py
 说明：
 
 - `SMAP / MSL / SMD` 最容易直接对齐。
-- `BMS / NASA / RANDOM / CALCE` 若要使用，需要先改 `omni_anomaly/utils.py` 里的 `get_data_dim()`，补上特征维度。
+- 当前仓内已经补了 `NASA / NASA_RANDOM / BMS` 的主仓 `processed` 直读与维度支持。
+- `CALCE` 仍未纳入当前适配范围。
 
 ### 4. GDN
 

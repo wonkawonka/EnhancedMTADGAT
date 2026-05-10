@@ -4,7 +4,7 @@
 
 - `ch3_main_results.json`
   - 主仓主结果计划。
-  - 用途：第三章主表 + 第四章 `BMS c4` 主结果。
+  - 用途：第三章主表。
   - 覆盖：`SMAP`、`MSL`、`NASA_RANDOM_DISCHARGE(RW1/RW2/RW7/RW8)`、`BMS`。
 
 - `ch4_bms_main.json`

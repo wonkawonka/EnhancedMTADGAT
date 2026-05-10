@@ -416,7 +416,6 @@ if __name__ == "__main__":
                     nasa_battery_id=args.nasa_battery_id,
                     nasa_train_batteries=args.nasa_train_batteries,
                     nasa_test_batteries=args.nasa_test_batteries,
-                    nasa_random_split_mode=args.nasa_random_split_mode,
                 )
         elif dataset in ['CALCE', 'CALCE2']:
             output_path = f'output/{dataset}'
@@ -584,7 +583,6 @@ if __name__ == "__main__":
             print(f"Test reconstruction loss: {test_loss[1]:.5f}")
             print(f"Test total loss: {test_loss[2]:.5f}")
 
-        # TODO
         # Some suggestions for POT args
         level_q_dict = {
             "SMAP": (0.90, 0.005),

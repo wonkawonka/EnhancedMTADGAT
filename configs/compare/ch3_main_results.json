@@ -1,11 +1,10 @@
 {
   "plan_name": "ch3_main_results",
-  "_comment": "主结果实验计划：用于论文主表。第三章覆盖 SMAP、MSL、NASA_RANDOM_DISCHARGE 和 BMS 的 baseline/c3；其中 SMAP、MSL 才作为带标签二分类指标主表，NASA_RANDOM_DISCHARGE 和 BMS 主要用于无标签电池场景下的阈值、分数分布和案例分析。第四章在本文件中只保留 BMS 上的 c4 主结果。",
-  "_usage": "建议优先运行本文件；用于回答第三章在通用场景和电池随机工况场景上的总体效果，以及第四章在 BMS 主场景上的 c4 效果。NASA_RANDOM_DISCHARGE 这里改为逐电池 single_battery_split，避免全电池 fold 模式下 train/test 电池重叠。若需要第四章 BMS 主结果，请结合 ch4_bms_main.json；若需要第四章消融，请结合 ch4_bms_ablation.json；若需要外部基线，请结合 ch3_external_baselines.json 和 ch4_bms_external_baselines.json。",
+  "_comment": "第三章主结果实验计划：覆盖 SMAP、MSL、NASA_RANDOM_DISCHARGE 和 BMS 的 baseline/c3。SMAP、MSL 作为带标签二分类指标主表；NASA_RANDOM_DISCHARGE 和 BMS 主要用于无标签电池场景下的分数分布、阈值与案例分析。",
+  "_usage": "建议优先运行本文件；用于回答第三章在通用场景和电池随机工况场景上的总体效果。NASA_RANDOM_DISCHARGE 这里按逐电池运行，并优先复用 processed 中已经分好的 train/test，避免再次切分。若需要第四章 BMS 主结果，请使用 ch4_bms_main.json；若需要第四章消融，请使用 ch4_bms_ablation.json；若需要外部基线，请结合 ch3_external_baselines.json 和 ch4_bms_external_baselines.json。",
   "_experiment_mapping": [
     "smap_mtadgat_baseline / msl_mtadgat_baseline / nasa_random_discharge_rw*_mtadgat_baseline / bms_mtadgat_baseline：原始 MTAD-GAT baseline。",
-    "smap_c3_full / msl_c3_full / nasa_random_discharge_rw*_c3_full / bms_c3_full：第三章完整模型，用于证明工况感知关系建模在通用场景和电池场景中的有效性。",
-    "bms_c4_full：第四章 BMS 层级残差双分支模型，用于展示场景化深化效果。"
+    "smap_c3_full / msl_c3_full / nasa_random_discharge_rw*_c3_full / bms_c3_full：第三章完整模型，用于证明工况感知关系建模在通用场景和电池场景中的有效性。"
   ],
   "_kaggle_tip": "本文件中的 run_id 已固定，可配合 --skip-existing 使用；已完成且存在 model.pt 的实验会自动跳过。",
   "common_args": {
@@ -82,22 +81,20 @@
     },
     {
       "name": "nasa_random_discharge_rw1_mtadgat_baseline",
-      "comment": "NASA_RANDOM_DISCHARGE 的 RW1 baseline，采用单电池内部 80/20 划分，避免全电池 fold 模式下的 train/test 电池重叠。",
+      "comment": "NASA_RANDOM_DISCHARGE 的 RW1 baseline，按单电池运行，并优先复用 processed 中已分好的 train/test。",
       "args": {
         "dataset": "NASA_RANDOM_DISCHARGE",
         "nasa_battery_id": "RW1",
-        "nasa_random_split_mode": "single_battery_split",
         "model_name": "mtad_gat",
         "run_id": "main_nasa_random_discharge_rw1_mtadgat"
       }
     },
     {
       "name": "nasa_random_discharge_rw1_c3_full",
-      "comment": "NASA_RANDOM_DISCHARGE 的 RW1 第三章完整模型，采用单电池内部 80/20 划分。",
+      "comment": "NASA_RANDOM_DISCHARGE 的 RW1 第三章完整模型，按单电池运行，并优先复用 processed 中已分好的 train/test。",
       "args": {
         "dataset": "NASA_RANDOM_DISCHARGE",
         "nasa_battery_id": "RW1",
-        "nasa_random_split_mode": "single_battery_split",
         "model_name": "mtad_gat_c3",
         "use_transformer": true,
         "use_revin": true,
@@ -108,22 +105,20 @@
     },
     {
       "name": "nasa_random_discharge_rw2_mtadgat_baseline",
-      "comment": "NASA_RANDOM_DISCHARGE 的 RW2 baseline，采用单电池内部 80/20 划分。",
+      "comment": "NASA_RANDOM_DISCHARGE 的 RW2 baseline，按单电池运行，并优先复用 processed 中已分好的 train/test。",
       "args": {
         "dataset": "NASA_RANDOM_DISCHARGE",
         "nasa_battery_id": "RW2",
-        "nasa_random_split_mode": "single_battery_split",
         "model_name": "mtad_gat",
         "run_id": "main_nasa_random_discharge_rw2_mtadgat"
       }
     },
     {
       "name": "nasa_random_discharge_rw2_c3_full",
-      "comment": "NASA_RANDOM_DISCHARGE 的 RW2 第三章完整模型，采用单电池内部 80/20 划分。",
+      "comment": "NASA_RANDOM_DISCHARGE 的 RW2 第三章完整模型，按单电池运行，并优先复用 processed 中已分好的 train/test。",
       "args": {
         "dataset": "NASA_RANDOM_DISCHARGE",
         "nasa_battery_id": "RW2",
-        "nasa_random_split_mode": "single_battery_split",
         "model_name": "mtad_gat_c3",
         "use_transformer": true,
         "use_revin": true,
@@ -134,22 +129,20 @@
     },
     {
       "name": "nasa_random_discharge_rw7_mtadgat_baseline",
-      "comment": "NASA_RANDOM_DISCHARGE 的 RW7 baseline，采用单电池内部 80/20 划分。",
+      "comment": "NASA_RANDOM_DISCHARGE 的 RW7 baseline，按单电池运行，并优先复用 processed 中已分好的 train/test。",
       "args": {
         "dataset": "NASA_RANDOM_DISCHARGE",
         "nasa_battery_id": "RW7",
-        "nasa_random_split_mode": "single_battery_split",
         "model_name": "mtad_gat",
         "run_id": "main_nasa_random_discharge_rw7_mtadgat"
       }
     },
     {
       "name": "nasa_random_discharge_rw7_c3_full",
-      "comment": "NASA_RANDOM_DISCHARGE 的 RW7 第三章完整模型，采用单电池内部 80/20 划分。",
+      "comment": "NASA_RANDOM_DISCHARGE 的 RW7 第三章完整模型，按单电池运行，并优先复用 processed 中已分好的 train/test。",
       "args": {
         "dataset": "NASA_RANDOM_DISCHARGE",
         "nasa_battery_id": "RW7",
-        "nasa_random_split_mode": "single_battery_split",
         "model_name": "mtad_gat_c3",
         "use_transformer": true,
         "use_revin": true,
@@ -160,22 +153,20 @@
     },
     {
       "name": "nasa_random_discharge_rw8_mtadgat_baseline",
-      "comment": "NASA_RANDOM_DISCHARGE 的 RW8 baseline，采用单电池内部 80/20 划分。",
+      "comment": "NASA_RANDOM_DISCHARGE 的 RW8 baseline，按单电池运行，并优先复用 processed 中已分好的 train/test。",
       "args": {
         "dataset": "NASA_RANDOM_DISCHARGE",
         "nasa_battery_id": "RW8",
-        "nasa_random_split_mode": "single_battery_split",
         "model_name": "mtad_gat",
         "run_id": "main_nasa_random_discharge_rw8_mtadgat"
       }
     },
     {
       "name": "nasa_random_discharge_rw8_c3_full",
-      "comment": "NASA_RANDOM_DISCHARGE 的 RW8 第三章完整模型，采用单电池内部 80/20 划分。",
+      "comment": "NASA_RANDOM_DISCHARGE 的 RW8 第三章完整模型，按单电池运行，并优先复用 processed 中已分好的 train/test。",
       "args": {
         "dataset": "NASA_RANDOM_DISCHARGE",
         "nasa_battery_id": "RW8",
-        "nasa_random_split_mode": "single_battery_split",
         "model_name": "mtad_gat_c3",
         "use_transformer": true,
         "use_revin": true,
@@ -204,20 +195,6 @@
         "score_fusion_mode": "quality_aware",
         "use_event_consistency": true,
         "run_id": "main_bms_c3"
-      }
-    },
-    {
-      "name": "bms_c4_full",
-      "comment": "BMS 第四章完整模型，在 c3 基础上增加层级残差双分支检测。",
-      "args": {
-        "dataset": "BMS",
-        "model_name": "mtad_gat_c4",
-        "use_transformer": true,
-        "use_revin": true,
-        "score_fusion_mode": "quality_aware",
-        "use_event_consistency": true,
-        "hier_score_weight": 0.5,
-        "run_id": "main_bms_c4"
       }
     }
   ]
