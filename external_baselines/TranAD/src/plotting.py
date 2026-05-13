@@ -4,7 +4,8 @@ import statistics
 import os, torch
 import numpy as np
 
-plt.style.use(['science', 'ieee'])
+# Remove SciencePlots dependency to avoid installation issues
+# plt.style.use(['science', 'ieee'])
 plt.rcParams["text.usetex"] = False
 plt.rcParams['figure.figsize'] = 6, 2
 
