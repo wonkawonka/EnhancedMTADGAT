@@ -3,33 +3,21 @@ import os
 from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
-import torch
 import torch.nn as nn
 
-# Fix PyTorch 2.2.0 Transformer API compatibility issue
-original_encoder_layer_forward = nn.TransformerEncoderLayer.forward
-original_decoder_layer_forward = nn.TransformerDecoderLayer.forward
+original_encoder_forward = nn.TransformerEncoderLayer.forward
+def _patched_encoder_forward(self, src, src_mask=None, src_key_padding_mask=None, is_causal=None):
+    return original_encoder_forward(self, src, src_mask=src_mask, src_key_padding_mask=src_key_padding_mask)
 
-def fixed_encoder_layer_forward(self, src, src_mask=None, src_key_padding_mask=None, is_causal=None):
-    if is_causal is not None:
-        return original_encoder_layer_forward(self, src, src_mask=src_mask, src_key_padding_mask=src_key_padding_mask)
-    return original_encoder_layer_forward(self, src, src_mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+original_decoder_forward = nn.TransformerDecoderLayer.forward
+def _patched_decoder_forward(self, tgt, memory, tgt_mask=None, memory_mask=None,
+                             tgt_key_padding_mask=None, memory_key_padding_mask=None, is_causal=None):
+    return original_decoder_forward(self, tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
+                                    tgt_key_padding_mask=tgt_key_padding_mask,
+                                    memory_key_padding_mask=memory_key_padding_mask)
 
-def fixed_decoder_layer_forward(self, tgt, memory, tgt_mask=None, memory_mask=None, 
-                                tgt_key_padding_mask=None, memory_key_padding_mask=None,
-                                is_causal=None):
-    if is_causal is not None:
-        return original_decoder_layer_forward(self, tgt, memory, tgt_mask=tgt_mask, 
-                                             memory_mask=memory_mask, 
-                                             tgt_key_padding_mask=tgt_key_padding_mask,
-                                             memory_key_padding_mask=memory_key_padding_mask)
-    return original_decoder_layer_forward(self, tgt, memory, tgt_mask=tgt_mask, 
-                                         memory_mask=memory_mask, 
-                                         tgt_key_padding_mask=tgt_key_padding_mask,
-                                         memory_key_padding_mask=memory_key_padding_mask)
-
-nn.TransformerEncoderLayer.forward = fixed_encoder_layer_forward
-nn.TransformerDecoderLayer.forward = fixed_decoder_layer_forward
+nn.TransformerEncoderLayer.forward = _patched_encoder_forward
+nn.TransformerDecoderLayer.forward = _patched_decoder_forward
 
 from src.models import *
 from src.constants import *
