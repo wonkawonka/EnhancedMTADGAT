@@ -9,6 +9,15 @@ from argparse import ArgumentParser
 from pprint import pformat, pprint
 
 import numpy as np
+# Add numpy compatibility for tfsnippet (which uses deprecated np.int, np.float, etc.)
+np.int = int
+np.float = float
+np.bool = bool
+np.complex = complex
+np.long = int
+np.unicode = str
+np.str = str
+
 import tensorflow as tf
 from tfsnippet.examples.utils import MLResults, print_with_title
 from tfsnippet.scaffold import VariableSaver
