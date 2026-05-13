@@ -152,7 +152,7 @@ class GDN(nn.Module):
             cos_ji_mat = cos_ji_mat / normed_mat
 
             dim = weights.shape[-1]
-            topk_num = self.topk
+            topk_num = min(self.topk, node_num)
 
             topk_indices_ji = torch.topk(cos_ji_mat, topk_num, dim=-1)[1]
 

@@ -3,6 +3,23 @@ import os
 from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
+import torch
+import torch.nn as nn
+
+# PyTorch 2.2.0+ Transformer API 兼容补丁
+_original_encoder_forward = nn.TransformerEncoderLayer.forward
+def _patched_encoder_forward(self, src, src_mask=None, src_key_padding_mask=None, is_causal=None):
+    return _original_encoder_forward(self, src, src_mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+nn.TransformerEncoderLayer.forward = _patched_encoder_forward
+
+_original_decoder_forward = nn.TransformerDecoderLayer.forward
+def _patched_decoder_forward(self, tgt, memory, tgt_mask=None, memory_mask=None,
+                             tgt_key_padding_mask=None, memory_key_padding_mask=None, is_causal=None):
+    return _original_decoder_forward(self, tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
+                                     tgt_key_padding_mask=tgt_key_padding_mask,
+                                     memory_key_padding_mask=memory_key_padding_mask)
+nn.TransformerDecoderLayer.forward = _patched_decoder_forward
+
 from src.models import *
 from src.constants import *
 from src.plotting import *
@@ -263,7 +280,7 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 		bcel = nn.BCELoss(reduction = 'mean')
 		msel = nn.MSELoss(reduction = 'mean')
 		real_label, fake_label = torch.tensor([0.9]), torch.tensor([0.1]) # label smoothing
-		real_label, fake_label = real_label.type(torch.DoubleTensor), fake_label.type(torch.DoubleTensor)
+		real_label, fake_label = real_label.type(torch.FloatTensor), fake_label.type(torch.FloatTensor)
 		n = epoch + 1; w_size = model.n_window
 		mses, gls, dls = [], [], []
 		if training:
@@ -299,7 +316,7 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 			return loss.detach().numpy(), y_pred.detach().numpy()
 	elif 'TranAD' in model.name:
 		l = nn.MSELoss(reduction = 'none')
-		data_x = torch.DoubleTensor(data); dataset = TensorDataset(data_x, data_x)
+		data_x = torch.FloatTensor(data); dataset = TensorDataset(data_x, data_x)
 		bs = model.batch if training else len(data)
 		dataloader = DataLoader(dataset, batch_size = bs)
 		n = epoch + 1; w_size = model.n_window

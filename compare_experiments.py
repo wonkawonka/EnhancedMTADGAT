@@ -1,6 +1,7 @@
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -74,6 +75,19 @@ def stream_subprocess(command, cwd, log_path):
             log_file.write(line)
 
         return process.wait()
+
+
+def pack_experiment_output(output_dir):
+    output_dir = Path(output_dir)
+    if not output_dir.exists():
+        return None
+    zip_path = output_dir.parent / f"{output_dir.name}.zip"
+    if zip_path.exists():
+        zip_path.unlink()
+    shutil.make_archive(str(zip_path.with_suffix("")), "zip", str(output_dir))
+    size_mb = zip_path.stat().st_size / (1024 * 1024)
+    print(f"[PACK] {zip_path.name} ({size_mb:.1f} MB)")
+    return zip_path
 
 
 def parse_args():
@@ -213,6 +227,8 @@ def main():
         result["return_code"] = return_code
         result["status"] = "done" if return_code == 0 else "failed"
         resolved_registry["experiments"].append(result)
+
+        pack_experiment_output(output_dir)
 
         registry_path = batch_root / "run_registry.json"
         with open(registry_path, "w", encoding="utf-8") as f:

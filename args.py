@@ -83,7 +83,7 @@ def get_parser():
         "--model_name",
         type=str,
         default="mtad_gat",
-        help="模型名称。mtad_gat 为 baseline，mtad_gat_c3 为第三章模型，mtad_gat_c4 为第四章层级一致性增强版本",
+        help="模型名称。mtad_gat 为 baseline，mtad_gat_c3 为第三章模型:工况感知门控 Transformer 残差增强版本，mtad_gat_c4 为第四章在 c3 基础上增加层级残差双分支检测",
     )
     # 1D conv layer
     parser.add_argument("--kernel_size", type=int, default=7)
