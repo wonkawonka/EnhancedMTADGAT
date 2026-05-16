@@ -108,7 +108,7 @@ def save_model(model, optimizer, scheduler, epoch, accuracy_list):
 def load_model(modelname, dims):
 	import src.models
 	model_class = getattr(src.models, modelname)
-	model = model_class(dims).double()
+	model = model_class(dims).float()
 	optimizer = torch.optim.AdamW(model.parameters() , lr=model.lr, weight_decay=1e-5)
 	scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 5, 0.9)
 	fname = f'checkpoints/{args.model}_{args.dataset}/model.ckpt'
