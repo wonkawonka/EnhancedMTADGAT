@@ -177,8 +177,12 @@ def main():
     selected_experiments = []
     for idx, experiment in enumerate(experiments, start=1):
         name = sanitize_name(experiment.get("name", f"external-{idx:02d}"))
-        if only_names and name not in only_names:
-            continue
+        baseline_name = sanitize_name(experiment.get("baseline", ""))
+        if only_names:
+            if name in only_names or baseline_name in only_names:
+                pass
+            else:
+                continue
         selected_experiments.append((idx, name, experiment))
 
     if not selected_experiments:
