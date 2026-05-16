@@ -166,7 +166,7 @@ def main():
     if not experiments:
         raise ValueError(f"No experiments found in plan: {plan_path}")
 
-    only_names = {sanitize_name(item) for item in args.only.split(",") if item.strip()}
+    only_names = {sanitize_name(item).lower() for item in args.only.split(",") if item.strip()}
     plan_name = sanitize_name(plan.get("plan_name", plan_path.stem))
     batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     batch_root = project_root / "external_runs" / f"{plan_name}_{batch_timestamp}"
@@ -176,8 +176,8 @@ def main():
     common_env = dict(plan.get("common_env", {}))
     selected_experiments = []
     for idx, experiment in enumerate(experiments, start=1):
-        name = sanitize_name(experiment.get("name", f"external-{idx:02d}"))
-        baseline_name = sanitize_name(experiment.get("baseline", ""))
+        name = sanitize_name(experiment.get("name", f"external-{idx:02d}")).lower()
+        baseline_name = sanitize_name(experiment.get("baseline", "")).lower()
         if only_names:
             if name in only_names or baseline_name in only_names:
                 pass

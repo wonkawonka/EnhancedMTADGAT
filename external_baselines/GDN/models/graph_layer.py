@@ -61,6 +61,7 @@ class GraphLayer(MessagePassing):
         edge_index, _ = remove_self_loops(edge_index)
         edge_index, _ = add_self_loops(edge_index,
                                        num_nodes=x[1].size(self.node_dim))
+        edge_index = edge_index.view(2, -1)
 
         out = self.propagate(edge_index, x=x, embedding=embedding, edges=edge_index,
                              return_attention_weights=return_attention_weights)
@@ -86,6 +87,7 @@ class GraphLayer(MessagePassing):
 
         x_i = x_i.view(-1, self.heads, self.out_channels)
         x_j = x_j.view(-1, self.heads, self.out_channels)
+        edge_index_i = edge_index_i.reshape(-1)
 
         if embedding is not None:
             embedding_i, embedding_j = embedding[edge_index_i], embedding[edges[0]]
