@@ -6,7 +6,8 @@
     "TranAD 已支持直接读取主仓 BMS cluster 的 processed 数据。",
     "Anomaly-Transformer 已支持直接读取主仓 BMS cluster 的 processed 数据。",
     "OmniAnomaly 已支持直接读取主仓 BMS cluster 的 processed 数据。",
-    "GDN 已支持直接读取主仓 BMS cluster 的 processed 数据。"
+    "GDN 已支持直接读取主仓 BMS cluster 的 processed 数据。",
+    "DCdetector 已支持直接读取主仓 BMS cluster 的 processed 数据。"
   ],
   "_pending_now": [
     "OmniAnomaly 真正运行仍需要单独的 TensorFlow 1.x + tfsnippet 环境。"
@@ -363,6 +364,222 @@
         "-save_path_pattern": "ch4_gdn_bms_b14_3_2_cluster6"
       },
       "skip_if_exists": "pretrained/ch4_gdn_bms_b14_3_2_cluster6"
+    },
+    {
+      "name": "dcdetector_bms_b14_3_2_cluster1_ch4",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster1",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch4_dcdetector_bms_c1",
+        "input_c": 35,
+        "output_c": 35,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 1e-4
+      },
+      "skip_if_exists": "checkpoints/ch4_dcdetector_bms_c1/BMS_B14_3_2_cluster1_checkpoint.pth"
+    },
+    {
+      "name": "dcdetector_bms_b14_3_2_cluster2_ch4",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster2",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch4_dcdetector_bms_c2",
+        "input_c": 35,
+        "output_c": 35,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 1e-4
+      },
+      "skip_if_exists": "checkpoints/ch4_dcdetector_bms_c2/BMS_B14_3_2_cluster2_checkpoint.pth"
+    },
+    {
+      "name": "dcdetector_bms_b14_3_2_cluster3_ch4",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster3",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch4_dcdetector_bms_c3",
+        "input_c": 35,
+        "output_c": 35,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 1e-4
+      },
+      "skip_if_exists": "checkpoints/ch4_dcdetector_bms_c3/BMS_B14_3_2_cluster3_checkpoint.pth"
+    },
+    {
+      "name": "dcdetector_bms_b14_3_2_cluster4_ch4",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster4",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch4_dcdetector_bms_c4",
+        "input_c": 35,
+        "output_c": 35,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 1e-4
+      },
+      "skip_if_exists": "checkpoints/ch4_dcdetector_bms_c4/BMS_B14_3_2_cluster4_checkpoint.pth"
+    },
+    {
+      "name": "dcdetector_bms_b14_3_2_cluster5_ch4",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster5",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch4_dcdetector_bms_c5",
+        "input_c": 35,
+        "output_c": 35,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 1e-4
+      },
+      "skip_if_exists": "checkpoints/ch4_dcdetector_bms_c5/BMS_B14_3_2_cluster5_checkpoint.pth"
+    },
+    {
+      "name": "dcdetector_bms_b14_3_2_cluster6_ch4",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster6",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch4_dcdetector_bms_c6",
+        "input_c": 35,
+        "output_c": 35,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 1e-4
+      },
+      "skip_if_exists": "checkpoints/ch4_dcdetector_bms_c6/BMS_B14_3_2_cluster6_checkpoint.pth"
+    },
+    {
+      "name": "ganf_bms_b14_3_2_cluster1_ch4",
+      "baseline": "GANF",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster1",
+        "window_size": 60,
+        "stride": 10,
+        "batch_size": 512,
+        "epochs": 40,
+        "lr": 0.002,
+        "seed": 42,
+        "save_path": "checkpoints/ch4_ganf_bms_c1"
+      },
+      "skip_if_exists": "checkpoints/ch4_ganf_bms_c1/model.pth"
+    },
+    {
+      "name": "ganf_bms_b14_3_2_cluster2_ch4",
+      "baseline": "GANF",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster2",
+        "window_size": 60,
+        "stride": 10,
+        "batch_size": 512,
+        "epochs": 40,
+        "lr": 0.002,
+        "seed": 42,
+        "save_path": "checkpoints/ch4_ganf_bms_c2"
+      },
+      "skip_if_exists": "checkpoints/ch4_ganf_bms_c2/model.pth"
+    },
+    {
+      "name": "ganf_bms_b14_3_2_cluster3_ch4",
+      "baseline": "GANF",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster3",
+        "window_size": 60,
+        "stride": 10,
+        "batch_size": 512,
+        "epochs": 40,
+        "lr": 0.002,
+        "seed": 42,
+        "save_path": "checkpoints/ch4_ganf_bms_c3"
+      },
+      "skip_if_exists": "checkpoints/ch4_ganf_bms_c3/model.pth"
+    },
+    {
+      "name": "ganf_bms_b14_3_2_cluster4_ch4",
+      "baseline": "GANF",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster4",
+        "window_size": 60,
+        "stride": 10,
+        "batch_size": 512,
+        "epochs": 40,
+        "lr": 0.002,
+        "seed": 42,
+        "save_path": "checkpoints/ch4_ganf_bms_c4"
+      },
+      "skip_if_exists": "checkpoints/ch4_ganf_bms_c4/model.pth"
+    },
+    {
+      "name": "ganf_bms_b14_3_2_cluster5_ch4",
+      "baseline": "GANF",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster5",
+        "window_size": 60,
+        "stride": 10,
+        "batch_size": 512,
+        "epochs": 40,
+        "lr": 0.002,
+        "seed": 42,
+        "save_path": "checkpoints/ch4_ganf_bms_c5"
+      },
+      "skip_if_exists": "checkpoints/ch4_ganf_bms_c5/model.pth"
+    },
+    {
+      "name": "ganf_bms_b14_3_2_cluster6_ch4",
+      "baseline": "GANF",
+      "script": "main.py",
+      "args": {
+        "dataset": "BMS_B14_3_2_cluster6",
+        "window_size": 60,
+        "stride": 10,
+        "batch_size": 512,
+        "epochs": 40,
+        "lr": 0.002,
+        "seed": 42,
+        "save_path": "checkpoints/ch4_ganf_bms_c6"
+      },
+      "skip_if_exists": "checkpoints/ch4_ganf_bms_c6/model.pth"
     }
   ]
 }

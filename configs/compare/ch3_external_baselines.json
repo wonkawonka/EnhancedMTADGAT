@@ -6,7 +6,8 @@
     "TranAD 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
     "Anomaly-Transformer 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
     "OmniAnomaly 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
-    "GDN 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。"
+    "GDN 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
+    "DCdetector 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。"
   ],
   "_pending_now": [
     "BMS 外部基线已移到 ch4_bms_external_baselines.json，避免第三章和第四章重复执行。",
@@ -365,6 +366,216 @@
         "-save_path_pattern": "ch3_gdn_nasa_random_discharge_rw8"
       },
       "skip_if_exists": "pretrained/ch3_gdn_nasa_random_discharge_rw8"
+    },
+    {
+      "name": "dcdetector_smap_ch3",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "SMAP",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch3_dcdetector_smap",
+        "input_c": 25,
+        "output_c": 25,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 1e-4
+      },
+      "skip_if_exists": "checkpoints/ch3_dcdetector_smap/SMAP_checkpoint.pth"
+    },
+    {
+      "name": "dcdetector_msl_ch3",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "MSL",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch3_dcdetector_msl",
+        "input_c": 55,
+        "output_c": 55,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 1e-4
+      },
+      "skip_if_exists": "checkpoints/ch3_dcdetector_msl/MSL_checkpoint.pth"
+    },
+    {
+      "name": "dcdetector_nasa_random_discharge_rw1_ch3",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW1",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch3_dcdetector_nasa_rw1",
+        "input_c": 4,
+        "output_c": 4,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 1e-4
+      },
+      "skip_if_exists": "checkpoints/ch3_dcdetector_nasa_rw1/NASA_RANDOM_DISCHARGE_RW1_checkpoint.pth"
+    },
+    {
+      "name": "dcdetector_nasa_random_discharge_rw2_ch3",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW2",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch3_dcdetector_nasa_rw2",
+        "input_c": 4,
+        "output_c": 4,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 1e-4
+      },
+      "skip_if_exists": "checkpoints/ch3_dcdetector_nasa_rw2/NASA_RANDOM_DISCHARGE_RW2_checkpoint.pth"
+    },
+    {
+      "name": "dcdetector_nasa_random_discharge_rw7_ch3",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW7",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch3_dcdetector_nasa_rw7",
+        "input_c": 4,
+        "output_c": 4,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 1e-4
+      },
+      "skip_if_exists": "checkpoints/ch3_dcdetector_nasa_rw7/NASA_RANDOM_DISCHARGE_RW7_checkpoint.pth"
+    },
+    {
+      "name": "dcdetector_nasa_random_discharge_rw8_ch3",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW8",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/ch3_dcdetector_nasa_rw8",
+        "input_c": 4,
+        "output_c": 4,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 1e-4
+      },
+      "skip_if_exists": "checkpoints/ch3_dcdetector_nasa_rw8/NASA_RANDOM_DISCHARGE_RW8_checkpoint.pth"
+    },
+    {
+      "name": "ganf_smap_ch3",
+      "baseline": "GANF",
+      "script": "main.py",
+      "args": {
+        "dataset": "SMAP",
+        "window_size": 60,
+        "stride": 10,
+        "batch_size": 512,
+        "epochs": 40,
+        "lr": 0.002,
+        "seed": 42
+      },
+      "skip_if_exists": "checkpoints/ch3_ganf_smap/model.pth"
+    },
+    {
+      "name": "ganf_msl_ch3",
+      "baseline": "GANF",
+      "script": "main.py",
+      "args": {
+        "dataset": "MSL",
+        "window_size": 60,
+        "stride": 10,
+        "batch_size": 512,
+        "epochs": 40,
+        "lr": 0.002,
+        "seed": 42
+      },
+      "skip_if_exists": "checkpoints/ch3_ganf_msl/model.pth"
+    },
+    {
+      "name": "ganf_nasa_random_discharge_rw1_ch3",
+      "baseline": "GANF",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW1",
+        "window_size": 60,
+        "stride": 10,
+        "batch_size": 512,
+        "epochs": 40,
+        "lr": 0.002,
+        "seed": 42
+      },
+      "skip_if_exists": "checkpoints/ch3_ganf_nasa_rw1/model.pth"
+    },
+    {
+      "name": "ganf_nasa_random_discharge_rw2_ch3",
+      "baseline": "GANF",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW2",
+        "window_size": 60,
+        "stride": 10,
+        "batch_size": 512,
+        "epochs": 40,
+        "lr": 0.002,
+        "seed": 42
+      },
+      "skip_if_exists": "checkpoints/ch3_ganf_nasa_rw2/model.pth"
+    },
+    {
+      "name": "ganf_nasa_random_discharge_rw7_ch3",
+      "baseline": "GANF",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW7",
+        "window_size": 60,
+        "stride": 10,
+        "batch_size": 512,
+        "epochs": 40,
+        "lr": 0.002,
+        "seed": 42
+      },
+      "skip_if_exists": "checkpoints/ch3_ganf_nasa_rw7/model.pth"
+    },
+    {
+      "name": "ganf_nasa_random_discharge_rw8_ch3",
+      "baseline": "GANF",
+      "script": "main.py",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE_RW8",
+        "window_size": 60,
+        "stride": 10,
+        "batch_size": 512,
+        "epochs": 40,
+        "lr": 0.002,
+        "seed": 42
+      },
+      "skip_if_exists": "checkpoints/ch3_ganf_nasa_rw8/model.pth"
     }
   ]
 }

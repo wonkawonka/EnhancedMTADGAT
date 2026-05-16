@@ -302,7 +302,7 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 			return loss.detach().numpy(), y_pred.detach().numpy()
 	elif 'TranAD' in model.name:
 		l = nn.MSELoss(reduction = 'none')
-		data_x = torch.FloatTensor(data); dataset = TensorDataset(data_x, data_x)
+		data_x = data.float() if torch.is_tensor(data) else torch.FloatTensor(data); dataset = TensorDataset(data_x, data_x)
 		bs = model.batch if training else len(data)
 		dataloader = DataLoader(dataset, batch_size = bs)
 		n = epoch + 1; w_size = model.n_window

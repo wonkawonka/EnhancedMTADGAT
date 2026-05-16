@@ -15,6 +15,8 @@ BASELINE_DIR_MAP = {
     "TranAD": "TranAD",
     "LSTM-AE": "LSTM-AE",
     "OmniAnomaly": "OmniAnomaly",
+    "DCdetector": "DCdetector",
+    "GANF": "GANF",
 }
 
 

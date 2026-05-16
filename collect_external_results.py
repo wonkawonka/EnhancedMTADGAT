@@ -124,6 +124,22 @@ def parse_gdn_metrics(log_text):
     }
 
 
+def parse_dcdetector_metrics(log_text):
+    result = parse_anomaly_transformer_metrics(log_text)
+    return result
+
+
+def parse_ganf_metrics(log_text):
+    return {
+        "metric_auroc": find_last_float(r"AUROC:\s*([-+0-9.eE]+)", log_text),
+        "metric_threshold": find_last_float(r"Threshold\s*:\s*([-+0-9.eE]+)", log_text),
+        "metric_accuracy": find_last_float(r"Accuracy\s*:\s*([-+0-9.eE]+)", log_text),
+        "metric_precision": find_last_float(r"Precision\s*:\s*([-+0-9.eE]+)", log_text),
+        "metric_recall": find_last_float(r"Recall\s*:\s*([-+0-9.eE]+)", log_text),
+        "metric_f1": find_last_float(r"F-score\s*:\s*([-+0-9.eE]+)", log_text),
+    }
+
+
 def parse_metrics_for_baseline(baseline_name, log_text):
     if baseline_name == "TranAD":
         return parse_tranad_metrics(log_text)
@@ -133,6 +149,10 @@ def parse_metrics_for_baseline(baseline_name, log_text):
         return parse_omnianomaly_metrics(log_text)
     if baseline_name == "GDN":
         return parse_gdn_metrics(log_text)
+    if baseline_name == "DCdetector":
+        return parse_dcdetector_metrics(log_text)
+    if baseline_name == "GANF":
+        return parse_ganf_metrics(log_text)
     return {}
 
 
