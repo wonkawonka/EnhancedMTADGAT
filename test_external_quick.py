@@ -1,9 +1,11 @@
 """
 Quick validation: each external baseline does 1 forward + 1 backward pass
-with tiny synthetic data. Runs inline (no subprocess) to avoid path issues.
+with tiny synthetic data. Most run inline; GDN runs in subprocess to
+avoid relative-import conflicts.
+
 Usage: python test_external_quick.py
 """
-import sys, importlib
+import sys, subprocess, importlib
 from pathlib import Path
 import torch
 import numpy as np
@@ -11,12 +13,23 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent
 errors = []
 
-def _clean():
-    keys = [k for k in list(sys.modules.keys()) if "models" in k or "model" in k
-            or "GANF" in k or "TranAD" in k or "GDN" in k or "DCdetector" in k
-            or "AnomalyTransformer" in k or "dgl" in k or "torch_geometric" in k]
-    for k in keys:
-        del sys.modules[k]
+def clean():
+    """Remove our baseline modules from sys.modules."""
+    for k in list(sys.modules.keys()):
+        if any(kw in k for kw in ["GANF", "TranAD", "GDN", "DCdetector",
+                                   "AnomalyTransformer", "graph_layer",
+                                   "NF", "MAF", "RealNVP", "src"]):
+            del sys.modules[k]
+        if k == "util" or k.startswith("util."):
+            del sys.modules[k]
+    # Only delete models/model from external_baselines
+    for conflict in ["models", "model"]:
+        if conflict in sys.modules:
+            mod_path = getattr(sys.modules[conflict], "__file__", "") or ""
+            if "external_baselines" in str(mod_path):
+                for sk in list(sys.modules.keys()):
+                    if sk == conflict or sk.startswith(conflict + "."):
+                        del sys.modules[sk]
     sys.path = [p for p in sys.path if "external_baselines" not in p]
 
 def ok(name):
@@ -33,11 +46,9 @@ print("=" * 60)
 
 # ── 1. GANF ────────────────────────────────────
 print("\n--- GANF ---")
-_clean()
+clean()
 try:
     sys.path.insert(0, str(ROOT / "external_baselines" / "GANF"))
-    import models.GANF as ganf_mod
-    importlib.reload(ganf_mod)
     from models.GANF import GANF
     B, K, L, D = 4, 5, 10, 1
     x = torch.randn(B, K, L, D)
@@ -50,7 +61,7 @@ except Exception as e:
 
 # ── 2. TranAD ──────────────────────────────────
 print("\n--- TranAD ---")
-_clean()
+clean()
 try:
     sys.path.insert(0, str(ROOT / "external_baselines" / "TranAD"))
     from src.models import TranAD
@@ -65,7 +76,7 @@ except Exception as e:
 
 # ── 3. Anomaly-Transformer ─────────────────────
 print("\n--- Anomaly-Transformer ---")
-_clean()
+clean()
 try:
     sys.path.insert(0, str(ROOT / "external_baselines" / "Anomaly-Transformer"))
     from model.AnomalyTransformer import AnomalyTransformer
@@ -80,7 +91,7 @@ except Exception as e:
 
 # ── 4. DCdetector ──────────────────────────────
 print("\n--- DCdetector ---")
-_clean()
+clean()
 try:
     sys.path.insert(0, str(ROOT / "external_baselines" / "DCdetector"))
     from model.DCdetector import DCdetector
@@ -96,23 +107,31 @@ try:
 except Exception as e:
     fail("DCdetector", e)
 
-# ── 5. GDN ─────────────────────────────────────
-print("\n--- GDN ---")
-_clean()
-try:
-    sys.path.insert(0, str(ROOT / "external_baselines" / "GDN"))
-    from util.env import set_device
-    set_device(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
-    from models.GDN import GDN
-    node_num = 4
-    edge_index = torch.tensor([[0,1,2,3],[1,2,3,0]], dtype=torch.long)
-    m = GDN(edge_index_sets=[edge_index], node_num=node_num, dim=8, input_dim=10, out_layer_inter_dim=16, topk=2)
-    x = torch.randn(2, node_num, 10)
-    out = m(x, edge_index)
-    loss = out.mean(); loss.backward()
+# ── 5. GDN (subprocess to avoid relative-import issues) ──
+print("\n--- GDN (subprocess) ---")
+gdn_code = """
+import sys, torch; from pathlib import Path
+root = Path(r'{root}')
+gdn_root = root / 'external_baselines' / 'GDN'
+sys.path.insert(0, str(gdn_root))
+sys.path.insert(0, str(gdn_root / 'util'))
+from util.env import set_device
+set_device(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+from models.GDN import GDN
+node_num = 4
+edge_index = torch.tensor([[0,1,2,3],[1,2,3,0]], dtype=torch.long)
+m = GDN(edge_index_sets=[edge_index], node_num=node_num, dim=8, input_dim=10, out_layer_inter_dim=16, topk=2)
+x = torch.randn(2, node_num, 10)
+out = m(x, edge_index)
+loss = out.mean(); loss.backward()
+print("OK")
+"""
+r = subprocess.run([sys.executable, "-c", gdn_code.format(root=str(ROOT))],
+                    capture_output=True, text=True, timeout=120, cwd=ROOT)
+if r.returncode == 0 and "OK" in r.stdout:
     ok("GDN forward + backward")
-except Exception as e:
-    fail("GDN", e)
+else:
+    fail("GDN", r.stderr.strip().split("\n")[-2:])
 
 print(f"\n{'=' * 60}")
 if errors:
