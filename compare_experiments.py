@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -81,8 +82,11 @@ def stream_subprocess(command, cwd, log_path, extra_env=None):
 
         assert process.stdout is not None
         for line in process.stdout:
-            print(line, end="")
             log_file.write(line)
+            try:
+                print(line, end="")
+            except UnicodeEncodeError:
+                print(line.encode("utf-8", errors="replace").decode("utf-8", errors="replace"), end="")
 
         return process.wait()
 
