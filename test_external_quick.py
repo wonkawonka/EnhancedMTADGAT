@@ -95,7 +95,7 @@ fail_count = 0
 for name, code in models:
     code = code.format(root=str(ROOT))
     cmd = [str(VENV_PY), "-c", code]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=ROOT)
     if result.returncode == 0:
         print(f"  [PASS] {name}")
         pass_count += 1
