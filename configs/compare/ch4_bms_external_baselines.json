@@ -5,13 +5,10 @@
   "_ready_now": [
     "TranAD 已支持直接读取主仓 BMS cluster 的 processed 数据。",
     "Anomaly-Transformer 已支持直接读取主仓 BMS cluster 的 processed 数据。",
-    "OmniAnomaly 已支持直接读取主仓 BMS cluster 的 processed 数据。",
     "GDN 已支持直接读取主仓 BMS cluster 的 processed 数据。",
     "DCdetector 已支持直接读取主仓 BMS cluster 的 processed 数据。"
   ],
-  "_pending_now": [
-    "OmniAnomaly 真正运行仍需要单独的 TensorFlow 1.x + tfsnippet 环境。"
-  ],
+  "_pending_now": [],
   "_thesis_scope_note": "本计划只服务于第四章 BMS 外部基线对比，不包含 RANDOM。",
   "common_env": {
     "PYTHONIOENCODING": "utf-8"
@@ -47,18 +44,6 @@
         "anormly_ratio": 4.0
       },
       "skip_if_exists": "checkpoints/ch4_bms_b14_3_2_cluster1/BMS_B14_3_2_cluster1_checkpoint.pth"
-    },
-    {
-      "name": "omnianomaly_bms_b14_3_2_cluster1_ch4",
-      "baseline": "OmniAnomaly",
-      "script": "main.py",
-      "args": {
-        "dataset": "BMS_B14_3_2_cluster1",
-        "max_epoch": 10,
-        "result_dir": "result/ch4_bms_b14_3_2_cluster1",
-        "save_dir": "model/ch4_bms_b14_3_2_cluster1"
-      },
-      "skip_if_exists": "result/ch4_bms_b14_3_2_cluster1"
     },
     {
       "name": "gdn_bms_b14_3_2_cluster1_ch4",
@@ -107,18 +92,6 @@
       "skip_if_exists": "checkpoints/ch4_bms_b14_3_2_cluster2/BMS_B14_3_2_cluster2_checkpoint.pth"
     },
     {
-      "name": "omnianomaly_bms_b14_3_2_cluster2_ch4",
-      "baseline": "OmniAnomaly",
-      "script": "main.py",
-      "args": {
-        "dataset": "BMS_B14_3_2_cluster2",
-        "max_epoch": 10,
-        "result_dir": "result/ch4_bms_b14_3_2_cluster2",
-        "save_dir": "model/ch4_bms_b14_3_2_cluster2"
-      },
-      "skip_if_exists": "result/ch4_bms_b14_3_2_cluster2"
-    },
-    {
       "name": "gdn_bms_b14_3_2_cluster2_ch4",
       "baseline": "GDN",
       "script": "main.py",
@@ -163,18 +136,6 @@
         "anormly_ratio": 4.0
       },
       "skip_if_exists": "checkpoints/ch4_bms_b14_3_2_cluster3/BMS_B14_3_2_cluster3_checkpoint.pth"
-    },
-    {
-      "name": "omnianomaly_bms_b14_3_2_cluster3_ch4",
-      "baseline": "OmniAnomaly",
-      "script": "main.py",
-      "args": {
-        "dataset": "BMS_B14_3_2_cluster3",
-        "max_epoch": 10,
-        "result_dir": "result/ch4_bms_b14_3_2_cluster3",
-        "save_dir": "model/ch4_bms_b14_3_2_cluster3"
-      },
-      "skip_if_exists": "result/ch4_bms_b14_3_2_cluster3"
     },
     {
       "name": "gdn_bms_b14_3_2_cluster3_ch4",
@@ -223,18 +184,6 @@
       "skip_if_exists": "checkpoints/ch4_bms_b14_3_2_cluster4/BMS_B14_3_2_cluster4_checkpoint.pth"
     },
     {
-      "name": "omnianomaly_bms_b14_3_2_cluster4_ch4",
-      "baseline": "OmniAnomaly",
-      "script": "main.py",
-      "args": {
-        "dataset": "BMS_B14_3_2_cluster4",
-        "max_epoch": 10,
-        "result_dir": "result/ch4_bms_b14_3_2_cluster4",
-        "save_dir": "model/ch4_bms_b14_3_2_cluster4"
-      },
-      "skip_if_exists": "result/ch4_bms_b14_3_2_cluster4"
-    },
-    {
       "name": "gdn_bms_b14_3_2_cluster4_ch4",
       "baseline": "GDN",
       "script": "main.py",
@@ -281,18 +230,6 @@
       "skip_if_exists": "checkpoints/ch4_bms_b14_3_2_cluster5/BMS_B14_3_2_cluster5_checkpoint.pth"
     },
     {
-      "name": "omnianomaly_bms_b14_3_2_cluster5_ch4",
-      "baseline": "OmniAnomaly",
-      "script": "main.py",
-      "args": {
-        "dataset": "BMS_B14_3_2_cluster5",
-        "max_epoch": 10,
-        "result_dir": "result/ch4_bms_b14_3_2_cluster5",
-        "save_dir": "model/ch4_bms_b14_3_2_cluster5"
-      },
-      "skip_if_exists": "result/ch4_bms_b14_3_2_cluster5"
-    },
-    {
       "name": "gdn_bms_b14_3_2_cluster5_ch4",
       "baseline": "GDN",
       "script": "main.py",
@@ -337,18 +274,6 @@
         "anormly_ratio": 4.0
       },
       "skip_if_exists": "checkpoints/ch4_bms_b14_3_2_cluster6/BMS_B14_3_2_cluster6_checkpoint.pth"
-    },
-    {
-      "name": "omnianomaly_bms_b14_3_2_cluster6_ch4",
-      "baseline": "OmniAnomaly",
-      "script": "main.py",
-      "args": {
-        "dataset": "BMS_B14_3_2_cluster6",
-        "max_epoch": 10,
-        "result_dir": "result/ch4_bms_b14_3_2_cluster6",
-        "save_dir": "model/ch4_bms_b14_3_2_cluster6"
-      },
-      "skip_if_exists": "result/ch4_bms_b14_3_2_cluster6"
     },
     {
       "name": "gdn_bms_b14_3_2_cluster6_ch4",

@@ -5,13 +5,11 @@
   "_ready_now": [
     "TranAD 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
     "Anomaly-Transformer 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
-    "OmniAnomaly 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
     "GDN 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
     "DCdetector 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。"
   ],
   "_pending_now": [
     "BMS 外部基线已移到 ch4_bms_external_baselines.json，避免第三章和第四章重复执行。",
-    "OmniAnomaly 真正运行仍需要单独的 TensorFlow 1.x + tfsnippet 环境。",
     "LSTM-AE 当前还没有按论文现用数据集完成适配，因此未纳入本计划。"
   ],
   "_thesis_scope_note": "本计划用于第三章外部对比，覆盖 SMAP、MSL 和 NASA_RANDOM_DISCHARGE。这里只把 SMAP、MSL 作为主标签指标数据集；BMS 的外部对比统一复用第四章 BMS-only 计划。",
@@ -49,18 +47,6 @@
         "anormly_ratio": 4.0
       },
       "skip_if_exists": "checkpoints/ch3_smap/SMAP_checkpoint.pth"
-    },
-    {
-      "name": "omnianomaly_smap_ch3",
-      "baseline": "OmniAnomaly",
-      "script": "main.py",
-      "args": {
-        "dataset": "SMAP",
-        "max_epoch": 10,
-        "result_dir": "result/ch3_smap",
-        "save_dir": "model/ch3_smap"
-      },
-      "skip_if_exists": "result/ch3_smap"
     },
     {
       "name": "gdn_smap_ch3",
@@ -109,18 +95,6 @@
       "skip_if_exists": "checkpoints/ch3_msl/MSL_checkpoint.pth"
     },
     {
-      "name": "omnianomaly_msl_ch3",
-      "baseline": "OmniAnomaly",
-      "script": "main.py",
-      "args": {
-        "dataset": "MSL",
-        "max_epoch": 10,
-        "result_dir": "result/ch3_msl",
-        "save_dir": "model/ch3_msl"
-      },
-      "skip_if_exists": "result/ch3_msl"
-    },
-    {
       "name": "gdn_msl_ch3",
       "baseline": "GDN",
       "script": "main.py",
@@ -165,18 +139,6 @@
         "anormly_ratio": 4.0
       },
       "skip_if_exists": "checkpoints/ch3_nasa_random_discharge_rw1/NASA_RANDOM_DISCHARGE_RW1_checkpoint.pth"
-    },
-    {
-      "name": "omnianomaly_nasa_random_discharge_rw1_ch3",
-      "baseline": "OmniAnomaly",
-      "script": "main.py",
-      "args": {
-        "dataset": "NASA_RANDOM_DISCHARGE_RW1",
-        "max_epoch": 10,
-        "result_dir": "result/ch3_nasa_random_discharge_rw1",
-        "save_dir": "model/ch3_nasa_random_discharge_rw1"
-      },
-      "skip_if_exists": "result/ch3_nasa_random_discharge_rw1"
     },
     {
       "name": "gdn_nasa_random_discharge_rw1_ch3",
@@ -225,18 +187,6 @@
       "skip_if_exists": "checkpoints/ch3_nasa_random_discharge_rw2/NASA_RANDOM_DISCHARGE_RW2_checkpoint.pth"
     },
     {
-      "name": "omnianomaly_nasa_random_discharge_rw2_ch3",
-      "baseline": "OmniAnomaly",
-      "script": "main.py",
-      "args": {
-        "dataset": "NASA_RANDOM_DISCHARGE_RW2",
-        "max_epoch": 10,
-        "result_dir": "result/ch3_nasa_random_discharge_rw2",
-        "save_dir": "model/ch3_nasa_random_discharge_rw2"
-      },
-      "skip_if_exists": "result/ch3_nasa_random_discharge_rw2"
-    },
-    {
       "name": "gdn_nasa_random_discharge_rw2_ch3",
       "baseline": "GDN",
       "script": "main.py",
@@ -283,18 +233,6 @@
       "skip_if_exists": "checkpoints/ch3_nasa_random_discharge_rw7/NASA_RANDOM_DISCHARGE_RW7_checkpoint.pth"
     },
     {
-      "name": "omnianomaly_nasa_random_discharge_rw7_ch3",
-      "baseline": "OmniAnomaly",
-      "script": "main.py",
-      "args": {
-        "dataset": "NASA_RANDOM_DISCHARGE_RW7",
-        "max_epoch": 10,
-        "result_dir": "result/ch3_nasa_random_discharge_rw7",
-        "save_dir": "model/ch3_nasa_random_discharge_rw7"
-      },
-      "skip_if_exists": "result/ch3_nasa_random_discharge_rw7"
-    },
-    {
       "name": "gdn_nasa_random_discharge_rw7_ch3",
       "baseline": "GDN",
       "script": "main.py",
@@ -339,18 +277,6 @@
         "anormly_ratio": 4.0
       },
       "skip_if_exists": "checkpoints/ch3_nasa_random_discharge_rw8/NASA_RANDOM_DISCHARGE_RW8_checkpoint.pth"
-    },
-    {
-      "name": "omnianomaly_nasa_random_discharge_rw8_ch3",
-      "baseline": "OmniAnomaly",
-      "script": "main.py",
-      "args": {
-        "dataset": "NASA_RANDOM_DISCHARGE_RW8",
-        "max_epoch": 10,
-        "result_dir": "result/ch3_nasa_random_discharge_rw8",
-        "save_dir": "model/ch3_nasa_random_discharge_rw8"
-      },
-      "skip_if_exists": "result/ch3_nasa_random_discharge_rw8"
     },
     {
       "name": "gdn_nasa_random_discharge_rw8_ch3",
