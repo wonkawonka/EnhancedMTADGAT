@@ -22,4 +22,8 @@ parser.add_argument('--retrain',
 parser.add_argument('--less', 
 					action='store_true', 
 					help="train using less data")
+parser.add_argument('--output_dir', 
+					type=str, 
+					default='',
+                    help="directory for standardized output")
 args = parser.parse_args()

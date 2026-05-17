@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 import numpy as np
+import sys
+import json
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _common_output import save_standardized_output
+
 import torch
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, random_split, Subset
@@ -241,6 +247,26 @@ class Main():
         print(f'precision: {info[1]}')
         print(f'recall: {info[2]}\n')
 
+        # Save standardized output
+        output_dir = self.env_config.get('output_dir', '')
+        if output_dir:
+            final_scores = np.max(test_scores, axis=0)
+            save_standardized_output(
+                output_dir=output_dir,
+                metrics={
+                    "metric_f1": float(info[0]),
+                    "metric_precision": float(info[1]),
+                    "metric_recall": float(info[2]),
+                    "metric_auroc": float(info[3]) if len(info) > 3 else 0,
+                    "metric_threshold": float(info[4]) if len(info) > 4 else 0,
+                },
+                thresholds={
+                    "global_threshold": float(info[4]) if len(info) > 4 else 0,
+                },
+                test_scores=final_scores,
+                test_labels=np.array(test_labels),
+            )
+
 
     def get_save_path(self, feature_name=''):
 
@@ -283,6 +309,7 @@ if __name__ == "__main__":
     parser.add_argument('-topk', help='topk num', type = int, default=20)
     parser.add_argument('-report', help='best / val', type = str, default='best')
     parser.add_argument('-load_model_path', help='trained model path', type = str, default='')
+    parser.add_argument('-output_dir', help='standardized output dir', type = str, default='')
 
     args = parser.parse_args()
 
@@ -316,7 +343,8 @@ if __name__ == "__main__":
         'dataset': args.dataset,
         'report': args.report,
         'device': args.device,
-        'load_model_path': args.load_model_path
+        'load_model_path': args.load_model_path,
+        'output_dir': args.output_dir,
     }
     
 

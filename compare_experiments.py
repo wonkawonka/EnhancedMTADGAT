@@ -33,12 +33,18 @@ def normalize_cli_value(value):
 
 
 def resolve_output_dir(project_root, dataset, group, run_id):
+    """Legacy output dir resolution — kept for backward compatibility."""
     dataset = str(dataset).upper()
     if dataset == "SMD":
         return project_root / "output" / "SMD" / str(group) / run_id
     if dataset in {"CALCE", "CALCE2"}:
         return project_root / "output" / dataset / "universal_model" / run_id
     return project_root / "output" / dataset / run_id
+
+
+def resolve_plan_output_dir(batch_root, experiment_name):
+    """New output dir under experiment_runs/<batch>/output/<name>/."""
+    return batch_root / "output" / experiment_name
 
 
 def resolve_checkpoint_path(output_dir):
@@ -57,11 +63,15 @@ def build_train_command(project_root, python_executable, merged_args):
     return cmd
 
 
-def stream_subprocess(command, cwd, log_path):
+def stream_subprocess(command, cwd, log_path, extra_env=None):
+    env = os.environ.copy()
+    if extra_env:
+        env.update(extra_env)
     with open(log_path, "w", encoding="utf-8") as log_file:
         process = subprocess.Popen(
             command,
             cwd=str(cwd),
+            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -182,12 +192,9 @@ def main():
             run_id = sanitize_name(f"{idx:02d}-{name}-{batch_timestamp}")
             merged_args["run_id"] = run_id
 
-        output_dir = resolve_output_dir(
-            project_root,
-            dataset=dataset,
-            group=merged_args.get("group", "1-1"),
-            run_id=run_id,
-        )
+        # New: output under experiment_runs/<batch>/output/<name>/
+        output_dir = resolve_plan_output_dir(batch_root, name)
+        plan_extra_env = {"PLAN_OUTPUT_DIR": str(output_dir)}
         checkpoint_path = resolve_checkpoint_path(output_dir)
         if args.resume:
             merged_args["resume"] = True
@@ -223,7 +230,7 @@ def main():
             resolved_registry["experiments"].append(result)
             continue
 
-        return_code = stream_subprocess(command, cwd=project_root, log_path=log_path)
+        return_code = stream_subprocess(command, cwd=project_root, log_path=log_path, extra_env=plan_extra_env)
         result["return_code"] = return_code
         result["status"] = "done" if return_code == 0 else "failed"
         resolved_registry["experiments"].append(result)

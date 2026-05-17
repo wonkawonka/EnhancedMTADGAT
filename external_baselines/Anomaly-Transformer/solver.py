@@ -4,9 +4,13 @@ import torch.nn.functional as F
 import numpy as np
 import os
 import time
+import sys
+from pathlib import Path
 from utils.utils import *
 from model.AnomalyTransformer import AnomalyTransformer
 from data_factory.data_loader import get_loader_segment
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _common_output import save_standardized_output
 
 
 def my_kl_loss(p, q):
@@ -371,5 +375,25 @@ class Solver(object):
             "Accuracy : {:0.4f}, Precision : {:0.4f}, Recall : {:0.4f}, F-score : {:0.4f} ".format(
                 accuracy, precision,
                 recall, f_score))
+
+        # Save standardized output
+        output_dir = getattr(self, 'output_dir', '')
+        if output_dir:
+            save_standardized_output(
+                    output_dir=output_dir,
+                    metrics={
+                        "metric_f1": float(f_score),
+                        "metric_precision": float(precision),
+                        "metric_recall": float(recall),
+                        "metric_accuracy": float(accuracy),
+                        "metric_threshold": float(thresh),
+                    },
+                    thresholds={
+                        "global_threshold": float(thresh),
+                        "anormly_ratio": self.anormly_ratio,
+                    },
+                    test_scores=test_energy,
+                    test_labels=gt,
+                )
 
         return accuracy, precision, recall, f_score

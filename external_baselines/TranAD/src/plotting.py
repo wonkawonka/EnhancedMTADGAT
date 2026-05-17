@@ -16,10 +16,11 @@ def smooth(y, box_pts=1):
     y_smooth = np.convolve(y, box, mode='same')
     return y_smooth
 
-def plotter(name, y_true, y_pred, ascore, labels):
+def plotter(name, y_true, y_pred, ascore, labels, save_dir=None):
 	if 'TranAD' in name: y_true = torch.roll(y_true, 1, 0)
-	os.makedirs(os.path.join('plots', name), exist_ok=True)
-	pdf = PdfPages(f'plots/{name}/output.pdf')
+	save_dir = save_dir or 'plots'
+	os.makedirs(os.path.join(save_dir, name), exist_ok=True)
+	pdf = PdfPages(os.path.join(save_dir, name, 'output.pdf'))
 	for dim in range(y_true.shape[1]):
 		y_t, y_p = y_true[:, dim], y_pred[:, dim]
 		a_s = ascore[:, dim]

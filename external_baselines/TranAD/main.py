@@ -2,9 +2,13 @@ import pickle
 import os
 from pathlib import Path
 import pandas as pd
+import numpy as np
 from tqdm import tqdm
 import torch
 import torch.nn as nn
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _common_output import save_standardized_output
 
 from src.models import *
 from src.constants import *
@@ -95,7 +99,10 @@ def load_dataset(dataset):
 	return train_loader, test_loader, labels
 
 def save_model(model, optimizer, scheduler, epoch, accuracy_list):
-	folder = f'checkpoints/{args.model}_{args.dataset}/'
+	if args.output_dir:
+		folder = os.path.join(args.output_dir, 'checkpoints')
+	else:
+		folder = f'checkpoints/{args.model}_{args.dataset}/'
 	os.makedirs(folder, exist_ok=True)
 	file_path = f'{folder}/model.ckpt'
 	torch.save({
@@ -104,6 +111,21 @@ def save_model(model, optimizer, scheduler, epoch, accuracy_list):
         'optimizer_state_dict': optimizer.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
         'accuracy_list': accuracy_list}, file_path)
+
+def _save_tranad_loss_plot(train_losses, output_dir):
+	try:
+		import matplotlib
+		matplotlib.use('Agg')
+		import matplotlib.pyplot as plt
+		fig, ax = plt.subplots(figsize=(8, 4))
+		ax.plot(train_losses, label='Train Loss')
+		ax.set_xlabel('Epoch')
+		ax.set_ylabel('Loss')
+		ax.legend()
+		fig.savefig(os.path.join(output_dir, 'train_losses.png'), dpi=100, bbox_inches='tight')
+		plt.close(fig)
+	except Exception as e:
+		print(f'[OUTPUT] Warning: could not save loss plot: {e}')
 
 def load_model(modelname, dims):
 	import src.models
@@ -361,12 +383,17 @@ if __name__ == '__main__':
 	if not args.test:
 		print(f'{color.HEADER}Training {args.model} on {args.dataset}{color.ENDC}')
 		num_epochs = 5; e = epoch + 1; start = time()
+		train_losses = []
 		for e in tqdm(list(range(epoch+1, epoch+num_epochs+1))):
 			lossT, lr = backprop(e, model, trainD, trainO, optimizer, scheduler)
 			accuracy_list.append((lossT, lr))
+			train_losses.append(lossT)
 		print(color.BOLD+'Training time: '+"{:10.4f}".format(time()-start)+' s'+color.ENDC)
 		save_model(model, optimizer, scheduler, e, accuracy_list)
-		plot_accuracies(accuracy_list, f'{args.model}_{args.dataset}')
+		if args.output_dir:
+			_save_tranad_loss_plot(train_losses, args.output_dir)
+		else:
+			plot_accuracies(accuracy_list, f'{args.model}_{args.dataset}')
 
 	### Testing phase
 	torch.zero_grad = True
@@ -377,7 +404,10 @@ if __name__ == '__main__':
 	### Plot curves
 	if not args.test:
 		if 'TranAD' in model.name: testO = torch.roll(testO, 1, 0) 
-		plotter(f'{args.model}_{args.dataset}', testO, y_pred, loss, labels)
+		if args.output_dir:
+			plotter(f'{args.model}_{args.dataset}', testO, y_pred, loss, labels, save_dir=args.output_dir)
+		else:
+			plotter(f'{args.model}_{args.dataset}', testO, y_pred, loss, labels)
 
 	### Scores
 	df = pd.DataFrame()
@@ -395,5 +425,25 @@ if __name__ == '__main__':
 	result.update(ndcg(loss, labels))
 	print(df)
 	pprint(result)
-	# pprint(getresults2(df, result))
+
+	# Save standardized output
+	output_dir = args.output_dir
+	if output_dir:
+		save_standardized_output(
+			output_dir=output_dir,
+			metrics={
+				"metric_f1": result.get("f1", 0),
+				"metric_precision": result.get("precision", 0),
+				"metric_recall": result.get("recall", 0),
+				"metric_auroc": result.get("roc_auc", 0),
+				"metric_threshold": result.get("threshold", 0),
+			},
+			thresholds={
+				"global_threshold": result.get("threshold", 0),
+			},
+			test_scores=lossFinal,
+			test_labels=labelsFinal if labels is not None else None,
+			config=vars(args),
+			train_losses=train_losses if not args.test else None,
+		)
 	# beep(4)

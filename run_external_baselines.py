@@ -171,7 +171,7 @@ def main():
     only_names = {sanitize_name(item).lower() for item in args.only.split(",") if item.strip()}
     plan_name = sanitize_name(plan.get("plan_name", plan_path.stem))
     batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    batch_root = project_root / "external_runs" / f"{plan_name}_{batch_timestamp}"
+    batch_root = project_root / "experiment_runs" / f"{plan_name}_{batch_timestamp}"
     logs_dir = batch_root / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -202,6 +202,18 @@ def main():
 
     for idx, name, experiment in selected_experiments:
         cwd = resolve_cwd(project_root, experiment)
+
+        # Inject output_dir for standardized output
+        output_dir = batch_root / "output" / name
+        experiment.setdefault("args", {})
+        existing_keys = experiment["args"].keys()
+        has_output_key = any(k.strip("-") == "output_dir" for k in existing_keys)
+        if not has_output_key:
+            if any(k.startswith("-") for k in existing_keys):
+                experiment["args"]["-output_dir"] = str(output_dir)
+            else:
+                experiment["args"]["output_dir"] = str(output_dir)
+
         command = build_command(experiment, args.python)
         log_path = logs_dir / f"{name}.log"
         env_payload = dict(common_env)
@@ -209,6 +221,9 @@ def main():
 
         skip_marker_value = experiment.get("skip_if_exists", "")
         skip_marker = resolve_marker_path(cwd, skip_marker_value) if skip_marker_value else None
+
+        # Also check output_dir-based skip marker (native checkpoints now go there)
+        output_skip = output_dir / "checkpoints" if skip_marker_value else None
 
         record = {
             "name": name,
@@ -222,10 +237,15 @@ def main():
             "return_code": None,
         }
 
-        if args.skip_existing and skip_marker and skip_marker.exists():
-            record["status"] = "skipped_existing"
+        if args.skip_existing:
+            if skip_marker and skip_marker.exists():
+                record["status"] = "skipped_existing"
+            elif output_skip and output_skip.exists():
+                record["status"] = "skipped_existing"
+
+        if record["status"] == "skipped_existing":
             registry["experiments"].append(record)
-            print(f"[SKIP] {name} -> {skip_marker}")
+            print(f"[SKIP] {name} -> {skip_marker or output_skip}")
             continue
 
         print(f"\n[{idx}/{len(selected_experiments)}] {name}")

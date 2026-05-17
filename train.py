@@ -207,6 +207,9 @@ def train_universal_model(args):
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     save_path = f"{output_path}/{id}"
+    plan_output_dir = os.environ.get("PLAN_OUTPUT_DIR", "")
+    if plan_output_dir:
+        save_path = plan_output_dir
     
     n_features = train_entity_data[0][1].shape[1]  # 从第一个实体获取特征数
     
@@ -429,6 +432,9 @@ if __name__ == "__main__":
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
         save_path = f"{output_path}/{id}"
+        plan_output_dir = os.environ.get("PLAN_OUTPUT_DIR", "")
+        if plan_output_dir:
+            save_path = plan_output_dir
 
         nasa_train_tensors = None
         bms_train_tensors = None
