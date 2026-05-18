@@ -85,7 +85,9 @@ def load_dataset(dataset):
 				loader[0] = cut_array(0.2, loader[0])
 			train_loader = DataLoader(loader[0], batch_size=loader[0].shape[0])
 			test_loader = DataLoader(loader[1], batch_size=loader[1].shape[0])
-			labels = loader[2].reshape(-1)
+			labels = loader[2]
+			if labels.ndim == 1:
+				labels = labels.reshape(-1, 1)
 			print(f'Loading {dataset} from project processed dir: {project_root}')
 			return train_loader, test_loader, labels
 
