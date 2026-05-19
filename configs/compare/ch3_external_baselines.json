@@ -6,7 +6,8 @@
     "TranAD 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
     "Anomaly-Transformer 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
     "GDN 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
-    "DCdetector 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。"
+    "DCdetector 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。",
+    "GANF 已支持直接读取主仓 SMAP、MSL 和 NASA_RANDOM_DISCHARGE 的 processed 数据。"
   ],
   "_pending_now": [
     "BMS 外部基线已移到 ch4_bms_external_baselines.json，避免第三章和第四章重复执行。",

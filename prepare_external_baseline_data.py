@@ -164,6 +164,12 @@ def export_anomaly_transformer(output_dir: Path, target_dataset_name: str, train
 def export_tranad(output_dir: Path, target_dataset_name: str, series_prefix: str, train, test, labels, overwrite: bool):
     dataset_dir = output_dir / target_dataset_name
     ensure_dir(dataset_dir)
+    if str(target_dataset_name).startswith(("BMS_", "NASA_", "NASA_RANDOM_CHARGE_", "NASA_RANDOM_DISCHARGE_")):
+        labels = np.asarray(labels)
+        if labels.ndim == 1:
+            labels = np.repeat(labels.reshape(-1, 1), train.shape[1], axis=1)
+        elif labels.ndim == 2 and labels.shape[1] == 1:
+            labels = np.repeat(labels, train.shape[1], axis=1)
     write_numpy(dataset_dir / f"{series_prefix}_train.npy", train, overwrite)
     write_numpy(dataset_dir / f"{series_prefix}_test.npy", test, overwrite)
     write_numpy(dataset_dir / f"{series_prefix}_labels.npy", labels, overwrite)

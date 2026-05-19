@@ -1,1479 +1,0 @@
-3.2s 1 Looking in links: /kaggle/input/pm-115743517-at-05-12-2026-16-56-13
-3.3s 2 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/torch-2.2.0+cu118-cp312-cp312-linux_x86_64.whl
-9.9s 3 Requirement already satisfied: torchvision in /usr/local/lib/python3.12/dist-packages (0.25.0+cu128)
-9.9s 4 Requirement already satisfied: torchaudio in /usr/local/lib/python3.12/dist-packages (2.10.0+cu128)
-9.9s 5 Requirement already satisfied: filelock in /usr/local/lib/python3.12/dist-packages (from torch==2.2.0) (3.24.3)
-9.9s 6 Requirement already satisfied: typing-extensions>=4.8.0 in /usr/local/lib/python3.12/dist-packages (from torch==2.2.0) (4.15.0)
-9.9s 7 Requirement already satisfied: sympy in /usr/local/lib/python3.12/dist-packages (from torch==2.2.0) (1.14.0)
-9.9s 8 Requirement already satisfied: networkx in /usr/local/lib/python3.12/dist-packages (from torch==2.2.0) (3.6.1)
-9.9s 9 Requirement already satisfied: jinja2 in /usr/local/lib/python3.12/dist-packages (from torch==2.2.0) (3.1.6)
-9.9s 10 Requirement already satisfied: fsspec in /usr/local/lib/python3.12/dist-packages (from torch==2.2.0) (2026.2.0)
-9.9s 11 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cuda_nvrtc_cu11-11.8.89-py3-none-manylinux1_x86_64.whl (from torch==2.2.0)
-10.1s 12 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cuda_runtime_cu11-11.8.89-py3-none-manylinux1_x86_64.whl (from torch==2.2.0)
-10.1s 13 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cuda_cupti_cu11-11.8.87-py3-none-manylinux1_x86_64.whl (from torch==2.2.0)
-10.2s 14 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cudnn_cu11-8.7.0.84-py3-none-manylinux1_x86_64.whl (from torch==2.2.0)
-14.7s 15 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cublas_cu11-11.11.3.6-py3-none-manylinux1_x86_64.whl (from torch==2.2.0)
-17.4s 16 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cufft_cu11-10.9.0.58-py3-none-manylinux1_x86_64.whl (from torch==2.2.0)
-18.5s 17 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_curand_cu11-10.3.0.86-py3-none-manylinux1_x86_64.whl (from torch==2.2.0)
-18.8s 18 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cusolver_cu11-11.4.1.48-py3-none-manylinux1_x86_64.whl (from torch==2.2.0)
-19.7s 19 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cusparse_cu11-11.7.5.86-py3-none-manylinux1_x86_64.whl (from torch==2.2.0)
-21.0s 20 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_nccl_cu11-2.19.3-py3-none-manylinux1_x86_64.whl (from torch==2.2.0)
-21.9s 21 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_nvtx_cu11-11.8.86-py3-none-manylinux1_x86_64.whl (from torch==2.2.0)
-22.0s 22 Requirement already satisfied: numpy in /usr/local/lib/python3.12/dist-packages (from torchvision) (2.0.2)
-22.0s 23 INFO: pip is looking at multiple versions of torchvision to determine which version is compatible with other requirements. This could take a while.
-22.0s 24 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/torchvision-0.17.0+cu118-cp312-cp312-linux_x86_64.whl
-22.0s 25 Requirement already satisfied: requests in /usr/local/lib/python3.12/dist-packages (from torchvision) (2.32.4)
-22.0s 26 Requirement already satisfied: pillow!=8.3.*,>=5.3.0 in /usr/local/lib/python3.12/dist-packages (from torchvision) (11.3.0)
-22.0s 27 INFO: pip is looking at multiple versions of torchaudio to determine which version is compatible with other requirements. This could take a while.
-22.0s 28 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/torchaudio-2.2.0+cu118-cp312-cp312-linux_x86_64.whl
-22.1s 29 Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.12/dist-packages (from jinja2->torch==2.2.0) (3.0.3)
-22.1s 30 Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.12/dist-packages (from requests->torchvision) (3.4.4)
-22.1s 31 Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.12/dist-packages (from requests->torchvision) (3.11)
-22.1s 32 Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.12/dist-packages (from requests->torchvision) (2.5.0)
-22.1s 33 Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.12/dist-packages (from requests->torchvision) (2026.1.4)
-22.1s 34 Requirement already satisfied: mpmath<1.4,>=1.1.0 in /usr/local/lib/python3.12/dist-packages (from sympy->torch==2.2.0) (1.3.0)
-24.2s 35 Installing collected packages: nvidia-nvtx-cu11, nvidia-nccl-cu11, nvidia-cusparse-cu11, nvidia-curand-cu11, nvidia-cufft-cu11, nvidia-cuda-runtime-cu11, nvidia-cuda-nvrtc-cu11, nvidia-cuda-cupti-cu11, nvidia-cublas-cu11, nvidia-cusolver-cu11, nvidia-cudnn-cu11, torch, torchvision, torchaudio
-56.0s 36 Attempting uninstall: torch
-56.5s 37 Found existing installation: torch 2.10.0+cu128
-57.3s 38 Uninstalling torch-2.10.0+cu128:
-73.6s 39 Successfully uninstalled torch-2.10.0+cu128
-97.6s 40 Attempting uninstall: torchvision
-97.8s 41 Found existing installation: torchvision 0.25.0+cu128
-97.8s 42 Uninstalling torchvision-0.25.0+cu128:
-98.0s 43 Successfully uninstalled torchvision-0.25.0+cu128
-98.6s 44 Attempting uninstall: torchaudio
-98.8s 45 Found existing installation: torchaudio 2.10.0+cu128
-98.8s 46 Uninstalling torchaudio-2.10.0+cu128:
-98.9s 47 Successfully uninstalled torchaudio-2.10.0+cu128
-99.3s 48 Successfully installed nvidia-cublas-cu11-11.11.3.6 nvidia-cuda-cupti-cu11-11.8.87 nvidia-cuda-nvrtc-cu11-11.8.89 nvidia-cuda-runtime-cu11-11.8.89 nvidia-cudnn-cu11-8.7.0.84 nvidia-cufft-cu11-10.9.0.58 nvidia-curand-cu11-10.3.0.86 nvidia-cusolver-cu11-11.4.1.48 nvidia-cusparse-cu11-11.7.5.86 nvidia-nccl-cu11-2.19.3 nvidia-nvtx-cu11-11.8.86 torch-2.2.0+cu118 torchaudio-2.2.0+cu118 torchvision-0.17.0+cu118
-100.4s 49 Looking in links: /kaggle/input/pm-115743517-at-05-12-2026-16-56-13
-100.5s 50 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/numpy-1.26.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-103.0s 51 Installing collected packages: numpy
-103.0s 52 Attempting uninstall: numpy
-103.2s 53 Found existing installation: numpy 2.0.2
-103.3s 54 Uninstalling numpy-2.0.2:
-104.1s 55 Successfully uninstalled numpy-2.0.2
-106.3s 56 ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
-106.3s 57 bigframes 2.35.0 requires google-cloud-bigquery-storage<3.0.0,>=2.30.0, which is not installed.
-106.3s 58 kaggle-environments 1.27.3 requires numpy>=2.0, but you have numpy 1.26.0 which is incompatible.
-106.3s 59 tpot 1.1.0 requires numpy>=1.26.4, but you have numpy 1.26.0 which is incompatible.
-106.3s 60 cesium 0.12.4 requires numpy<3.0,>=2.0, but you have numpy 1.26.0 which is incompatible.
-106.3s 61 google-colab 1.0.0 requires jupyter-server==2.14.0, but you have jupyter-server 2.12.5 which is incompatible.
-106.3s 62 google-colab 1.0.0 requires pandas==2.2.2, but you have pandas 2.3.3 which is incompatible.
-106.3s 63 dopamine-rl 4.1.2 requires gym<=0.25.2, but you have gym 0.26.2 which is incompatible.
-106.3s 64 jaxlib 0.7.2 requires numpy>=2.0, but you have numpy 1.26.0 which is incompatible.
-106.3s 65 cupy-cuda12x 14.0.1 requires numpy<2.6,>=2.0, but you have numpy 1.26.0 which is incompatible.
-106.3s 66 opencv-python 4.13.0.92 requires numpy>=2; python_version >= "3.9", but you have numpy 1.26.0 which is incompatible.
-106.3s 67 shap 0.50.0 requires numpy>=2, but you have numpy 1.26.0 which is incompatible.
-106.3s 68 jax 0.7.2 requires numpy>=2.0, but you have numpy 1.26.0 which is incompatible.
-106.3s 69 opencv-python-headless 4.13.0.92 requires numpy>=2; python_version >= "3.9", but you have numpy 1.26.0 which is incompatible.
-106.3s 70 rasterio 1.5.0 requires numpy>=2, but you have numpy 1.26.0 which is incompatible.
-106.3s 71 tobler 0.13.0 requires numpy>=2.0, but you have numpy 1.26.0 which is incompatible.
-106.3s 72 music21 9.9.1 requires numpy>=1.26.4, but you have numpy 1.26.0 which is incompatible.
-106.3s 73 xarray-einstats 0.10.0 requires numpy>=2.0, but you have numpy 1.26.0 which is incompatible.
-106.3s 74 pytensor 2.38.0 requires numpy>=2.0, but you have numpy 1.26.0 which is incompatible.
-106.3s 75 opencv-contrib-python 4.13.0.92 requires numpy>=2; python_version >= "3.9", but you have numpy 1.26.0 which is incompatible.
-106.3s 76 Successfully installed numpy-1.26.0
-107.4s 77 Looking in links: /kaggle/input/pm-115743517-at-05-12-2026-16-56-13
-107.5s 78 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/torchdata-0.7.1-py3-none-any.whl
-107.5s 79 Requirement already satisfied: urllib3>=1.25 in /usr/local/lib/python3.12/dist-packages (from torchdata==0.7.1) (2.5.0)
-107.5s 80 Requirement already satisfied: requests in /usr/local/lib/python3.12/dist-packages (from torchdata==0.7.1) (2.32.4)
-107.5s 81 Requirement already satisfied: torch>=2 in /usr/local/lib/python3.12/dist-packages (from torchdata==0.7.1) (2.2.0+cu118)
-107.5s 82 Requirement already satisfied: filelock in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (3.24.3)
-107.5s 83 Requirement already satisfied: typing-extensions>=4.8.0 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (4.15.0)
-107.5s 84 Requirement already satisfied: sympy in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (1.14.0)
-107.5s 85 Requirement already satisfied: networkx in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (3.6.1)
-107.5s 86 Requirement already satisfied: jinja2 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (3.1.6)
-107.5s 87 Requirement already satisfied: fsspec in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (2026.2.0)
-107.5s 88 Requirement already satisfied: nvidia-cuda-nvrtc-cu11==11.8.89 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (11.8.89)
-107.5s 89 Requirement already satisfied: nvidia-cuda-runtime-cu11==11.8.89 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (11.8.89)
-107.5s 90 Requirement already satisfied: nvidia-cuda-cupti-cu11==11.8.87 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (11.8.87)
-107.5s 91 Requirement already satisfied: nvidia-cudnn-cu11==8.7.0.84 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (8.7.0.84)
-107.5s 92 Requirement already satisfied: nvidia-cublas-cu11==11.11.3.6 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (11.11.3.6)
-107.5s 93 Requirement already satisfied: nvidia-cufft-cu11==10.9.0.58 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (10.9.0.58)
-107.5s 94 Requirement already satisfied: nvidia-curand-cu11==10.3.0.86 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (10.3.0.86)
-107.5s 95 Requirement already satisfied: nvidia-cusolver-cu11==11.4.1.48 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (11.4.1.48)
-107.5s 96 Requirement already satisfied: nvidia-cusparse-cu11==11.7.5.86 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (11.7.5.86)
-107.5s 97 Requirement already satisfied: nvidia-nccl-cu11==2.19.3 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (2.19.3)
-107.5s 98 Requirement already satisfied: nvidia-nvtx-cu11==11.8.86 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata==0.7.1) (11.8.86)
-107.6s 99 Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.12/dist-packages (from requests->torchdata==0.7.1) (3.4.4)
-107.6s 100 Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.12/dist-packages (from requests->torchdata==0.7.1) (3.11)
-107.6s 101 Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.12/dist-packages (from requests->torchdata==0.7.1) (2026.1.4)
-107.6s 102 Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.12/dist-packages (from jinja2->torch>=2->torchdata==0.7.1) (3.0.3)
-107.6s 103 Requirement already satisfied: mpmath<1.4,>=1.1.0 in /usr/local/lib/python3.12/dist-packages (from sympy->torch>=2->torchdata==0.7.1) (1.3.0)
-109.5s 104 Installing collected packages: torchdata
-109.5s 105 Attempting uninstall: torchdata
-109.7s 106 Found existing installation: torchdata 0.11.0
-109.8s 107 Uninstalling torchdata-0.11.0:
-109.8s 108 Successfully uninstalled torchdata-0.11.0
-109.9s 109 ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
-109.9s 110 torchtune 0.6.1 requires torchdata==0.11.0, but you have torchdata 0.7.1 which is incompatible.
-109.9s 111 Successfully installed torchdata-0.7.1
-111.1s 112 Looking in links: /kaggle/input/pm-115743517-at-05-12-2026-16-56-13
-111.1s 113 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/dgl-2.1.0-cp312-cp312-manylinux1_x86_64.whl
-111.2s 114 Requirement already satisfied: numpy>=1.14.0 in /usr/local/lib/python3.12/dist-packages (from dgl) (1.26.0)
-111.2s 115 Requirement already satisfied: scipy>=1.1.0 in /usr/local/lib/python3.12/dist-packages (from dgl) (1.16.3)
-111.2s 116 Requirement already satisfied: networkx>=2.1 in /usr/local/lib/python3.12/dist-packages (from dgl) (3.6.1)
-111.2s 117 Requirement already satisfied: requests>=2.19.0 in /usr/local/lib/python3.12/dist-packages (from dgl) (2.32.4)
-111.2s 118 Requirement already satisfied: tqdm in /usr/local/lib/python3.12/dist-packages (from dgl) (4.67.3)
-111.2s 119 Requirement already satisfied: psutil>=5.8.0 in /usr/local/lib/python3.12/dist-packages (from dgl) (5.9.5)
-111.2s 120 Requirement already satisfied: torchdata>=0.5.0 in /usr/local/lib/python3.12/dist-packages (from dgl) (0.7.1)
-111.3s 121 Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.12/dist-packages (from requests>=2.19.0->dgl) (3.4.4)
-111.3s 122 Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.12/dist-packages (from requests>=2.19.0->dgl) (3.11)
-111.3s 123 Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.12/dist-packages (from requests>=2.19.0->dgl) (2.5.0)
-111.3s 124 Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.12/dist-packages (from requests>=2.19.0->dgl) (2026.1.4)
-111.3s 125 Requirement already satisfied: torch>=2 in /usr/local/lib/python3.12/dist-packages (from torchdata>=0.5.0->dgl) (2.2.0+cu118)
-111.3s 126 Requirement already satisfied: filelock in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (3.24.3)
-111.3s 127 Requirement already satisfied: typing-extensions>=4.8.0 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (4.15.0)
-111.3s 128 Requirement already satisfied: sympy in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (1.14.0)
-111.3s 129 Requirement already satisfied: jinja2 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (3.1.6)
-111.3s 130 Requirement already satisfied: fsspec in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (2026.2.0)
-111.3s 131 Requirement already satisfied: nvidia-cuda-nvrtc-cu11==11.8.89 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (11.8.89)
-111.3s 132 Requirement already satisfied: nvidia-cuda-runtime-cu11==11.8.89 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (11.8.89)
-111.3s 133 Requirement already satisfied: nvidia-cuda-cupti-cu11==11.8.87 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (11.8.87)
-111.3s 134 Requirement already satisfied: nvidia-cudnn-cu11==8.7.0.84 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (8.7.0.84)
-111.3s 135 Requirement already satisfied: nvidia-cublas-cu11==11.11.3.6 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (11.11.3.6)
-111.3s 136 Requirement already satisfied: nvidia-cufft-cu11==10.9.0.58 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (10.9.0.58)
-111.3s 137 Requirement already satisfied: nvidia-curand-cu11==10.3.0.86 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (10.3.0.86)
-111.3s 138 Requirement already satisfied: nvidia-cusolver-cu11==11.4.1.48 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (11.4.1.48)
-111.3s 139 Requirement already satisfied: nvidia-cusparse-cu11==11.7.5.86 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (11.7.5.86)
-111.3s 140 Requirement already satisfied: nvidia-nccl-cu11==2.19.3 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (2.19.3)
-111.3s 141 Requirement already satisfied: nvidia-nvtx-cu11==11.8.86 in /usr/local/lib/python3.12/dist-packages (from torch>=2->torchdata>=0.5.0->dgl) (11.8.86)
-111.3s 142 Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.12/dist-packages (from jinja2->torch>=2->torchdata>=0.5.0->dgl) (3.0.3)
-111.3s 143 Requirement already satisfied: mpmath<1.4,>=1.1.0 in /usr/local/lib/python3.12/dist-packages (from sympy->torch>=2->torchdata>=0.5.0->dgl) (1.3.0)
-113.3s 144 Installing collected packages: dgl
-114.1s 145 Successfully installed dgl-2.1.0
-115.2s 146 Looking in links: /kaggle/input/pm-115743517-at-05-12-2026-16-56-13
-115.2s 147 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/TFSnippet-0.2.0a1.zip
-115.3s 148 Preparing metadata (setup.py): started
-116.4s 149 Preparing metadata (setup.py): finished with status 'done'
-116.4s 150 Requirement already satisfied: filelock>=3.0.10 in /usr/local/lib/python3.12/dist-packages (from TFSnippet==0.2.0a1) (3.24.3)
-116.4s 151 Requirement already satisfied: frozendict>=1.2.0 in /usr/local/lib/python3.12/dist-packages (from TFSnippet==0.2.0a1) (2.4.7)
-116.4s 152 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/idx2numpy-1.2.3.tar.gz (from TFSnippet==0.2.0a1)
-116.5s 153 Preparing metadata (setup.py): started
-117.2s 154 Preparing metadata (setup.py): finished with status 'done'
-117.2s 155 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/lazy_object_proxy-1.12.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from TFSnippet==0.2.0a1)
-117.2s 156 Requirement already satisfied: natsort>=5.3.3 in /usr/local/lib/python3.12/dist-packages (from TFSnippet==0.2.0a1) (8.4.0)
-117.2s 157 Requirement already satisfied: numpy>=1.12.1 in /usr/local/lib/python3.12/dist-packages (from TFSnippet==0.2.0a1) (1.26.0)
-117.2s 158 Requirement already satisfied: PyYAML>=3.13 in /usr/local/lib/python3.12/dist-packages (from TFSnippet==0.2.0a1) (6.0.3)
-117.2s 159 Requirement already satisfied: requests>=2.18.4 in /usr/local/lib/python3.12/dist-packages (from TFSnippet==0.2.0a1) (2.32.4)
-117.2s 160 Requirement already satisfied: scipy>=1.2.0 in /usr/local/lib/python3.12/dist-packages (from TFSnippet==0.2.0a1) (1.16.3)
-117.2s 161 Processing /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/semver-3.0.4-py3-none-any.whl (from TFSnippet==0.2.0a1)
-117.2s 162 Requirement already satisfied: six>=1.11.0 in /usr/local/lib/python3.12/dist-packages (from TFSnippet==0.2.0a1) (1.17.0)
-117.2s 163 Requirement already satisfied: tqdm>=4.23.0 in /usr/local/lib/python3.12/dist-packages (from TFSnippet==0.2.0a1) (4.67.3)
-117.3s 164 Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.12/dist-packages (from requests>=2.18.4->TFSnippet==0.2.0a1) (3.4.4)
-117.3s 165 Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.12/dist-packages (from requests>=2.18.4->TFSnippet==0.2.0a1) (3.11)
-117.3s 166 Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.12/dist-packages (from requests>=2.18.4->TFSnippet==0.2.0a1) (2.5.0)
-117.3s 167 Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.12/dist-packages (from requests>=2.18.4->TFSnippet==0.2.0a1) (2026.1.4)
-117.3s 168 Building wheels for collected packages: TFSnippet, idx2numpy
-117.3s 169 Building wheel for TFSnippet (setup.py): started
-118.8s 170 Building wheel for TFSnippet (setup.py): finished with status 'done'
-118.8s 171 Created wheel for TFSnippet: filename=TFSnippet-0.2.0a1-py3-none-any.whl size=207820 sha256=26c2133873331a4ae52dd7f0947efb22a3fdb6718229971592e92fc7540e4630
-118.8s 172 Stored in directory: /root/.cache/pip/wheels/de/2b/88/f7ae32dc28c834d1558906bf2573630d69daff837ec1903221
-118.8s 173 Building wheel for idx2numpy (setup.py): started
-120.1s 174 Building wheel for idx2numpy (setup.py): finished with status 'done'
-120.1s 175 Created wheel for idx2numpy: filename=idx2numpy-1.2.3-py3-none-any.whl size=7903 sha256=1126136046d2f780e9c38abb83c30520661a004d9ad4326fb339da04a2ad507c
-120.1s 176 Stored in directory: /root/.cache/pip/wheels/87/37/b8/d821e2b00e91e17b8c5ae790d1e65de70882169a190cf34bfa
-120.1s 177 Successfully built TFSnippet idx2numpy
-122.1s 178 Installing collected packages: semver, lazy-object-proxy, idx2numpy, TFSnippet
-122.5s 179 Successfully installed TFSnippet-0.2.0a1 idx2numpy-1.2.3 lazy-object-proxy-1.12.0 semver-3.0.4
-127.2s 180 0.00s - Debugger warning: It seems that frozen modules are being used, which may
-127.2s 181 0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
-127.2s 182 0.00s - to python to disable frozen modules.
-127.2s 183 0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
-127.8s 184 0.00s - Debugger warning: It seems that frozen modules are being used, which may
-127.8s 185 0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
-127.8s 186 0.00s - to python to disable frozen modules.
-127.8s 187 0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
-129.5s 188 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/__script__.py
-129.5s 189 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/idna-3.4-py3-none-any.whl
-129.5s 190 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/typing_extensions-4.15.0-py3-none-any.whl
-129.5s 191 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cusolver_cu11-11.4.1.48-py3-none-manylinux1_x86_64.whl
-129.5s 192 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/urllib3-1.26.13-py2.py3-none-any.whl
-129.5s 193 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cufft-12.0.0.61-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
-129.5s 194 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/torchdata-0.7.1-py3-none-any.whl
-129.5s 195 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/setuptools-81.0.0-py3-none-any.whl
-129.5s 196 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/charset_normalizer-3.4.7-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-129.5s 197 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_nvjitlink-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl
-129.5s 198 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/certifi-2026.4.22-py3-none-any.whl
-129.5s 199 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_nvtx-13.0.85-py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl
-129.5s 200 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
-129.5s 201 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/TFSnippet-0.2.0a1.zip
-129.5s 202 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cublas_cu11-11.11.3.6-py3-none-manylinux1_x86_64.whl
-129.5s 203 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/cuda_toolkit-13.0.2-py2.py3-none-any.whl
-129.5s 204 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
-129.5s 205 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cuda_nvrtc_cu11-11.8.89-py3-none-manylinux1_x86_64.whl
-129.5s 206 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/charset_normalizer-2.1.1-py3-none-any.whl
-129.5s 207 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/torchvision-0.17.0+cu118-cp312-cp312-linux_x86_64.whl
-129.5s 208 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_curand_cu11-10.3.0.86-py3-none-manylinux1_x86_64.whl
-129.5s 209 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cusparse_cu11-11.7.5.86-py3-none-manylinux1_x86_64.whl
-129.5s 210 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/idna-3.14-py3-none-any.whl
-129.5s 211 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/triton-3.6.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
-129.5s 212 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_nccl_cu11-2.19.3-py3-none-manylinux1_x86_64.whl
-129.5s 213 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cufile-1.15.1.6-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
-129.5s 214 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/__results__.html
-129.5s 215 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/torchaudio-2.2.0+cu118-cp312-cp312-linux_x86_64.whl
-129.5s 216 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/torchdata-0.11.0-py3-none-any.whl
-129.5s 217 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/urllib3-2.7.0-py3-none-any.whl
-129.5s 218 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_x86_64.whl
-129.5s 219 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/networkx-3.6.1-py3-none-any.whl
-129.5s 220 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/semver-3.0.4-py3-none-any.whl
-129.5s 221 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cuda_cupti_cu11-11.8.87-py3-none-manylinux1_x86_64.whl
-129.5s 222 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/mpmath-1.3.0-py3-none-any.whl
-129.5s 223 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cuda_cupti-13.0.85-py3-none-manylinux_2_25_x86_64.whl
-129.5s 224 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_nccl_cu13-2.28.9-py3-none-manylinux_2_18_x86_64.whl
-129.5s 225 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/pillow-12.1.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
-129.5s 226 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/jinja2-3.1.6-py3-none-any.whl
-129.5s 227 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cufft_cu11-10.9.0.58-py3-none-manylinux1_x86_64.whl
-129.5s 228 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/input_requirements.txt
-129.5s 229 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/six-1.17.0-py2.py3-none-any.whl
-129.5s 230 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/dgl-2.1.0-cp312-cp312-manylinux1_x86_64.whl
-129.5s 231 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/filelock-3.25.2-py3-none-any.whl
-129.5s 232 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_curand-10.4.0.35-py3-none-manylinux_2_27_x86_64.whl
-129.5s 233 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/frozendict-2.4.7-py3-none-any.whl
-129.5s 234 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/fsspec-2026.4.0-py3-none-any.whl
-129.5s 235 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl
-129.5s 236 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/tqdm-4.67.3-py3-none-any.whl
-129.5s 237 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/natsort-8.4.0-py3-none-any.whl
-129.5s 238 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/__script__.ipynb
-129.5s 239 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cudnn_cu11-8.7.0.84-py3-none-manylinux1_x86_64.whl
-129.5s 240 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_nvshmem_cu13-3.4.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
-129.5s 241 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cuda_nvrtc-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl
-129.5s 242 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/idx2numpy-1.2.3.tar.gz
-129.5s 243 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/__output__.json
-129.5s 244 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/torch-2.2.0+cu118-cp312-cp312-linux_x86_64.whl
-129.5s 245 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/cuda_pathfinder-1.5.4-py3-none-any.whl
-129.5s 246 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cuda_runtime_cu11-11.8.89-py3-none-manylinux1_x86_64.whl
-129.5s 247 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-129.5s 248 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cublas-13.1.0.3-py3-none-manylinux_2_27_x86_64.whl
-129.5s 249 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_nvtx_cu11-11.8.86-py3-none-manylinux1_x86_64.whl
-129.5s 250 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/requests-2.28.1-py3-none-any.whl
-129.5s 251 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/markupsafe-3.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-129.5s 252 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/requests-2.34.0-py3-none-any.whl
-129.5s 253 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/torch-2.11.0-cp312-cp312-manylinux_2_28_x86_64.whl
-129.5s 254 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/cuda_bindings-13.2.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
-129.5s 255 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/sympy-1.14.0-py3-none-any.whl
-129.5s 256 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/numpy-1.26.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-129.5s 257 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/lazy_object_proxy-1.12.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
-129.5s 258 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/fsspec-2026.2.0-py3-none-any.whl
-129.5s 259 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/numpy-2.4.3-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
-129.5s 260 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/install_requirements.sh
-129.5s 261 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/scipy-1.17.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
-129.5s 262 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cudnn_cu13-9.19.0.56-py3-none-manylinux_2_27_x86_64.whl
-129.5s 263 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/filelock-3.29.0-py3-none-any.whl
-129.5s 264 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/numpy-2.4.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
-129.5s 265 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/nvidia_cusparselt_cu13-0.8.0-py3-none-manylinux2014_x86_64.whl
-129.5s 266 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/certifi-2022.12.7-py3-none-any.whl
-129.5s 267 /kaggle/input/pm-115743517-at-05-12-2026-16-56-13/custom.css
-131.4s 268 python 3.12.12 (main, Oct 10 2025, 08:52:57) [GCC 11.4.0]
-131.4s 269 torch 2.2.0+cu118 cuda 11.8
-131.4s 270 gpu Tesla T4 cap (7, 5)
-131.4s 271 /kaggle/working
-131.5s 272 rm: cannot remove '/kaggle/working/EnhancedMTADGAT': No such file or directory
-131.6s 273 [33mhint: Using 'master' as the name for the initial branch. This default branch name[m
-131.6s 274 [33mhint: is subject to change. To configure the initial branch name to use in all[m
-131.6s 275 [33mhint: of your new repositories, which will suppress this warning, call:[m
-131.6s 276 [33mhint: [m
-131.6s 277 [33mhint: 	git config --global init.defaultBranch <name>[m
-131.6s 278 [33mhint: [m
-131.6s 279 [33mhint: Names commonly chosen instead of 'master' are 'main', 'trunk' and[m
-131.6s 280 [33mhint: 'development'. The just-created branch can be renamed via this command:[m
-131.6s 281 [33mhint: [m
-131.6s 282 [33mhint: 	git branch -m <name>[m
-131.6s 283 Initialized empty Git repository in /kaggle/working/.git/
-131.8s 284 Cloning into 'EnhancedMTADGAT'...
-132.9s 285 remote: Enumerating objects: 7542, done.[K
-132.9s 286 remote: Counting objects:   0% (1/123)[Kremote: Counting objects:   1% (2/123)[Kremote: Counting objects:   2% (3/123)[Kremote: Counting objects:   3% (4/123)[Kremote: Counting objects:   4% (5/123)[Kremote: Counting objects:   5% (7/123)[Kremote: Counting objects:   6% (8/123)[Kremote: Counting objects:   7% (9/123)[Kremote: Counting objects:   8% (10/123)[Kremote: Counting objects:   9% (12/123)[Kremote: Counting objects:  10% (13/123)[Kremote: Counting objects:  11% (14/123)[Kremote: Counting objects:  12% (15/123)[Kremote: Counting objects:  13% (16/123)[Kremote: Counting objects:  14% (18/123)[Kremote: Counting objects:  15% (19/123)[Kremote: Counting objects:  16% (20/123)[Kremote: Counting objects:  17% (21/123)[Kremote: Counting objects:  18% (23/123)[Kremote: Counting objects:  19% (24/123)[Kremote: Counting objects:  20% (25/123)[Kremote: Counting objects:  21% (26/123)[Kremote: Counting objects:  22% (28/123)[Kremote: Counting objects:  23% (29/123)[Kremote: Counting objects:  24% (30/123)[Kremote: Counting objects:  25% (31/123)[Kremote: Counting objects:  26% (32/123)[Kremote: Counting objects:  27% (34/123)[Kremote: Counting objects:  28% (35/123)[Kremote: Counting objects:  29% (36/123)[Kremote: Counting objects:  30% (37/123)[Kremote: Counting objects:  31% (39/123)[Kremote: Counting objects:  32% (40/123)[Kremote: Counting objects:  33% (41/123)[Kremote: Counting objects:  34% (42/123)[Kremote: Counting objects:  35% (44/123)[Kremote: Counting objects:  36% (45/123)[Kremote: Counting objects:  37% (46/123)[Kremote: Counting objects:  38% (47/123)[Kremote: Counting objects:  39% (48/123)[Kremote: Counting objects:  40% (50/123)[Kremote: Counting objects:  41% (51/123)[Kremote: Counting objects:  42% (52/123)[Kremote: Counting objects:  43% (53/123)[Kremote: Counting objects:  44% (55/123)[Kremote: Counting objects:  45% (56/123)[Kremote: Counting objects:  46% (57/123)[Kremote: Counting objects:  47% (58/123)[Kremote: Counting objects:  48% (60/123)[Kremote: Counting objects:  49% (61/123)[Kremote: Counting objects:  50% (62/123)[Kremote: Counting objects:  51% (63/123)[Kremote: Counting objects:  52% (64/123)[Kremote: Counting objects:  53% (66/123)[Kremote: Counting objects:  54% (67/123)[Kremote: Counting objects:  55% (68/123)[Kremote: Counting objects:  56% (69/123)[Kremote: Counting objects:  57% (71/123)[Kremote: Counting objects:  58% (72/123)[Kremote: Counting objects:  59% (73/123)[Kremote: Counting objects:  60% (74/123)[Kremote: Counting objects:  61% (76/123)[Kremote: Counting objects:  62% (77/123)[Kremote: Counting objects:  63% (78/123)[Kremote: Counting objects:  64% (79/123)[Kremote: Counting objects:  65% (80/123)[Kremote: Counting objects:  66% (82/123)[Kremote: Counting objects:  67% (83/123)[Kremote: Counting objects:  68% (84/123)[Kremote: Counting objects:  69% (85/123)[Kremote: Counting objects:  70% (87/123)[Kremote: Counting objects:  71% (88/123)[Kremote: Counting objects:  72% (89/123)[Kremote: Counting objects:  73% (90/123)[Kremote: Counting objects:  74% (92/123)[Kremote: Counting objects:  75% (93/123)[Kremote: Counting objects:  76% (94/123)[Kremote: Counting objects:  77% (95/123)[Kremote: Counting objects:  78% (96/123)[Kremote: Counting objects:  79% (98/123)[Kremote: Counting objects:  80% (99/123)[Kremote: Counting objects:  81% (100/123)[Kremote: Counting objects:  82% (101/123)[Kremote: Counting objects:  83% (103/123)[Kremote: Counting objects:  84% (104/123)[Kremote: Counting objects:  85% (105/123)[Kremote: Counting objects:  86% (106/123)[Kremote: Counting objects:  87% (108/123)[Kremote: Counting objects:  88% (109/123)[Kremote: Counting objects:  89% (110/123)[Kremote: Counting objects:  90% (111/123)[Kremote: Counting objects:  91% (112/123)[Kremote: Counting objects:  92% (114/123)[Kremote: Counting objects:  93% (115/123)[Kremote: Counting objects:  94% (116/123)[Kremote: Counting objects:  95% (117/123)[Kremote: Counting objects:  96% (119/123)[Kremote: Counting objects:  97% (120/123)[Kremote: Counting objects:  98% (121/123)[Kremote: Counting objects:  99% (122/123)[Kremote: Counting objects: 100% (123/123)[Kremote: Counting objects: 100% (123/123), done.[K
-133.6s 287 remote: Compressing objects:   1% (1/98)[Kremote: Compressing objects:   2% (2/98)[Kremote: Compressing objects:   3% (3/98)[Kremote: Compressing objects:   4% (4/98)[Kremote: Compressing objects:   5% (5/98)[Kremote: Compressing objects:   6% (6/98)[Kremote: Compressing objects:   7% (7/98)[Kremote: Compressing objects:   8% (8/98)[Kremote: Compressing objects:   9% (9/98)[Kremote: Compressing objects:  10% (10/98)[Kremote: Compressing objects:  11% (11/98)[Kremote: Compressing objects:  12% (12/98)[Kremote: Compressing objects:  13% (13/98)[Kremote: Compressing objects:  14% (14/98)[Kremote: Compressing objects:  15% (15/98)[Kremote: Compressing objects:  16% (16/98)[Kremote: Compressing objects:  17% (17/98)[Kremote: Compressing objects:  18% (18/98)[Kremote: Compressing objects:  19% (19/98)[Kremote: Compressing objects:  20% (20/98)[Kremote: Compressing objects:  21% (21/98)[Kremote: Compressing objects:  22% (22/98)[Kremote: Compressing objects:  23% (23/98)[Kremote: Compressing objects:  24% (24/98)[Kremote: Compressing objects:  25% (25/98)[Kremote: Compressing objects:  26% (26/98)[Kremote: Compressing objects:  27% (27/98)[Kremote: Compressing objects:  28% (28/98)[Kremote: Compressing objects:  29% (29/98)[Kremote: Compressing objects:  30% (30/98)[Kremote: Compressing objects:  31% (31/98)[Kremote: Compressing objects:  32% (32/98)[Kremote: Compressing objects:  33% (33/98)[Kremote: Compressing objects:  34% (34/98)[Kremote: Compressing objects:  35% (35/98)[Kremote: Compressing objects:  36% (36/98)[Kremote: Compressing objects:  37% (37/98)[Kremote: Compressing objects:  38% (38/98)[Kremote: Compressing objects:  39% (39/98)[Kremote: Compressing objects:  40% (40/98)[Kremote: Compressing objects:  41% (41/98)[Kremote: Compressing objects:  42% (42/98)[Kremote: Compressing objects:  43% (43/98)[Kremote: Compressing objects:  44% (44/98)[Kremote: Compressing objects:  45% (45/98)[Kremote: Compressing objects:  46% (46/98)[Kremote: Compressing objects:  47% (47/98)[Kremote: Compressing objects:  48% (48/98)[Kremote: Compressing objects:  50% (49/98)[Kremote: Compressing objects:  51% (50/98)[Kremote: Compressing objects:  52% (51/98)[Kremote: Compressing objects:  53% (52/98)[Kremote: Compressing objects:  54% (53/98)[Kremote: Compressing objects:  55% (54/98)[Kremote: Compressing objects:  56% (55/98)[Kremote: Compressing objects:  57% (56/98)[Kremote: Compressing objects:  58% (57/98)[Kremote: Compressing objects:  59% (58/98)[Kremote: Compressing objects:  60% (59/98)[Kremote: Compressing objects:  61% (60/98)[Kremote: Compressing objects:  62% (61/98)[Kremote: Compressing objects:  63% (62/98)[Kremote: Compressing objects:  64% (63/98)[Kremote: Compressing objects:  65% (64/98)[Kremote: Compressing objects:  66% (65/98)[Kremote: Compressing objects:  67% (66/98)[Kremote: Compressing objects:  68% (67/98)[Kremote: Compressing objects:  69% (68/98)[Kremote: Compressing objects:  70% (69/98)[Kremote: Compressing objects:  71% (70/98)[Kremote: Compressing objects:  72% (71/98)[Kremote: Compressing objects:  73% (72/98)[Kremote: Compressing objects:  74% (73/98)[Kremote: Compressing objects:  75% (74/98)[Kremote: Compressing objects:  76% (75/98)[Kremote: Compressing objects:  77% (76/98)[Kremote: Compressing objects:  78% (77/98)[Kremote: Compressing objects:  79% (78/98)[Kremote: Compressing objects:  80% (79/98)[Kremote: Compressing objects:  81% (80/98)[Kremote: Compressing objects:  82% (81/98)[Kremote: Compressing objects:  83% (82/98)[Kremote: Compressing objects:  84% (83/98)[Kremote: Compressing objects:  85% (84/98)[Kremote: Compressing objects:  86% (85/98)[Kremote: Compressing objects:  87% (86/98)[Kremote: Compressing objects:  88% (87/98)[Kremote: Compressing objects:  89% (88/98)[Kremote: Compressing objects:  90% (89/98)[Kremote: Compressing objects:  91% (90/98)[Kremote: Compressing objects:  92% (91/98)[Kremote: Compressing objects:  93% (92/98)[Kremote: Compressing objects:  94% (93/98)[Kremote: Compressing objects:  95% (94/98)[Kremote: Compressing objects:  96% (95/98)[Kremote: Compressing objects:  97% (96/98)[Kremote: Compressing objects:  98% (97/98)[Kremote: Compressing objects: 100% (98/98)[Kremote: Compressing objects: 100% (98/98), done.[K
-193.7s 288 Receiving objects:   0% (1/7542)Receiving objects:   1% (76/7542)Receiving objects:   2% (151/7542)Receiving objects:   3% (227/7542)Receiving objects:   4% (302/7542)Receiving objects:   5% (378/7542)Receiving objects:   6% (453/7542)Receiving objects:   7% (528/7542)Receiving objects:   8% (604/7542)Receiving objects:   9% (679/7542)Receiving objects:  10% (755/7542)Receiving objects:  11% (830/7542)Receiving objects:  12% (906/7542)Receiving objects:  13% (981/7542)Receiving objects:  14% (1056/7542)Receiving objects:  15% (1132/7542)Receiving objects:  16% (1207/7542)Receiving objects:  17% (1283/7542)Receiving objects:  18% (1358/7542)Receiving objects:  19% (1433/7542)Receiving objects:  20% (1509/7542)Receiving objects:  21% (1584/7542)Receiving objects:  22% (1660/7542)Receiving objects:  23% (1735/7542)Receiving objects:  24% (1811/7542)Receiving objects:  25% (1886/7542), 9.49 MiB | 18.97 MiB/sReceiving objects:  25% (1889/7542), 23.89 MiB | 23.88 MiB/sReceiving objects:  25% (1907/7542), 51.10 MiB | 25.54 MiB/sReceiving objects:  25% (1926/7542), 78.48 MiB | 26.17 MiB/sReceiving objects:  25% (1943/7542), 105.82 MiB | 26.46 MiB/sReceiving objects:  26% (1961/7542), 121.11 MiB | 26.92 MiB/sReceiving objects:  26% (1963/7542), 134.84 MiB | 27.87 MiB/sReceiving objects:  26% (1981/7542), 163.64 MiB | 28.00 MiB/sReceiving objects:  27% (2037/7542), 163.64 MiB | 28.00 MiB/sReceiving objects:  27% (2079/7542), 192.96 MiB | 28.46 MiB/sReceiving objects:  28% (2112/7542), 192.96 MiB | 28.46 MiB/sReceiving objects:  29% (2188/7542), 192.96 MiB | 28.46 MiB/sReceiving objects:  30% (2263/7542), 207.34 MiB | 28.58 MiB/sReceiving objects:  31% (2339/7542), 207.34 MiB | 28.58 MiB/sReceiving objects:  32% (2414/7542), 207.34 MiB | 28.58 MiB/sReceiving objects:  32% (2466/7542), 217.88 MiB | 27.89 MiB/sReceiving objects:  33% (2489/7542), 231.86 MiB | 27.96 MiB/sReceiving objects:  33% (2506/7542), 243.21 MiB | 27.08 MiB/sReceiving objects:  34% (2565/7542), 256.93 MiB | 27.08 MiB/sReceiving objects:  35% (2640/7542), 256.93 MiB | 27.08 MiB/sReceiving objects:  36% (2716/7542), 256.93 MiB | 27.08 MiB/sReceiving objects:  37% (2791/7542), 256.93 MiB | 27.08 MiB/sReceiving objects:  38% (2866/7542), 256.93 MiB | 27.08 MiB/sReceiving objects:  39% (2942/7542), 256.93 MiB | 27.08 MiB/sReceiving objects:  40% (3017/7542), 256.93 MiB | 27.08 MiB/sReceiving objects:  41% (3093/7542), 256.93 MiB | 27.08 MiB/sReceiving objects:  42% (3168/7542), 256.93 MiB | 27.08 MiB/sReceiving objects:  42% (3228/7542), 268.72 MiB | 26.56 MiB/sReceiving objects:  43% (3244/7542), 268.72 MiB | 26.56 MiB/sReceiving objects:  44% (3319/7542), 285.36 MiB | 27.00 MiB/sReceiving objects:  45% (3394/7542), 285.36 MiB | 27.00 MiB/sReceiving objects:  46% (3470/7542), 285.36 MiB | 27.00 MiB/sReceiving objects:  47% (3545/7542), 285.36 MiB | 27.00 MiB/sReceiving objects:  48% (3621/7542), 285.36 MiB | 27.00 MiB/sReceiving objects:  49% (3696/7542), 285.36 MiB | 27.00 MiB/sReceiving objects:  49% (3757/7542), 303.90 MiB | 27.87 MiB/sReceiving objects:  50% (3771/7542), 318.40 MiB | 27.74 MiB/sReceiving objects:  50% (3798/7542), 318.40 MiB | 27.74 MiB/sReceiving objects:  50% (3831/7542), 359.29 MiB | 28.16 MiB/sReceiving objects:  51% (3847/7542), 373.14 MiB | 28.72 MiB/sReceiving objects:  51% (3864/7542), 401.14 MiB | 29.27 MiB/sReceiving objects:  51% (3879/7542), 429.57 MiB | 27.91 MiB/sReceiving objects:  51% (3896/7542), 471.96 MiB | 28.23 MiB/sReceiving objects:  51% (3910/7542), 500.32 MiB | 28.26 MiB/sReceiving objects:  52% (3922/7542), 514.90 MiB | 28.42 MiB/sReceiving objects:  52% (3929/7542), 514.90 MiB | 28.42 MiB/sReceiving objects:  52% (3943/7542), 543.58 MiB | 28.55 MiB/sReceiving objects:  52% (3960/7542), 586.67 MiB | 28.58 MiB/sReceiving objects:  52% (3978/7542), 615.32 MiB | 28.57 MiB/sReceiving objects:  52% (3993/7542), 644.67 MiB | 28.82 MiB/sReceiving objects:  53% (3998/7542), 644.67 MiB | 28.82 MiB/sReceiving objects:  53% (4014/7542), 658.77 MiB | 28.74 MiB/sReceiving objects:  53% (4029/7542), 687.66 MiB | 28.84 MiB/sReceiving objects:  53% (4048/7542), 731.04 MiB | 28.77 MiB/sReceiving objects:  53% (4065/7542), 745.84 MiB | 29.02 MiB/sReceiving objects:  54% (4073/7542), 760.10 MiB | 28.82 MiB/sReceiving objects:  54% (4091/7542), 774.72 MiB | 28.90 MiB/sReceiving objects:  55% (4149/7542), 803.53 MiB | 28.81 MiB/sReceiving objects:  56% (4224/7542), 803.53 MiB | 28.81 MiB/sReceiving objects:  57% (4299/7542), 803.53 MiB | 28.81 MiB/sReceiving objects:  58% (4375/7542), 803.53 MiB | 28.81 MiB/sReceiving objects:  59% (4450/7542), 803.53 MiB | 28.81 MiB/sReceiving objects:  60% (4526/7542), 803.53 MiB | 28.81 MiB/sReceiving objects:  61% (4601/7542), 803.53 MiB | 28.81 MiB/sReceiving objects:  62% (4677/7542), 803.53 MiB | 28.81 MiB/sReceiving objects:  63% (4752/7542), 803.53 MiB | 28.81 MiB/sReceiving objects:  64% (4827/7542), 803.53 MiB | 28.81 MiB/sReceiving objects:  65% (4903/7542), 803.53 MiB | 28.81 MiB/sReceiving objects:  65% (4945/7542), 803.53 MiB | 28.81 MiB/sReceiving objects:  66% (4978/7542), 816.73 MiB | 28.67 MiB/sReceiving objects:  67% (5054/7542), 831.60 MiB | 28.70 MiB/sReceiving objects:  68% (5129/7542), 831.60 MiB | 28.70 MiB/sReceiving objects:  69% (5204/7542), 831.60 MiB | 28.70 MiB/sReceiving objects:  70% (5280/7542), 831.60 MiB | 28.70 MiB/sReceiving objects:  71% (5355/7542), 831.60 MiB | 28.70 MiB/sReceiving objects:  71% (5403/7542), 831.60 MiB | 28.70 MiB/sReceiving objects:  72% (5431/7542), 862.08 MiB | 29.11 MiB/sReceiving objects:  72% (5444/7542), 862.08 MiB | 29.11 MiB/sReceiving objects:  73% (5506/7542), 876.04 MiB | 28.93 MiB/sReceiving objects:  74% (5582/7542), 876.04 MiB | 28.93 MiB/sReceiving objects:  75% (5657/7542), 890.64 MiB | 29.00 MiB/sReceiving objects:  75% (5709/7542), 890.64 MiB | 29.00 MiB/sReceiving objects:  76% (5732/7542), 905.39 MiB | 29.04 MiB/sReceiving objects:  77% (5808/7542), 905.39 MiB | 29.04 MiB/sReceiving objects:  78% (5883/7542), 905.39 MiB | 29.04 MiB/sReceiving objects:  79% (5959/7542), 919.48 MiB | 28.88 MiB/sReceiving objects:  80% (6034/7542), 919.48 MiB | 28.88 MiB/sReceiving objects:  81% (6110/7542), 919.48 MiB | 28.88 MiB/sReceiving objects:  82% (6185/7542), 919.48 MiB | 28.88 MiB/sReceiving objects:  82% (6210/7542), 934.42 MiB | 29.09 MiB/sReceiving objects:  83% (6260/7542), 934.42 MiB | 29.09 MiB/sReceiving objects:  83% (6267/7542), 955.93 MiB | 27.62 MiB/sReceiving objects:  83% (6280/7542), 966.98 MiB | 26.65 MiB/sReceiving objects:  84% (6336/7542), 978.50 MiB | 25.87 MiB/sReceiving objects:  84% (6364/7542), 1015.02 MiB | 27.50 MiB/sReceiving objects:  84% (6365/7542), 1.01 GiB | 27.15 MiB/s   Receiving objects:  84% (6368/7542), 1.04 GiB | 27.49 MiB/sReceiving objects:  84% (6369/7542), 1.07 GiB | 29.02 MiB/sReceiving objects:  84% (6370/7542), 1.10 GiB | 27.71 MiB/sReceiving objects:  84% (6372/7542), 1.11 GiB | 27.87 MiB/sReceiving objects:  84% (6384/7542), 1.15 GiB | 28.35 MiB/sReceiving objects:  85% (6411/7542), 1.15 GiB | 28.35 MiB/sReceiving objects:  85% (6436/7542), 1.18 GiB | 27.81 MiB/sReceiving objects:  85% (6458/7542), 1.20 GiB | 25.99 MiB/sReceiving objects:  85% (6479/7542), 1.21 GiB | 25.17 MiB/sReceiving objects:  86% (6487/7542), 1.22 GiB | 24.40 MiB/sReceiving objects:  86% (6517/7542), 1.24 GiB | 23.91 MiB/sReceiving objects:  86% (6537/7542), 1.27 GiB | 22.95 MiB/sReceiving objects:  87% (6562/7542), 1.28 GiB | 22.45 MiB/sReceiving objects:  87% (6565/7542), 1.28 GiB | 22.45 MiB/sReceiving objects:  87% (6624/7542), 1.32 GiB | 26.42 MiB/sReceiving objects:  88% (6637/7542), 1.33 GiB | 26.54 MiB/sReceiving objects:  88% (6653/7542), 1.33 GiB | 26.54 MiB/sReceiving objects:  88% (6699/7542), 1.38 GiB | 27.75 MiB/sReceiving objects:  89% (6713/7542), 1.39 GiB | 27.64 MiB/sReceiving objects:  89% (6715/7542), 1.40 GiB | 28.41 MiB/sReceiving objects:  89% (6732/7542), 1.41 GiB | 26.10 MiB/sReceiving objects:  90% (6788/7542), 1.41 GiB | 26.10 MiB/sReceiving objects:  91% (6864/7542), 1.42 GiB | 25.50 MiB/sReceiving objects:  91% (6936/7542), 1.46 GiB | 27.63 MiB/sReceiving objects:  92% (6939/7542), 1.46 GiB | 27.63 MiB/sReceiving objects:  93% (7015/7542), 1.47 GiB | 27.45 MiB/sReceiving objects:  93% (7026/7542), 1.47 GiB | 27.45 MiB/sReceiving objects:  94% (7090/7542), 1.48 GiB | 27.31 MiB/sReceiving objects:  95% (7165/7542), 1.50 GiB | 26.59 MiB/sReceiving objects:  96% (7241/7542), 1.50 GiB | 26.59 MiB/sReceiving objects:  96% (7267/7542), 1.50 GiB | 26.59 MiB/sReceiving objects:  97% (7316/7542), 1.50 GiB | 26.59 MiB/sReceiving objects:  97% (7365/7542), 1.52 GiB | 27.73 MiB/sReceiving objects:  97% (7374/7542), 1.54 GiB | 27.62 MiB/sReceiving objects:  97% (7384/7542), 1.56 GiB | 24.39 MiB/sReceiving objects:  98% (7392/7542), 1.57 GiB | 23.44 MiB/sReceiving objects:  98% (7463/7542), 1.58 GiB | 22.81 MiB/sReceiving objects:  99% (7467/7542), 1.58 GiB | 22.81 MiB/sremote: Total 7542 (delta 30), reused 86 (delta 22), pack-reused 7419 (from 5)[K
-193.7s 289 Receiving objects: 100% (7542/7542), 1.58 GiB | 22.81 MiB/sReceiving objects: 100% (7542/7542), 1.59 GiB | 27.25 MiB/s, done.
-199.4s 290 Resolving deltas:   0% (0/3287)Resolving deltas:   1% (33/3287)Resolving deltas:   2% (66/3287)Resolving deltas:   3% (99/3287)Resolving deltas:   4% (132/3287)Resolving deltas:   5% (165/3287)Resolving deltas:   6% (198/3287)Resolving deltas:   7% (231/3287)Resolving deltas:   8% (263/3287)Resolving deltas:   9% (296/3287)Resolving deltas:  10% (329/3287)Resolving deltas:  11% (362/3287)Resolving deltas:  12% (395/3287)Resolving deltas:  13% (428/3287)Resolving deltas:  14% (461/3287)Resolving deltas:  15% (494/3287)Resolving deltas:  16% (526/3287)Resolving deltas:  17% (559/3287)Resolving deltas:  18% (592/3287)Resolving deltas:  19% (625/3287)Resolving deltas:  20% (658/3287)Resolving deltas:  21% (691/3287)Resolving deltas:  22% (724/3287)Resolving deltas:  23% (757/3287)Resolving deltas:  24% (789/3287)Resolving deltas:  25% (822/3287)Resolving deltas:  25% (828/3287)Resolving deltas:  26% (855/3287)Resolving deltas:  26% (862/3287)Resolving deltas:  27% (888/3287)Resolving deltas:  28% (921/3287)Resolving deltas:  29% (954/3287)Resolving deltas:  30% (987/3287)Resolving deltas:  31% (1019/3287)Resolving deltas:  32% (1052/3287)Resolving deltas:  33% (1085/3287)Resolving deltas:  34% (1118/3287)Resolving deltas:  35% (1151/3287)Resolving deltas:  36% (1184/3287)Resolving deltas:  37% (1217/3287)Resolving deltas:  38% (1250/3287)Resolving deltas:  39% (1282/3287)Resolving deltas:  40% (1315/3287)Resolving deltas:  41% (1348/3287)Resolving deltas:  42% (1381/3287)Resolving deltas:  43% (1414/3287)Resolving deltas:  44% (1447/3287)Resolving deltas:  45% (1480/3287)Resolving deltas:  46% (1513/3287)Resolving deltas:  47% (1545/3287)Resolving deltas:  48% (1578/3287)Resolving deltas:  49% (1611/3287)Resolving deltas:  50% (1644/3287)Resolving deltas:  51% (1677/3287)Resolving deltas:  52% (1710/3287)Resolving deltas:  53% (1743/3287)Resolving deltas:  54% (1775/3287)Resolving deltas:  55% (1808/3287)Resolving deltas:  56% (1841/3287)Resolving deltas:  57% (1874/3287)Resolving deltas:  58% (1907/3287)Resolving deltas:  59% (1940/3287)Resolving deltas:  60% (1973/3287)Resolving deltas:  61% (2006/3287)Resolving deltas:  62% (2038/3287)Resolving deltas:  63% (2071/3287)Resolving deltas:  64% (2104/3287)Resolving deltas:  65% (2137/3287)Resolving deltas:  66% (2170/3287)Resolving deltas:  67% (2203/3287)Resolving deltas:  68% (2236/3287)Resolving deltas:  69% (2269/3287)Resolving deltas:  70% (2301/3287)Resolving deltas:  71% (2334/3287)Resolving deltas:  72% (2367/3287)Resolving deltas:  73% (2400/3287)Resolving deltas:  74% (2433/3287)Resolving deltas:  75% (2466/3287)Resolving deltas:  76% (2499/3287)Resolving deltas:  77% (2531/3287)Resolving deltas:  78% (2564/3287)Resolving deltas:  79% (2597/3287)Resolving deltas:  79% (2625/3287)Resolving deltas:  80% (2630/3287)Resolving deltas:  81% (2663/3287)Resolving deltas:  82% (2696/3287)Resolving deltas:  83% (2729/3287)Resolving deltas:  84% (2762/3287)Resolving deltas:  84% (2769/3287)Resolving deltas:  85% (2794/3287)Resolving deltas:  86% (2827/3287)Resolving deltas:  87% (2860/3287)Resolving deltas:  88% (2893/3287)Resolving deltas:  89% (2926/3287)Resolving deltas:  90% (2959/3287)Resolving deltas:  91% (2992/3287)Resolving deltas:  92% (3025/3287)Resolving deltas:  93% (3057/3287)Resolving deltas:  94% (3090/3287)Resolving deltas:  95% (3123/3287)Resolving deltas:  96% (3156/3287)Resolving deltas:  97% (3189/3287)Resolving deltas:  98% (3222/3287)Resolving deltas:  99% (3255/3287)Resolving deltas:  99% (3282/3287)Resolving deltas: 100% (3287/3287)Resolving deltas: 100% (3287/3287), done.
-211.9s 291 Updating files:  14% (119/798)Updating files:  15% (120/798)Updating files:  16% (128/798)Updating files:  17% (136/798)Updating files:  18% (144/798)Updating files:  19% (152/798)Updating files:  19% (156/798)Updating files:  20% (160/798)Updating files:  21% (168/798)Updating files:  22% (176/798)Updating files:  22% (182/798)Updating files:  23% (184/798)Updating files:  23% (185/798)Updating files:  24% (192/798)Updating files:  25% (200/798)Updating files:  26% (208/798)Updating files:  27% (216/798)Updating files:  28% (224/798)Updating files:  29% (232/798)Updating files:  30% (240/798)Updating files:  31% (248/798)Updating files:  32% (256/798)Updating files:  33% (264/798)Updating files:  34% (272/798)Updating files:  35% (280/798)Updating files:  36% (288/798)Updating files:  37% (296/798)Updating files:  38% (304/798)Updating files:  39% (312/798)Updating files:  40% (320/798)Updating files:  41% (328/798)Updating files:  42% (336/798)Updating files:  43% (344/798)Updating files:  44% (352/798)Updating files:  45% (360/798)Updating files:  46% (368/798)Updating files:  47% (376/798)Updating files:  48% (384/798)Updating files:  49% (392/798)Updating files:  50% (399/798)Updating files:  51% (407/798)Updating files:  52% (415/798)Updating files:  53% (423/798)Updating files:  54% (431/798)Updating files:  55% (439/798)Updating files:  56% (447/798)Updating files:  57% (455/798)Updating files:  58% (463/798)Updating files:  59% (471/798)Updating files:  60% (479/798)Updating files:  61% (487/798)Updating files:  62% (495/798)Updating files:  63% (503/798)Updating files:  64% (511/798)Updating files:  64% (518/798)Updating files:  65% (519/798)Updating files:  66% (527/798)Updating files:  67% (535/798)Updating files:  68% (543/798)Updating files:  69% (551/798)Updating files:  70% (559/798)Updating files:  70% (562/798)Updating files:  71% (567/798)Updating files:  72% (575/798)Updating files:  73% (583/798)Updating files:  74% (591/798)Updating files:  75% (599/798)Updating files:  76% (607/798)Updating files:  77% (615/798)Updating files:  78% (623/798)Updating files:  79% (631/798)Updating files:  80% (639/798)Updating files:  81% (647/798)Updating files:  82% (655/798)Updating files:  83% (663/798)Updating files:  84% (671/798)Updating files:  84% (674/798)Updating files:  85% (679/798)Updating files:  86% (687/798)Updating files:  87% (695/798)Updating files:  88% (703/798)Updating files:  89% (711/798)Updating files:  89% (714/798)Updating files:  90% (719/798)Updating files:  91% (727/798)Updating files:  92% (735/798)Updating files:  93% (743/798)Updating files:  94% (751/798)Updating files:  95% (759/798)Updating files:  96% (767/798)Updating files:  96% (774/798)Updating files:  97% (775/798)Updating files:  98% (783/798)Updating files:  99% (791/798)Updating files: 100% (798/798)Updating files: 100% (798/798), done.
-212.1s 292 /kaggle/working/EnhancedMTADGAT
-212.7s 293 DGL backend not selected or invalid.  Assuming PyTorch for now.
-212.7s 294 Setting the default backend to "pytorch". You can change it in the ~/.dgl/config.json file or export the DGLBACKEND environment variable.  Valid options are: pytorch, mxnet, tensorflow (all lowercase)
-218.3s 295 2.1.0
-219.2s 296 Loaded 24 external baseline experiments from ch3_external_baselines.json
-219.2s 297 
-219.2s 298 [1/24] tranad_smap_ch3
-219.2s 299 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/TranAD
-219.2s 300 COMMAND : /usr/bin/python3 main.py --retrain --dataset SMAP --model TranAD
-224.0s 301 Traceback (most recent call last):
-224.0s 302 File "/usr/local/lib/python3.12/dist-packages/matplotlib/style/core.py", line 129, in use
-224.0s 303 style = _rc_params_in_file(style)
-224.0s 304 ^^^^^^^^^^^^^^^^^^^^^^^^^
-224.0s 305 File "/usr/local/lib/python3.12/dist-packages/matplotlib/__init__.py", line 903, in _rc_params_in_file
-224.0s 306 with _open_file_or_url(fname) as fd:
-224.0s 307 ^^^^^^^^^^^^^^^^^^^^^^^^
-224.0s 308 File "/usr/lib/python3.12/contextlib.py", line 137, in __enter__
-224.0s 309 return next(self.gen)
-224.0s 310 ^^^^^^^^^^^^^^
-224.0s 311 File "/usr/local/lib/python3.12/dist-packages/matplotlib/__init__.py", line 880, in _open_file_or_url
-224.0s 312 with open(fname, encoding='utf-8') as f:
-224.0s 313 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-224.0s 314 FileNotFoundError: [Errno 2] No such file or directory: 'science'
-224.0s 315 
-224.0s 316 The above exception was the direct cause of the following exception:
-224.0s 317 
-224.0s 318 Traceback (most recent call last):
-224.0s 319 File "/kaggle/working/EnhancedMTADGAT/external_baselines/TranAD/main.py", line 8, in <module>
-224.0s 320 from src.plotting import *
-224.0s 321 File "/kaggle/working/EnhancedMTADGAT/external_baselines/TranAD/src/plotting.py", line 7, in <module>
-224.0s 322 plt.style.use(['science', 'ieee'])
-224.0s 323 File "/usr/local/lib/python3.12/dist-packages/matplotlib/style/core.py", line 131, in use
-224.0s 324 raise OSError(
-224.0s 325 OSError: 'science' is not a valid package style, path of style file, URL of style file, or library style name (library styles are listed in `style.available`)
-224.7s 326 [FAILED] tranad_smap_ch3 -> return code 1
-224.7s 327 
-224.7s 328 [2/24] anomaly_transformer_smap_ch3
-224.7s 329 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/Anomaly-Transformer
-224.7s 330 COMMAND : /usr/bin/python3 main.py --dataset SMAP --mode train --data_path . --model_save_path ./checkpoints/ch3_smap --input_c 25 --output_c 25 --num_epochs 10 --batch_size 256 --win_size 100 --anormly_ratio 4.0
-8467.6s 331 ------------ Options -------------
-8467.6s 332 anormly_ratio: 4.0
-8467.6s 333 batch_size: 256
-8467.6s 334 data_path: .
-8467.6s 335 dataset: SMAP
-8467.6s 336 input_c: 25
-8467.6s 337 k: 3
-8467.6s 338 lr: 0.0001
-8467.6s 339 mode: train
-8467.6s 340 model_save_path: ./checkpoints/ch3_smap
-8467.6s 341 num_epochs: 10
-8467.6s 342 output_c: 25
-8467.6s 343 pretrained_model: None
-8467.6s 344 win_size: 100
-8467.6s 345 -------------- End ----------------
-8467.6s 346 Loading SMAP from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/data/processed
-8467.6s 347 test: (427617, 25)
-8467.6s 348 train: (135183, 25)
-8467.6s 349 Loading SMAP from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/data/processed
-8467.6s 350 test: (427617, 25)
-8467.6s 351 train: (135183, 25)
-8467.6s 352 Loading SMAP from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/data/processed
-8467.6s 353 test: (427617, 25)
-8467.6s 354 train: (135183, 25)
-8467.6s 355 Loading SMAP from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/data/processed
-8467.6s 356 test: (427617, 25)
-8467.6s 357 train: (135183, 25)
-8467.6s 358 ======================TRAIN MODE======================
-8467.6s 359 speed: 0.6778s/iter; left time: 3511.9205s
-8467.6s 360 speed: 0.7699s/iter; left time: 3912.0357s
-8467.6s 361 speed: 0.8258s/iter; left time: 4113.5017s
-8467.6s 362 speed: 0.8207s/iter; left time: 4005.9271s
-8467.6s 363 speed: 0.8255s/iter; left time: 3946.6887s
-8467.6s 364 Epoch: 1 cost time: 415.6551296710968
-8467.6s 365 Epoch: 1, Steps: 528 | Train Loss: -44.8258597 Vali Loss: -14.6005308
-8467.6s 366 Validation loss decreased (inf --> -14.600531).  Saving model ...
-8467.6s 367 Updating learning rate to 0.0001
-8467.6s 368 speed: 5.0115s/iter; left time: 23318.6616s
-8467.6s 369 speed: 0.8172s/iter; left time: 3720.9042s
-8467.6s 370 speed: 0.8123s/iter; left time: 3617.3115s
-8467.6s 371 speed: 0.8185s/iter; left time: 3562.8346s
-8467.6s 372 speed: 0.8166s/iter; left time: 3472.8416s
-8467.6s 373 Epoch: 2 cost time: 431.0735831260681
-8467.6s 374 Epoch: 2, Steps: 528 | Train Loss: -47.9479781 Vali Loss: -19.3083480
-8467.6s 375 Validation loss decreased (-14.600531 --> -19.308348).  Saving model ...
-8467.6s 376 Updating learning rate to 5e-05
-8467.6s 377 speed: 4.9984s/iter; left time: 20618.4206s
-8467.6s 378 speed: 0.8103s/iter; left time: 3261.6362s
-8467.6s 379 speed: 0.8106s/iter; left time: 3181.5804s
-8467.6s 380 speed: 0.8108s/iter; left time: 3101.4536s
-8467.6s 381 speed: 0.8109s/iter; left time: 3020.6655s
-8467.6s 382 Epoch: 3 cost time: 428.1951472759247
-8467.6s 383 Epoch: 3, Steps: 528 | Train Loss: -48.2474083 Vali Loss: -21.3540027
-8467.6s 384 Validation loss decreased (-19.308348 --> -21.354003).  Saving model ...
-8467.6s 385 Updating learning rate to 2.5e-05
-8467.6s 386 speed: 4.9898s/iter; left time: 17948.3436s
-8467.6s 387 speed: 0.8105s/iter; left time: 2834.3825s
-8467.6s 388 speed: 0.8111s/iter; left time: 2755.1920s
-8467.6s 389 speed: 0.8164s/iter; left time: 2691.5619s
-8467.6s 390 speed: 0.8103s/iter; left time: 2590.6142s
-8467.6s 391 Epoch: 4 cost time: 427.9699902534485
-8467.6s 392 Epoch: 4, Steps: 528 | Train Loss: -48.3196569 Vali Loss: -22.4717094
-8467.6s 393 Validation loss decreased (-21.354003 --> -22.471709).  Saving model ...
-8467.6s 394 Updating learning rate to 1.25e-05
-8467.6s 395 speed: 4.9904s/iter; left time: 15315.6525s
-8467.6s 396 speed: 0.8128s/iter; left time: 2413.1003s
-8467.6s 397 speed: 0.8133s/iter; left time: 2333.4318s
-8467.6s 398 speed: 0.8128s/iter; left time: 2250.5656s
-8467.6s 399 speed: 0.8133s/iter; left time: 2170.6133s
-8467.6s 400 Epoch: 5 cost time: 428.58416867256165
-8467.6s 401 Epoch: 5, Steps: 528 | Train Loss: -48.3494151 Vali Loss: -23.1121275
-8467.6s 402 Validation loss decreased (-22.471709 --> -23.112128).  Saving model ...
-8467.6s 403 Updating learning rate to 6.25e-06
-8467.6s 404 speed: 4.9915s/iter; left time: 12683.3287s
-8467.6s 405 speed: 0.8128s/iter; left time: 1984.1523s
-8467.6s 406 speed: 0.8104s/iter; left time: 1897.2220s
-8467.6s 407 speed: 0.8109s/iter; left time: 1817.1897s
-8467.6s 408 speed: 0.8127s/iter; left time: 1739.9125s
-8467.6s 409 Epoch: 6 cost time: 428.1644387245178
-8467.6s 410 Epoch: 6, Steps: 528 | Train Loss: -48.3642500 Vali Loss: -23.4432973
-8467.6s 411 Validation loss decreased (-23.112128 --> -23.443297).  Saving model ...
-8467.6s 412 Updating learning rate to 3.125e-06
-8467.6s 413 speed: 4.9876s/iter; left time: 10040.0127s
-8467.6s 414 speed: 0.8116s/iter; left time: 1552.5978s
-8467.6s 415 speed: 0.8141s/iter; left time: 1475.9981s
-8467.6s 416 speed: 0.8157s/iter; left time: 1397.3777s
-8467.6s 417 speed: 0.8147s/iter; left time: 1314.0679s
-8467.6s 418 Epoch: 7 cost time: 428.72224736213684
-8467.6s 419 Epoch: 7, Steps: 528 | Train Loss: -48.3721278 Vali Loss: -23.6369439
-8467.6s 420 Validation loss decreased (-23.443297 --> -23.636944).  Saving model ...
-8467.6s 421 Updating learning rate to 1.5625e-06
-8467.6s 422 speed: 4.9962s/iter; left time: 7419.4137s
-8467.6s 423 speed: 0.8105s/iter; left time: 1122.4942s
-8467.6s 424 speed: 0.8108s/iter; left time: 1041.8303s
-8467.6s 425 speed: 0.8107s/iter; left time: 960.6939s
-8467.6s 426 speed: 0.8126s/iter; left time: 881.7067s
-8467.6s 427 Epoch: 8 cost time: 428.0137701034546
-8467.6s 428 Epoch: 8, Steps: 528 | Train Loss: -48.3765621 Vali Loss: -23.7360504
-8467.6s 429 Validation loss decreased (-23.636944 --> -23.736050).  Saving model ...
-8467.6s 430 Updating learning rate to 7.8125e-07
-8467.6s 431 speed: 4.9859s/iter; left time: 4771.4668s
-8467.6s 432 speed: 0.8113s/iter; left time: 695.2922s
-8467.6s 433 speed: 0.8107s/iter; left time: 613.6971s
-8467.6s 434 speed: 0.8107s/iter; left time: 532.6421s
-8467.6s 435 speed: 0.8150s/iter; left time: 453.9562s
-8467.6s 436 Epoch: 9 cost time: 428.80111026763916
-8467.6s 437 Epoch: 9, Steps: 528 | Train Loss: -48.3792867 Vali Loss: -23.7899406
-8467.6s 438 Validation loss decreased (-23.736050 --> -23.789941).  Saving model ...
-8467.6s 439 Updating learning rate to 3.90625e-07
-8467.6s 440 speed: 4.9874s/iter; left time: 2139.5991s
-8467.6s 441 speed: 0.8132s/iter; left time: 267.5578s
-8467.6s 442 speed: 0.8111s/iter; left time: 185.7421s
-8467.6s 443 speed: 0.8100s/iter; left time: 104.4912s
-8467.6s 444 speed: 0.8100s/iter; left time: 23.4891s
-8467.6s 445 Epoch: 10 cost time: 427.9078528881073
-8467.6s 446 Epoch: 10, Steps: 528 | Train Loss: -48.3806332 Vali Loss: -23.8178299
-8467.6s 447 Validation loss decreased (-23.789941 --> -23.817830).  Saving model ...
-8467.6s 448 Updating learning rate to 1.953125e-07
-8468.4s 449 [DONE] anomaly_transformer_smap_ch3
-8468.4s 450 
-8468.4s 451 [3/24] omnianomaly_smap_ch3
-8468.4s 452 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/OmniAnomaly
-8468.4s 453 COMMAND : /usr/bin/python3 main.py --dataset SMAP --max_epoch 10 --result_dir result/ch3_smap --save_dir model/ch3_smap
-8470.1s 454 2026-05-12 19:21:42.928635: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:467] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
-8470.2s 455 WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
-8470.2s 456 E0000 00:00:1778613703.084625     145 cuda_dnn.cc:8579] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
-8470.3s 457 E0000 00:00:1778613703.131481     145 cuda_blas.cc:1407] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
-8470.7s 458 W0000 00:00:1778613703.497272     145 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-8470.7s 459 W0000 00:00:1778613703.497316     145 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-8470.7s 460 W0000 00:00:1778613703.497322     145 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-8470.7s 461 W0000 00:00:1778613703.497325     145 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-8484.6s 462 Traceback (most recent call last):
-8484.6s 463 File "/kaggle/working/EnhancedMTADGAT/external_baselines/OmniAnomaly/main.py", line 13, in <module>
-8484.6s 464 from tfsnippet.examples.utils import MLResults, print_with_title
-8484.6s 465 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/__init__.py", line 4, in <module>
-8484.6s 466 from . import (dataflows, datasets, distributions, layers, ops,
-8484.6s 467 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/dataflows/__init__.py", line 1, in <module>
-8484.6s 468 from .array_flow import *
-8484.6s 469 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/dataflows/array_flow.py", line 4, in <module>
-8484.6s 470 from tfsnippet.utils import minibatch_slices_iterator
-8484.6s 471 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/__init__.py", line 4, in <module>
-8484.6s 472 from .config_ import *
-8484.6s 473 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/config_.py", line 1, in <module>
-8484.6s 474 from .config_utils import Config, ConfigField
-8484.6s 475 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/config_utils.py", line 10, in <module>
-8484.6s 476 from .type_utils import is_integer, is_float
-8484.6s 477 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/type_utils.py", line 19, in <module>
-8484.6s 478 (np.integer, np.int, np.uint,
-8484.6s 479 ^^^^^^
-8484.6s 480 File "/usr/local/lib/python3.12/dist-packages/numpy/__init__.py", line 324, in __getattr__
-8484.6s 481 raise AttributeError(__former_attrs__[attr])
-8484.6s 482 AttributeError: module 'numpy' has no attribute 'int'.
-8484.6s 483 `np.int` was a deprecated alias for the builtin `int`. To avoid this error in existing code, use `int` by itself. Doing this will not modify any behavior and is safe. When replacing `np.int`, you may wish to use e.g. `np.int64` or `np.int32` to specify the precision. If you wish to review your current use, check the release note link for additional information.
-8484.6s 484 The aliases was originally deprecated in NumPy 1.20; for more details and guidance see the original release note at:
-8484.6s 485 https://numpy.org/devdocs/release/1.20.0-notes.html#deprecations. Did you mean: 'inf'?
-8485.6s 486 [FAILED] omnianomaly_smap_ch3 -> return code 1
-8485.6s 487 
-8485.6s 488 [4/24] gdn_smap_ch3
-8485.6s 489 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/GDN
-8485.6s 490 COMMAND : /usr/bin/python3 main.py -dataset smap -device cpu -epoch 10 -batch 128 -slide_win 15 -slide_stride 5 -save_path_pattern ch3_gdn_smap
-8488.4s 491 Traceback (most recent call last):
-8488.4s 492 File "/kaggle/working/EnhancedMTADGAT/external_baselines/GDN/main.py", line 18, in <module>
-8488.4s 493 from models.GDN import GDN
-8488.4s 494 File "/kaggle/working/EnhancedMTADGAT/external_baselines/GDN/models/GDN.py", line 8, in <module>
-8488.4s 495 from torch_geometric.nn import GCNConv, GATConv, EdgeConv
-8488.4s 496 ModuleNotFoundError: No module named 'torch_geometric'
-8488.9s 497 [FAILED] gdn_smap_ch3 -> return code 1
-8488.9s 498 
-8488.9s 499 [5/24] tranad_msl_ch3
-8488.9s 500 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/TranAD
-8488.9s 501 COMMAND : /usr/bin/python3 main.py --retrain --dataset MSL --model TranAD
-8492.6s 502 Traceback (most recent call last):
-8492.6s 503 File "/usr/local/lib/python3.12/dist-packages/matplotlib/style/core.py", line 129, in use
-8492.6s 504 style = _rc_params_in_file(style)
-8492.6s 505 ^^^^^^^^^^^^^^^^^^^^^^^^^
-8492.6s 506 File "/usr/local/lib/python3.12/dist-packages/matplotlib/__init__.py", line 903, in _rc_params_in_file
-8492.6s 507 with _open_file_or_url(fname) as fd:
-8492.6s 508 ^^^^^^^^^^^^^^^^^^^^^^^^
-8492.6s 509 File "/usr/lib/python3.12/contextlib.py", line 137, in __enter__
-8492.6s 510 return next(self.gen)
-8492.6s 511 ^^^^^^^^^^^^^^
-8492.6s 512 File "/usr/local/lib/python3.12/dist-packages/matplotlib/__init__.py", line 880, in _open_file_or_url
-8492.6s 513 with open(fname, encoding='utf-8') as f:
-8492.6s 514 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-8492.6s 515 FileNotFoundError: [Errno 2] No such file or directory: 'science'
-8492.6s 516 
-8492.6s 517 The above exception was the direct cause of the following exception:
-8492.6s 518 
-8492.6s 519 Traceback (most recent call last):
-8492.6s 520 File "/kaggle/working/EnhancedMTADGAT/external_baselines/TranAD/main.py", line 8, in <module>
-8492.6s 521 from src.plotting import *
-8492.6s 522 File "/kaggle/working/EnhancedMTADGAT/external_baselines/TranAD/src/plotting.py", line 7, in <module>
-8492.6s 523 plt.style.use(['science', 'ieee'])
-8492.6s 524 File "/usr/local/lib/python3.12/dist-packages/matplotlib/style/core.py", line 131, in use
-8492.6s 525 raise OSError(
-8492.6s 526 OSError: 'science' is not a valid package style, path of style file, URL of style file, or library style name (library styles are listed in `style.available`)
-8493.3s 527 [FAILED] tranad_msl_ch3 -> return code 1
-8493.3s 528 
-8493.3s 529 [6/24] anomaly_transformer_msl_ch3
-8493.3s 530 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/Anomaly-Transformer
-8493.3s 531 COMMAND : /usr/bin/python3 main.py --dataset MSL --mode train --data_path . --model_save_path ./checkpoints/ch3_msl --input_c 55 --output_c 55 --num_epochs 10 --batch_size 256 --win_size 100 --anormly_ratio 4.0
-11085.7s 532 ------------ Options -------------
-11085.7s 533 anormly_ratio: 4.0
-11085.7s 534 batch_size: 256
-11085.7s 535 data_path: .
-11085.7s 536 dataset: MSL
-11085.7s 537 input_c: 55
-11085.7s 538 k: 3
-11085.7s 539 lr: 0.0001
-11085.7s 540 mode: train
-11085.7s 541 model_save_path: ./checkpoints/ch3_msl
-11085.7s 542 num_epochs: 10
-11085.7s 543 output_c: 55
-11085.7s 544 pretrained_model: None
-11085.7s 545 win_size: 100
-11085.7s 546 -------------- End ----------------
-11085.7s 547 Loading MSL from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/data/processed
-11085.7s 548 test: (73729, 55)
-11085.7s 549 train: (58317, 55)
-11085.7s 550 Loading MSL from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/data/processed
-11085.7s 551 test: (73729, 55)
-11085.7s 552 train: (58317, 55)
-11085.7s 553 Loading MSL from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/data/processed
-11085.7s 554 test: (73729, 55)
-11085.7s 555 train: (58317, 55)
-11085.7s 556 Loading MSL from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/data/processed
-11085.7s 557 test: (73729, 55)
-11085.7s 558 train: (58317, 55)
-11085.7s 559 ======================TRAIN MODE======================
-11085.7s 560 speed: 0.8522s/iter; left time: 1858.5830s
-11085.7s 561 speed: 0.8455s/iter; left time: 1759.5731s
-11085.7s 562 Epoch: 1 cost time: 193.8663671016693
-11085.7s 563 Epoch: 1, Steps: 228 | Train Loss: -42.5066910 Vali Loss: -41.6950376
-11085.7s 564 Validation loss decreased (inf --> -41.695038).  Saving model ...
-11085.7s 565 Updating learning rate to 0.0001
-11085.7s 566 speed: 1.7443s/iter; left time: 3406.6679s
-11085.7s 567 speed: 0.8441s/iter; left time: 1564.1287s
-11085.7s 568 Epoch: 2 cost time: 192.21599316596985
-11085.7s 569 Epoch: 2, Steps: 228 | Train Loss: -47.9714928 Vali Loss: -42.6440232
-11085.7s 570 Validation loss decreased (-41.695038 --> -42.644023).  Saving model ...
-11085.7s 571 Updating learning rate to 5e-05
-11085.7s 572 speed: 1.7374s/iter; left time: 2996.9466s
-11085.7s 573 speed: 0.8438s/iter; left time: 1371.2197s
-11085.7s 574 Epoch: 3 cost time: 192.0604932308197
-11085.7s 575 Epoch: 3, Steps: 228 | Train Loss: -48.1620672 Vali Loss: -42.9585250
-11085.7s 576 Validation loss decreased (-42.644023 --> -42.958525).  Saving model ...
-11085.7s 577 Updating learning rate to 2.5e-05
-11085.7s 578 speed: 1.7417s/iter; left time: 2607.3926s
-11085.7s 579 speed: 0.8506s/iter; left time: 1188.2807s
-11085.7s 580 Epoch: 4 cost time: 193.12515234947205
-11085.7s 581 Epoch: 4, Steps: 228 | Train Loss: -48.2089324 Vali Loss: -43.1348657
-11085.7s 582 Validation loss decreased (-42.958525 --> -43.134866).  Saving model ...
-11085.7s 583 Updating learning rate to 1.25e-05
-11085.7s 584 speed: 1.7339s/iter; left time: 2200.3263s
-11085.7s 585 speed: 0.8472s/iter; left time: 990.3295s
-11085.7s 586 Epoch: 5 cost time: 191.93066668510437
-11085.7s 587 Epoch: 5, Steps: 228 | Train Loss: -48.2292451 Vali Loss: -43.2290884
-11085.7s 588 Validation loss decreased (-43.134866 --> -43.229088).  Saving model ...
-11085.7s 589 Updating learning rate to 6.25e-06
-11085.7s 590 speed: 1.7431s/iter; left time: 1814.6122s
-11085.7s 591 speed: 0.8430s/iter; left time: 793.2657s
-11085.7s 592 Epoch: 6 cost time: 192.05662155151367
-11085.7s 593 Epoch: 6, Steps: 228 | Train Loss: -48.2432684 Vali Loss: -43.2703322
-11085.7s 594 Validation loss decreased (-43.229088 --> -43.270332).  Saving model ...
-11085.7s 595 Updating learning rate to 3.125e-06
-11085.7s 596 speed: 1.7323s/iter; left time: 1408.3942s
-11085.7s 597 speed: 0.8506s/iter; left time: 606.4641s
-11085.7s 598 Epoch: 7 cost time: 192.49085426330566
-11085.7s 599 Epoch: 7, Steps: 228 | Train Loss: -48.2850375 Vali Loss: -43.2956748
-11085.7s 600 Validation loss decreased (-43.270332 --> -43.295675).  Saving model ...
-11085.7s 601 Updating learning rate to 1.5625e-06
-11085.7s 602 speed: 1.7308s/iter; left time: 1012.5364s
-11085.7s 603 speed: 0.8493s/iter; left time: 411.9111s
-11085.7s 604 Epoch: 8 cost time: 192.1302773952484
-11085.7s 605 Epoch: 8, Steps: 228 | Train Loss: -48.2911243 Vali Loss: -43.3097160
-11085.7s 606 Validation loss decreased (-43.295675 --> -43.309716).  Saving model ...
-11085.7s 607 Updating learning rate to 7.8125e-07
-11085.7s 608 speed: 1.7442s/iter; left time: 622.6802s
-11085.7s 609 speed: 0.8416s/iter; left time: 216.2858s
-11085.7s 610 Epoch: 9 cost time: 192.29969096183777
-11085.7s 611 Epoch: 9, Steps: 228 | Train Loss: -48.2938111 Vali Loss: -43.3168105
-11085.7s 612 Validation loss decreased (-43.309716 --> -43.316810).  Saving model ...
-11085.7s 613 Updating learning rate to 3.90625e-07
-11085.7s 614 speed: 1.7410s/iter; left time: 224.5887s
-11085.7s 615 speed: 0.8405s/iter; left time: 24.3759s
-11085.7s 616 Epoch: 10 cost time: 191.68925642967224
-11085.7s 617 Epoch: 10, Steps: 228 | Train Loss: -48.2950275 Vali Loss: -43.3204761
-11085.7s 618 Validation loss decreased (-43.316810 --> -43.320476).  Saving model ...
-11085.7s 619 Updating learning rate to 1.953125e-07
-11086.4s 620 [DONE] anomaly_transformer_msl_ch3
-11086.4s 621 
-11086.4s 622 [7/24] omnianomaly_msl_ch3
-11086.4s 623 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/OmniAnomaly
-11086.4s 624 COMMAND : /usr/bin/python3 main.py --dataset MSL --max_epoch 10 --result_dir result/ch3_msl --save_dir model/ch3_msl
-11087.0s 625 2026-05-12 20:05:19.845314: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:467] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
-11087.0s 626 WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
-11087.0s 627 E0000 00:00:1778616319.869723     203 cuda_dnn.cc:8579] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
-11087.0s 628 E0000 00:00:1778616319.877699     203 cuda_blas.cc:1407] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
-11087.0s 629 W0000 00:00:1778616319.896620     203 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-11087.0s 630 W0000 00:00:1778616319.896645     203 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-11087.0s 631 W0000 00:00:1778616319.896648     203 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-11087.0s 632 W0000 00:00:1778616319.896650     203 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-11092.9s 633 Traceback (most recent call last):
-11092.9s 634 File "/kaggle/working/EnhancedMTADGAT/external_baselines/OmniAnomaly/main.py", line 13, in <module>
-11092.9s 635 from tfsnippet.examples.utils import MLResults, print_with_title
-11092.9s 636 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/__init__.py", line 4, in <module>
-11092.9s 637 from . import (dataflows, datasets, distributions, layers, ops,
-11092.9s 638 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/dataflows/__init__.py", line 1, in <module>
-11092.9s 639 from .array_flow import *
-11092.9s 640 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/dataflows/array_flow.py", line 4, in <module>
-11092.9s 641 from tfsnippet.utils import minibatch_slices_iterator
-11092.9s 642 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/__init__.py", line 4, in <module>
-11092.9s 643 from .config_ import *
-11092.9s 644 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/config_.py", line 1, in <module>
-11092.9s 645 from .config_utils import Config, ConfigField
-11092.9s 646 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/config_utils.py", line 10, in <module>
-11092.9s 647 from .type_utils import is_integer, is_float
-11092.9s 648 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/type_utils.py", line 19, in <module>
-11092.9s 649 (np.integer, np.int, np.uint,
-11092.9s 650 ^^^^^^
-11092.9s 651 File "/usr/local/lib/python3.12/dist-packages/numpy/__init__.py", line 324, in __getattr__
-11092.9s 652 raise AttributeError(__former_attrs__[attr])
-11092.9s 653 AttributeError: module 'numpy' has no attribute 'int'.
-11092.9s 654 `np.int` was a deprecated alias for the builtin `int`. To avoid this error in existing code, use `int` by itself. Doing this will not modify any behavior and is safe. When replacing `np.int`, you may wish to use e.g. `np.int64` or `np.int32` to specify the precision. If you wish to review your current use, check the release note link for additional information.
-11092.9s 655 The aliases was originally deprecated in NumPy 1.20; for more details and guidance see the original release note at:
-11092.9s 656 https://numpy.org/devdocs/release/1.20.0-notes.html#deprecations. Did you mean: 'inf'?
-11093.7s 657 [FAILED] omnianomaly_msl_ch3 -> return code 1
-11093.7s 658 
-11093.7s 659 [8/24] gdn_msl_ch3
-11093.7s 660 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/GDN
-11093.7s 661 COMMAND : /usr/bin/python3 main.py -dataset msl -device cpu -epoch 10 -batch 128 -slide_win 15 -slide_stride 5 -save_path_pattern ch3_gdn_msl
-11096.5s 662 Traceback (most recent call last):
-11096.5s 663 File "/kaggle/working/EnhancedMTADGAT/external_baselines/GDN/main.py", line 18, in <module>
-11096.5s 664 from models.GDN import GDN
-11096.5s 665 File "/kaggle/working/EnhancedMTADGAT/external_baselines/GDN/models/GDN.py", line 8, in <module>
-11096.5s 666 from torch_geometric.nn import GCNConv, GATConv, EdgeConv
-11096.5s 667 ModuleNotFoundError: No module named 'torch_geometric'
-11096.9s 668 [FAILED] gdn_msl_ch3 -> return code 1
-11096.9s 669 
-11096.9s 670 [9/24] tranad_nasa_random_discharge_rw1_ch3
-11096.9s 671 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/TranAD
-11096.9s 672 COMMAND : /usr/bin/python3 main.py --retrain --dataset NASA_RANDOM_DISCHARGE_RW1 --model TranAD
-11100.6s 673 Traceback (most recent call last):
-11100.6s 674 File "/usr/local/lib/python3.12/dist-packages/matplotlib/style/core.py", line 129, in use
-11100.6s 675 style = _rc_params_in_file(style)
-11100.6s 676 ^^^^^^^^^^^^^^^^^^^^^^^^^
-11100.6s 677 File "/usr/local/lib/python3.12/dist-packages/matplotlib/__init__.py", line 903, in _rc_params_in_file
-11100.6s 678 with _open_file_or_url(fname) as fd:
-11100.6s 679 ^^^^^^^^^^^^^^^^^^^^^^^^
-11100.6s 680 File "/usr/lib/python3.12/contextlib.py", line 137, in __enter__
-11100.6s 681 return next(self.gen)
-11100.6s 682 ^^^^^^^^^^^^^^
-11100.6s 683 File "/usr/local/lib/python3.12/dist-packages/matplotlib/__init__.py", line 880, in _open_file_or_url
-11100.6s 684 with open(fname, encoding='utf-8') as f:
-11100.6s 685 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-11100.6s 686 FileNotFoundError: [Errno 2] No such file or directory: 'science'
-11100.6s 687 
-11100.6s 688 The above exception was the direct cause of the following exception:
-11100.6s 689 
-11100.6s 690 Traceback (most recent call last):
-11100.6s 691 File "/kaggle/working/EnhancedMTADGAT/external_baselines/TranAD/main.py", line 8, in <module>
-11100.6s 692 from src.plotting import *
-11100.6s 693 File "/kaggle/working/EnhancedMTADGAT/external_baselines/TranAD/src/plotting.py", line 7, in <module>
-11100.6s 694 plt.style.use(['science', 'ieee'])
-11100.6s 695 File "/usr/local/lib/python3.12/dist-packages/matplotlib/style/core.py", line 131, in use
-11100.6s 696 raise OSError(
-11100.6s 697 OSError: 'science' is not a valid package style, path of style file, URL of style file, or library style name (library styles are listed in `style.available`)
-11101.2s 698 [FAILED] tranad_nasa_random_discharge_rw1_ch3 -> return code 1
-11101.2s 699 
-11101.2s 700 [10/24] anomaly_transformer_nasa_random_discharge_rw1_ch3
-11101.2s 701 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/Anomaly-Transformer
-11101.2s 702 COMMAND : /usr/bin/python3 main.py --dataset NASA_RANDOM_DISCHARGE_RW1 --mode train --data_path . --model_save_path ./checkpoints/ch3_nasa_random_discharge_rw1 --input_c 4 --output_c 4 --num_epochs 10 --batch_size 256 --win_size 100 --anormly_ratio 4.0
-17431.2s 703 ------------ Options -------------
-17431.2s 704 anormly_ratio: 4.0
-17431.2s 705 batch_size: 256
-17431.2s 706 data_path: .
-17431.2s 707 dataset: NASA_RANDOM_DISCHARGE_RW1
-17431.2s 708 input_c: 4
-17431.2s 709 k: 3
-17431.2s 710 lr: 0.0001
-17431.2s 711 mode: train
-17431.2s 712 model_save_path: ./checkpoints/ch3_nasa_random_discharge_rw1
-17431.2s 713 num_epochs: 10
-17431.2s 714 output_c: 4
-17431.2s 715 pretrained_model: None
-17431.2s 716 win_size: 100
-17431.2s 717 -------------- End ----------------
-17431.2s 718 Loading NASA_RANDOM_DISCHARGE_RW1 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-17431.2s 719 test: (118427, 4)
-17431.2s 720 train: (473704, 4)
-17431.2s 721 Loading NASA_RANDOM_DISCHARGE_RW1 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-17431.2s 722 test: (118427, 4)
-17431.2s 723 train: (473704, 4)
-17431.2s 724 Loading NASA_RANDOM_DISCHARGE_RW1 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-17431.2s 725 test: (118427, 4)
-17431.2s 726 train: (473704, 4)
-17431.2s 727 Loading NASA_RANDOM_DISCHARGE_RW1 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-17431.2s 728 test: (118427, 4)
-17431.2s 729 train: (473704, 4)
-17431.2s 730 ======================TRAIN MODE======================
-17431.2s 731 speed: 0.8189s/iter; left time: 15077.3302s
-17431.2s 732 speed: 0.8090s/iter; left time: 14814.1675s
-17431.2s 733 speed: 0.8058s/iter; left time: 14674.5989s
-17431.2s 734 speed: 0.8104s/iter; left time: 14676.7077s
-17431.2s 735 speed: 0.8073s/iter; left time: 14540.9462s
-17431.2s 736 speed: 0.8038s/iter; left time: 14397.0202s
-17431.2s 737 speed: 0.8033s/iter; left time: 14307.2871s
-17431.2s 738 speed: 0.7999s/iter; left time: 14166.8937s
-17431.2s 739 speed: 0.8017s/iter; left time: 14119.0456s
-17431.2s 740 speed: 0.8011s/iter; left time: 14027.9757s
-17431.2s 741 speed: 0.8090s/iter; left time: 14086.1592s
-17431.2s 742 speed: 0.8073s/iter; left time: 13974.9242s
-17431.2s 743 speed: 0.8008s/iter; left time: 13783.2607s
-17431.2s 744 speed: 0.8014s/iter; left time: 13712.2465s
-17431.2s 745 speed: 0.8007s/iter; left time: 13620.9881s
-17431.2s 746 speed: 0.7999s/iter; left time: 13527.4828s
-17431.2s 747 speed: 0.8038s/iter; left time: 13513.4847s
-17431.2s 748 speed: 0.8028s/iter; left time: 13416.1672s
-17431.2s 749 Epoch: 1 cost time: 1489.4869725704193
-17431.2s 750 Epoch: 1, Steps: 1851 | Train Loss: -47.7178249 Vali Loss: -48.8920250
-17431.2s 751 Validation loss decreased (inf --> -48.892025).  Saving model ...
-17431.2s 752 Updating learning rate to 0.0001
-17431.2s 753 speed: 2.2432s/iter; left time: 37146.9612s
-17431.2s 754 speed: 0.8013s/iter; left time: 13189.2365s
-17431.2s 755 speed: 0.7964s/iter; left time: 13029.6236s
-17431.2s 756 speed: 0.7957s/iter; left time: 12937.6709s
-17431.2s 757 speed: 0.7987s/iter; left time: 12906.3159s
-17431.2s 758 speed: 0.8051s/iter; left time: 12929.7301s
-17431.2s 759 speed: 0.8000s/iter; left time: 12768.1075s
-17431.2s 760 speed: 0.7963s/iter; left time: 12629.7520s
-17431.2s 761 speed: 0.7948s/iter; left time: 12526.6622s
-17431.2s 762 speed: 0.7941s/iter; left time: 12435.8206s
-17431.2s 763 speed: 0.7952s/iter; left time: 12374.0112s
-17431.2s 764 speed: 0.7941s/iter; left time: 12277.1319s
-17431.2s 765 speed: 0.7951s/iter; left time: 12212.3730s
-17431.2s 766 speed: 0.8006s/iter; left time: 12217.2438s
-17431.2s 767 speed: 0.7957s/iter; left time: 12063.0739s
-17431.2s 768 speed: 0.7942s/iter; left time: 11959.9707s
-17431.2s 769 speed: 0.7947s/iter; left time: 11888.1462s
-17431.2s 770 speed: 0.7980s/iter; left time: 11858.7506s
-17431.2s 771 Epoch: 2 cost time: 1475.3166177272797
-17431.2s 772 Epoch: 2, Steps: 1851 | Train Loss: -48.9677437 Vali Loss: -48.9786721
-17431.2s 773 EarlyStopping counter: 1 out of 3
-17431.2s 774 Updating learning rate to 5e-05
-17431.2s 775 speed: 2.2329s/iter; left time: 32844.3542s
-17431.2s 776 speed: 0.7966s/iter; left time: 11637.1785s
-17431.2s 777 speed: 0.7916s/iter; left time: 11484.9964s
-17431.2s 778 speed: 0.7934s/iter; left time: 11432.3964s
-17431.2s 779 speed: 0.7967s/iter; left time: 11400.0210s
-17431.2s 780 speed: 0.7983s/iter; left time: 11342.7356s
-17431.2s 781 speed: 0.7988s/iter; left time: 11270.7044s
-17431.2s 782 speed: 0.7982s/iter; left time: 11182.2568s
-17431.2s 783 speed: 0.8002s/iter; left time: 11130.6083s
-17431.2s 784 speed: 0.7999s/iter; left time: 11046.3032s
-17431.2s 785 speed: 0.7995s/iter; left time: 10959.7024s
-17431.2s 786 speed: 0.7996s/iter; left time: 10881.5632s
-17431.2s 787 speed: 0.7932s/iter; left time: 10714.9196s
-17431.2s 788 speed: 0.7924s/iter; left time: 10625.0906s
-17431.2s 789 speed: 0.7969s/iter; left time: 10605.5975s
-17431.2s 790 speed: 0.7989s/iter; left time: 10553.2525s
-17431.2s 791 speed: 0.7986s/iter; left time: 10468.9579s
-17431.2s 792 speed: 0.7915s/iter; left time: 10296.9073s
-17431.2s 793 Epoch: 3 cost time: 1473.8587481975555
-17431.2s 794 Epoch: 3, Steps: 1851 | Train Loss: -48.9938835 Vali Loss: -48.9896895
-17431.2s 795 EarlyStopping counter: 2 out of 3
-17431.2s 796 Updating learning rate to 2.5e-05
-17431.2s 797 speed: 2.2378s/iter; left time: 28774.1378s
-17431.2s 798 speed: 0.8000s/iter; left time: 10205.8773s
-17431.2s 799 speed: 0.7921s/iter; left time: 10026.0072s
-17431.2s 800 speed: 0.7913s/iter; left time: 9936.6141s
-17431.2s 801 speed: 0.7966s/iter; left time: 9924.4165s
-17431.2s 802 speed: 0.7928s/iter; left time: 9797.5995s
-17431.2s 803 speed: 0.7928s/iter; left time: 9717.8515s
-17431.2s 804 speed: 0.7997s/iter; left time: 9722.6054s
-17431.2s 805 speed: 0.7928s/iter; left time: 9559.1734s
-17431.2s 806 speed: 0.7901s/iter; left time: 9447.7002s
-17431.2s 807 speed: 0.7951s/iter; left time: 9427.7137s
-17431.2s 808 speed: 0.7963s/iter; left time: 9363.4654s
-17431.2s 809 speed: 0.7961s/iter; left time: 9280.8577s
-17431.2s 810 speed: 0.7910s/iter; left time: 9142.0705s
-17431.2s 811 speed: 0.7886s/iter; left time: 9036.3480s
-17431.2s 812 speed: 0.7916s/iter; left time: 8990.5376s
-17431.2s 813 speed: 0.7957s/iter; left time: 8957.6111s
-17431.2s 814 speed: 0.7935s/iter; left time: 8854.3624s
-17431.2s 815 Epoch: 4 cost time: 1469.1303925514221
-17431.2s 816 Epoch: 4, Steps: 1851 | Train Loss: -48.9992285 Vali Loss: -48.9922183
-17431.2s 817 EarlyStopping counter: 3 out of 3
-17431.2s 818 Early stopping
-17432.0s 819 [DONE] anomaly_transformer_nasa_random_discharge_rw1_ch3
-17432.0s 820 
-17432.0s 821 [11/24] omnianomaly_nasa_random_discharge_rw1_ch3
-17432.0s 822 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/OmniAnomaly
-17432.0s 823 COMMAND : /usr/bin/python3 main.py --dataset NASA_RANDOM_DISCHARGE_RW1 --max_epoch 10 --result_dir result/ch3_nasa_random_discharge_rw1 --save_dir model/ch3_nasa_random_discharge_rw1
-17432.5s 824 2026-05-12 21:51:05.375639: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:467] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
-17432.6s 825 WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
-17432.6s 826 E0000 00:00:1778622665.399234     261 cuda_dnn.cc:8579] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
-17432.6s 827 E0000 00:00:1778622665.406723     261 cuda_blas.cc:1407] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
-17432.6s 828 W0000 00:00:1778622665.424899     261 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-17432.6s 829 W0000 00:00:1778622665.424925     261 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-17432.6s 830 W0000 00:00:1778622665.424927     261 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-17432.6s 831 W0000 00:00:1778622665.424929     261 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-17438.3s 832 Traceback (most recent call last):
-17438.3s 833 File "/kaggle/working/EnhancedMTADGAT/external_baselines/OmniAnomaly/main.py", line 13, in <module>
-17438.3s 834 from tfsnippet.examples.utils import MLResults, print_with_title
-17438.3s 835 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/__init__.py", line 4, in <module>
-17438.3s 836 from . import (dataflows, datasets, distributions, layers, ops,
-17438.3s 837 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/dataflows/__init__.py", line 1, in <module>
-17438.3s 838 from .array_flow import *
-17438.3s 839 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/dataflows/array_flow.py", line 4, in <module>
-17438.3s 840 from tfsnippet.utils import minibatch_slices_iterator
-17438.3s 841 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/__init__.py", line 4, in <module>
-17438.3s 842 from .config_ import *
-17438.3s 843 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/config_.py", line 1, in <module>
-17438.3s 844 from .config_utils import Config, ConfigField
-17438.3s 845 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/config_utils.py", line 10, in <module>
-17438.3s 846 from .type_utils import is_integer, is_float
-17438.3s 847 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/type_utils.py", line 19, in <module>
-17438.3s 848 (np.integer, np.int, np.uint,
-17438.3s 849 ^^^^^^
-17438.3s 850 File "/usr/local/lib/python3.12/dist-packages/numpy/__init__.py", line 324, in __getattr__
-17438.3s 851 raise AttributeError(__former_attrs__[attr])
-17438.3s 852 AttributeError: module 'numpy' has no attribute 'int'.
-17438.3s 853 `np.int` was a deprecated alias for the builtin `int`. To avoid this error in existing code, use `int` by itself. Doing this will not modify any behavior and is safe. When replacing `np.int`, you may wish to use e.g. `np.int64` or `np.int32` to specify the precision. If you wish to review your current use, check the release note link for additional information.
-17438.3s 854 The aliases was originally deprecated in NumPy 1.20; for more details and guidance see the original release note at:
-17438.3s 855 https://numpy.org/devdocs/release/1.20.0-notes.html#deprecations. Did you mean: 'inf'?
-17439.0s 856 [FAILED] omnianomaly_nasa_random_discharge_rw1_ch3 -> return code 1
-17439.0s 857 
-17439.0s 858 [12/24] gdn_nasa_random_discharge_rw1_ch3
-17439.0s 859 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/GDN
-17439.0s 860 COMMAND : /usr/bin/python3 main.py -dataset NASA_RANDOM_DISCHARGE_RW1 -device cpu -epoch 10 -batch 128 -slide_win 15 -slide_stride 5 -save_path_pattern ch3_gdn_nasa_random_discharge_rw1
-17441.8s 861 Traceback (most recent call last):
-17441.8s 862 File "/kaggle/working/EnhancedMTADGAT/external_baselines/GDN/main.py", line 18, in <module>
-17441.8s 863 from models.GDN import GDN
-17441.8s 864 File "/kaggle/working/EnhancedMTADGAT/external_baselines/GDN/models/GDN.py", line 8, in <module>
-17441.8s 865 from torch_geometric.nn import GCNConv, GATConv, EdgeConv
-17441.8s 866 ModuleNotFoundError: No module named 'torch_geometric'
-17442.2s 867 [FAILED] gdn_nasa_random_discharge_rw1_ch3 -> return code 1
-17442.2s 868 
-17442.2s 869 [13/24] tranad_nasa_random_discharge_rw2_ch3
-17442.2s 870 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/TranAD
-17442.2s 871 COMMAND : /usr/bin/python3 main.py --retrain --dataset NASA_RANDOM_DISCHARGE_RW2 --model TranAD
-17445.8s 872 Traceback (most recent call last):
-17445.8s 873 File "/usr/local/lib/python3.12/dist-packages/matplotlib/style/core.py", line 129, in use
-17445.8s 874 style = _rc_params_in_file(style)
-17445.8s 875 ^^^^^^^^^^^^^^^^^^^^^^^^^
-17445.8s 876 File "/usr/local/lib/python3.12/dist-packages/matplotlib/__init__.py", line 903, in _rc_params_in_file
-17445.8s 877 with _open_file_or_url(fname) as fd:
-17445.8s 878 ^^^^^^^^^^^^^^^^^^^^^^^^
-17445.8s 879 File "/usr/lib/python3.12/contextlib.py", line 137, in __enter__
-17445.8s 880 return next(self.gen)
-17445.8s 881 ^^^^^^^^^^^^^^
-17445.8s 882 File "/usr/local/lib/python3.12/dist-packages/matplotlib/__init__.py", line 880, in _open_file_or_url
-17445.8s 883 with open(fname, encoding='utf-8') as f:
-17445.8s 884 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-17445.8s 885 FileNotFoundError: [Errno 2] No such file or directory: 'science'
-17445.8s 886 
-17445.8s 887 The above exception was the direct cause of the following exception:
-17445.8s 888 
-17445.8s 889 Traceback (most recent call last):
-17445.8s 890 File "/kaggle/working/EnhancedMTADGAT/external_baselines/TranAD/main.py", line 8, in <module>
-17445.8s 891 from src.plotting import *
-17445.8s 892 File "/kaggle/working/EnhancedMTADGAT/external_baselines/TranAD/src/plotting.py", line 7, in <module>
-17445.8s 893 plt.style.use(['science', 'ieee'])
-17445.8s 894 File "/usr/local/lib/python3.12/dist-packages/matplotlib/style/core.py", line 131, in use
-17445.8s 895 raise OSError(
-17445.8s 896 OSError: 'science' is not a valid package style, path of style file, URL of style file, or library style name (library styles are listed in `style.available`)
-17446.4s 897 [FAILED] tranad_nasa_random_discharge_rw2_ch3 -> return code 1
-17446.4s 898 
-17446.4s 899 [14/24] anomaly_transformer_nasa_random_discharge_rw2_ch3
-17446.4s 900 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/Anomaly-Transformer
-17446.4s 901 COMMAND : /usr/bin/python3 main.py --dataset NASA_RANDOM_DISCHARGE_RW2 --mode train --data_path . --model_save_path ./checkpoints/ch3_nasa_random_discharge_rw2 --input_c 4 --output_c 4 --num_epochs 10 --batch_size 256 --win_size 100 --anormly_ratio 4.0
-23720.4s 902 ------------ Options -------------
-23720.4s 903 anormly_ratio: 4.0
-23720.4s 904 batch_size: 256
-23720.4s 905 data_path: .
-23720.4s 906 dataset: NASA_RANDOM_DISCHARGE_RW2
-23720.4s 907 input_c: 4
-23720.4s 908 k: 3
-23720.4s 909 lr: 0.0001
-23720.4s 910 mode: train
-23720.4s 911 model_save_path: ./checkpoints/ch3_nasa_random_discharge_rw2
-23720.4s 912 num_epochs: 10
-23720.4s 913 output_c: 4
-23720.4s 914 pretrained_model: None
-23720.4s 915 win_size: 100
-23720.4s 916 -------------- End ----------------
-23720.4s 917 Loading NASA_RANDOM_DISCHARGE_RW2 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-23720.4s 918 test: (116631, 4)
-23720.4s 919 train: (466520, 4)
-23720.4s 920 Loading NASA_RANDOM_DISCHARGE_RW2 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-23720.4s 921 test: (116631, 4)
-23720.4s 922 train: (466520, 4)
-23720.4s 923 Loading NASA_RANDOM_DISCHARGE_RW2 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-23720.4s 924 test: (116631, 4)
-23720.4s 925 train: (466520, 4)
-23720.4s 926 Loading NASA_RANDOM_DISCHARGE_RW2 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-23720.4s 927 test: (116631, 4)
-23720.4s 928 train: (466520, 4)
-23720.4s 929 ======================TRAIN MODE======================
-23720.4s 930 speed: 0.8191s/iter; left time: 14843.3650s
-23720.4s 931 speed: 0.8122s/iter; left time: 14636.0458s
-23720.4s 932 speed: 0.8106s/iter; left time: 14527.6578s
-23720.4s 933 speed: 0.8149s/iter; left time: 14521.8517s
-23720.4s 934 speed: 0.8116s/iter; left time: 14382.6338s
-23720.4s 935 speed: 0.8092s/iter; left time: 14259.1126s
-23720.4s 936 speed: 0.8103s/iter; left time: 14197.5433s
-23720.4s 937 speed: 0.8126s/iter; left time: 14155.9327s
-23720.4s 938 speed: 0.8074s/iter; left time: 13984.6919s
-23720.4s 939 speed: 0.8049s/iter; left time: 13860.6894s
-23720.4s 940 speed: 0.8100s/iter; left time: 13868.1618s
-23720.4s 941 speed: 0.8034s/iter; left time: 13674.3406s
-23720.4s 942 speed: 0.8060s/iter; left time: 13637.4950s
-23720.4s 943 speed: 0.8088s/iter; left time: 13604.9225s
-23720.4s 944 speed: 0.8096s/iter; left time: 13537.5389s
-23720.4s 945 speed: 0.8097s/iter; left time: 13457.8633s
-23720.4s 946 speed: 0.8092s/iter; left time: 13368.1895s
-23720.4s 947 speed: 0.8094s/iter; left time: 13291.7229s
-23720.4s 948 Epoch: 1 cost time: 1476.5807509422302
-23720.4s 949 Epoch: 1, Steps: 1822 | Train Loss: -47.5518378 Vali Loss: -48.8896688
-23720.4s 950 Validation loss decreased (inf --> -48.889669).  Saving model ...
-23720.4s 951 Updating learning rate to 0.0001
-23720.4s 952 speed: 2.0217s/iter; left time: 32951.4219s
-23720.4s 953 speed: 0.8077s/iter; left time: 13084.6411s
-23720.4s 954 speed: 0.8002s/iter; left time: 12882.1289s
-23720.4s 955 speed: 0.8063s/iter; left time: 12900.7036s
-23720.4s 956 speed: 0.8069s/iter; left time: 12828.5801s
-23720.4s 957 speed: 0.8082s/iter; left time: 12768.9486s
-23720.4s 958 speed: 0.8082s/iter; left time: 12687.4547s
-23720.4s 959 speed: 0.8000s/iter; left time: 12479.4733s
-23720.4s 960 speed: 0.8052s/iter; left time: 12479.4774s
-23720.4s 961 speed: 0.8012s/iter; left time: 12338.1184s
-23720.4s 962 speed: 0.8039s/iter; left time: 12298.3931s
-23720.4s 963 speed: 0.8058s/iter; left time: 12247.8044s
-23720.4s 964 speed: 0.8071s/iter; left time: 12186.5736s
-23720.4s 965 speed: 0.8057s/iter; left time: 12085.2789s
-23720.4s 966 speed: 0.8017s/iter; left time: 11944.4609s
-23720.4s 967 speed: 0.7995s/iter; left time: 11831.4103s
-23720.4s 968 speed: 0.8048s/iter; left time: 11830.1242s
-23720.4s 969 speed: 0.8046s/iter; left time: 11745.6697s
-23720.4s 970 Epoch: 2 cost time: 1465.6512699127197
-23720.4s 971 Epoch: 2, Steps: 1822 | Train Loss: -48.9635632 Vali Loss: -48.9588764
-23720.4s 972 EarlyStopping counter: 1 out of 3
-23720.4s 973 Updating learning rate to 5e-05
-23720.4s 974 speed: 2.0067s/iter; left time: 29050.3866s
-23720.4s 975 speed: 0.8044s/iter; left time: 11565.4789s
-23720.4s 976 speed: 0.7969s/iter; left time: 11377.2599s
-23720.4s 977 speed: 0.7993s/iter; left time: 11330.9882s
-23720.4s 978 speed: 0.8040s/iter; left time: 11318.0843s
-23720.4s 979 speed: 0.8044s/iter; left time: 11242.5185s
-23720.4s 980 speed: 0.8042s/iter; left time: 11159.7235s
-23720.4s 981 speed: 0.7952s/iter; left time: 10955.0740s
-23720.4s 982 speed: 0.7980s/iter; left time: 10914.4045s
-23720.4s 983 speed: 0.8031s/iter; left time: 10904.3263s
-23720.4s 984 speed: 0.8041s/iter; left time: 10836.6732s
-23720.4s 985 speed: 0.7972s/iter; left time: 10663.4769s
-23720.4s 986 speed: 0.7928s/iter; left time: 10525.5206s
-23720.4s 987 speed: 0.7987s/iter; left time: 10523.9505s
-23720.4s 988 speed: 0.8020s/iter; left time: 10487.8200s
-23720.4s 989 speed: 0.8033s/iter; left time: 10424.0709s
-23720.4s 990 speed: 0.7963s/iter; left time: 10254.1558s
-23720.4s 991 speed: 0.7962s/iter; left time: 10172.9703s
-23720.4s 992 Epoch: 3 cost time: 1457.489583492279
-23720.4s 993 Epoch: 3, Steps: 1822 | Train Loss: -48.9892400 Vali Loss: -48.9802512
-23720.4s 994 EarlyStopping counter: 2 out of 3
-23720.4s 995 Updating learning rate to 2.5e-05
-23720.4s 996 speed: 1.9987s/iter; left time: 25293.0238s
-23720.4s 997 speed: 0.7961s/iter; left time: 9994.4574s
-23720.4s 998 speed: 0.7998s/iter; left time: 9961.0962s
-23720.4s 999 speed: 0.8027s/iter; left time: 9917.9015s
-23720.4s 1000 speed: 0.7982s/iter; left time: 9781.5334s
-23720.4s 1001 speed: 0.7933s/iter; left time: 9642.0761s
-23720.4s 1002 speed: 0.7984s/iter; left time: 9624.9970s
-23720.4s 1003 speed: 0.8024s/iter; left time: 9592.2742s
-23720.4s 1004 speed: 0.8017s/iter; left time: 9504.6563s
-23720.4s 1005 speed: 0.7968s/iter; left time: 9366.2117s
-23720.4s 1006 speed: 0.7996s/iter; left time: 9318.9831s
-23720.4s 1007 speed: 0.8023s/iter; left time: 9270.0882s
-23720.4s 1008 speed: 0.8037s/iter; left time: 9206.3930s
-23720.4s 1009 speed: 0.8025s/iter; left time: 9112.3031s
-23720.4s 1010 speed: 0.7967s/iter; left time: 8966.9977s
-23720.4s 1011 speed: 0.7924s/iter; left time: 8838.7204s
-23720.4s 1012 speed: 0.7971s/iter; left time: 8811.5580s
-23720.4s 1013 speed: 0.7995s/iter; left time: 8758.8975s
-23720.4s 1014 Epoch: 4 cost time: 1455.533296585083
-23720.4s 1015 Epoch: 4, Steps: 1822 | Train Loss: -48.9998584 Vali Loss: -48.9850854
-23720.4s 1016 EarlyStopping counter: 3 out of 3
-23720.4s 1017 Early stopping
-23721.2s 1018 [DONE] anomaly_transformer_nasa_random_discharge_rw2_ch3
-23721.2s 1019 
-23721.2s 1020 [15/24] omnianomaly_nasa_random_discharge_rw2_ch3
-23721.2s 1021 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/OmniAnomaly
-23721.2s 1022 COMMAND : /usr/bin/python3 main.py --dataset NASA_RANDOM_DISCHARGE_RW2 --max_epoch 10 --result_dir result/ch3_nasa_random_discharge_rw2 --save_dir model/ch3_nasa_random_discharge_rw2
-23721.8s 1023 2026-05-12 23:35:54.603473: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:467] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
-23721.8s 1024 WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
-23721.8s 1025 E0000 00:00:1778628954.627083     319 cuda_dnn.cc:8579] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
-23721.8s 1026 E0000 00:00:1778628954.635404     319 cuda_blas.cc:1407] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
-23721.8s 1027 W0000 00:00:1778628954.654377     319 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-23721.8s 1028 W0000 00:00:1778628954.654434     319 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-23721.8s 1029 W0000 00:00:1778628954.654441     319 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-23721.8s 1030 W0000 00:00:1778628954.654446     319 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-23727.5s 1031 Traceback (most recent call last):
-23727.5s 1032 File "/kaggle/working/EnhancedMTADGAT/external_baselines/OmniAnomaly/main.py", line 13, in <module>
-23727.5s 1033 from tfsnippet.examples.utils import MLResults, print_with_title
-23727.5s 1034 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/__init__.py", line 4, in <module>
-23727.5s 1035 from . import (dataflows, datasets, distributions, layers, ops,
-23727.5s 1036 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/dataflows/__init__.py", line 1, in <module>
-23727.5s 1037 from .array_flow import *
-23727.5s 1038 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/dataflows/array_flow.py", line 4, in <module>
-23727.5s 1039 from tfsnippet.utils import minibatch_slices_iterator
-23727.5s 1040 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/__init__.py", line 4, in <module>
-23727.5s 1041 from .config_ import *
-23727.5s 1042 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/config_.py", line 1, in <module>
-23727.5s 1043 from .config_utils import Config, ConfigField
-23727.5s 1044 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/config_utils.py", line 10, in <module>
-23727.5s 1045 from .type_utils import is_integer, is_float
-23727.5s 1046 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/type_utils.py", line 19, in <module>
-23727.5s 1047 (np.integer, np.int, np.uint,
-23727.5s 1048 ^^^^^^
-23727.5s 1049 File "/usr/local/lib/python3.12/dist-packages/numpy/__init__.py", line 324, in __getattr__
-23727.5s 1050 raise AttributeError(__former_attrs__[attr])
-23727.5s 1051 AttributeError: module 'numpy' has no attribute 'int'.
-23727.5s 1052 `np.int` was a deprecated alias for the builtin `int`. To avoid this error in existing code, use `int` by itself. Doing this will not modify any behavior and is safe. When replacing `np.int`, you may wish to use e.g. `np.int64` or `np.int32` to specify the precision. If you wish to review your current use, check the release note link for additional information.
-23727.5s 1053 The aliases was originally deprecated in NumPy 1.20; for more details and guidance see the original release note at:
-23727.5s 1054 https://numpy.org/devdocs/release/1.20.0-notes.html#deprecations. Did you mean: 'inf'?
-23728.3s 1055 [FAILED] omnianomaly_nasa_random_discharge_rw2_ch3 -> return code 1
-23728.3s 1056 
-23728.3s 1057 [16/24] gdn_nasa_random_discharge_rw2_ch3
-23728.3s 1058 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/GDN
-23728.3s 1059 COMMAND : /usr/bin/python3 main.py -dataset NASA_RANDOM_DISCHARGE_RW2 -device cpu -epoch 10 -batch 128 -slide_win 15 -slide_stride 5 -save_path_pattern ch3_gdn_nasa_random_discharge_rw2
-23731.0s 1060 Traceback (most recent call last):
-23731.0s 1061 File "/kaggle/working/EnhancedMTADGAT/external_baselines/GDN/main.py", line 18, in <module>
-23731.0s 1062 from models.GDN import GDN
-23731.0s 1063 File "/kaggle/working/EnhancedMTADGAT/external_baselines/GDN/models/GDN.py", line 8, in <module>
-23731.0s 1064 from torch_geometric.nn import GCNConv, GATConv, EdgeConv
-23731.0s 1065 ModuleNotFoundError: No module named 'torch_geometric'
-23731.4s 1066 [FAILED] gdn_nasa_random_discharge_rw2_ch3 -> return code 1
-23731.4s 1067 
-23731.4s 1068 [17/24] tranad_nasa_random_discharge_rw7_ch3
-23731.4s 1069 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/TranAD
-23731.4s 1070 COMMAND : /usr/bin/python3 main.py --retrain --dataset NASA_RANDOM_DISCHARGE_RW7 --model TranAD
-23735.1s 1071 Traceback (most recent call last):
-23735.1s 1072 File "/usr/local/lib/python3.12/dist-packages/matplotlib/style/core.py", line 129, in use
-23735.1s 1073 style = _rc_params_in_file(style)
-23735.1s 1074 ^^^^^^^^^^^^^^^^^^^^^^^^^
-23735.1s 1075 File "/usr/local/lib/python3.12/dist-packages/matplotlib/__init__.py", line 903, in _rc_params_in_file
-23735.1s 1076 with _open_file_or_url(fname) as fd:
-23735.1s 1077 ^^^^^^^^^^^^^^^^^^^^^^^^
-23735.1s 1078 File "/usr/lib/python3.12/contextlib.py", line 137, in __enter__
-23735.1s 1079 return next(self.gen)
-23735.1s 1080 ^^^^^^^^^^^^^^
-23735.1s 1081 File "/usr/local/lib/python3.12/dist-packages/matplotlib/__init__.py", line 880, in _open_file_or_url
-23735.1s 1082 with open(fname, encoding='utf-8') as f:
-23735.1s 1083 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-23735.1s 1084 FileNotFoundError: [Errno 2] No such file or directory: 'science'
-23735.1s 1085 
-23735.1s 1086 The above exception was the direct cause of the following exception:
-23735.1s 1087 
-23735.1s 1088 Traceback (most recent call last):
-23735.1s 1089 File "/kaggle/working/EnhancedMTADGAT/external_baselines/TranAD/main.py", line 8, in <module>
-23735.1s 1090 from src.plotting import *
-23735.1s 1091 File "/kaggle/working/EnhancedMTADGAT/external_baselines/TranAD/src/plotting.py", line 7, in <module>
-23735.1s 1092 plt.style.use(['science', 'ieee'])
-23735.1s 1093 File "/usr/local/lib/python3.12/dist-packages/matplotlib/style/core.py", line 131, in use
-23735.1s 1094 raise OSError(
-23735.1s 1095 OSError: 'science' is not a valid package style, path of style file, URL of style file, or library style name (library styles are listed in `style.available`)
-23735.7s 1096 [FAILED] tranad_nasa_random_discharge_rw7_ch3 -> return code 1
-23735.7s 1097 
-23735.7s 1098 [18/24] anomaly_transformer_nasa_random_discharge_rw7_ch3
-23735.7s 1099 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/Anomaly-Transformer
-23735.7s 1100 COMMAND : /usr/bin/python3 main.py --dataset NASA_RANDOM_DISCHARGE_RW7 --mode train --data_path . --model_save_path ./checkpoints/ch3_nasa_random_discharge_rw7 --input_c 4 --output_c 4 --num_epochs 10 --batch_size 256 --win_size 100 --anormly_ratio 4.0
-30274.3s 1101 ------------ Options -------------
-30274.3s 1102 anormly_ratio: 4.0
-30274.3s 1103 batch_size: 256
-30274.3s 1104 data_path: .
-30274.3s 1105 dataset: NASA_RANDOM_DISCHARGE_RW7
-30274.3s 1106 input_c: 4
-30274.3s 1107 k: 3
-30274.3s 1108 lr: 0.0001
-30274.3s 1109 mode: train
-30274.3s 1110 model_save_path: ./checkpoints/ch3_nasa_random_discharge_rw7
-30274.3s 1111 num_epochs: 10
-30274.3s 1112 output_c: 4
-30274.3s 1113 pretrained_model: None
-30274.3s 1114 win_size: 100
-30274.3s 1115 -------------- End ----------------
-30274.3s 1116 Loading NASA_RANDOM_DISCHARGE_RW7 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-30274.3s 1117 test: (118758, 4)
-30274.3s 1118 train: (475032, 4)
-30274.3s 1119 Loading NASA_RANDOM_DISCHARGE_RW7 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-30274.3s 1120 test: (118758, 4)
-30274.3s 1121 train: (475032, 4)
-30274.3s 1122 Loading NASA_RANDOM_DISCHARGE_RW7 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-30274.3s 1123 test: (118758, 4)
-30274.3s 1124 train: (475032, 4)
-30274.3s 1125 Loading NASA_RANDOM_DISCHARGE_RW7 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-30274.3s 1126 test: (118758, 4)
-30274.3s 1127 train: (475032, 4)
-30274.3s 1128 ======================TRAIN MODE======================
-30274.3s 1129 speed: 0.8436s/iter; left time: 15573.7689s
-30274.3s 1130 speed: 0.8370s/iter; left time: 15368.1038s
-30274.3s 1131 speed: 0.8319s/iter; left time: 15191.8355s
-30274.3s 1132 speed: 0.8360s/iter; left time: 15182.9010s
-30274.3s 1133 speed: 0.8372s/iter; left time: 15120.2815s
-30274.3s 1134 speed: 0.8323s/iter; left time: 14948.7524s
-30274.3s 1135 speed: 0.8302s/iter; left time: 14827.4673s
-30274.3s 1136 speed: 0.8312s/iter; left time: 14763.1256s
-30274.3s 1137 speed: 0.8309s/iter; left time: 14675.0160s
-30274.3s 1138 speed: 0.8314s/iter; left time: 14600.4134s
-30274.3s 1139 speed: 0.8310s/iter; left time: 14509.9435s
-30274.3s 1140 speed: 0.8313s/iter; left time: 14431.7812s
-30274.3s 1141 speed: 0.8308s/iter; left time: 14340.9501s
-30274.3s 1142 speed: 0.8314s/iter; left time: 14267.6425s
-30274.3s 1143 speed: 0.8310s/iter; left time: 14178.4942s
-30274.3s 1144 speed: 0.8312s/iter; left time: 14097.5464s
-30274.3s 1145 speed: 0.8310s/iter; left time: 14011.2658s
-30274.3s 1146 speed: 0.8309s/iter; left time: 13927.1306s
-30274.3s 1147 Epoch: 1 cost time: 1545.6728296279907
-30274.3s 1148 Epoch: 1, Steps: 1856 | Train Loss: -47.6469745 Vali Loss: -48.5042169
-30274.3s 1149 Validation loss decreased (inf --> -48.504217).  Saving model ...
-30274.3s 1150 Updating learning rate to 0.0001
-30274.3s 1151 speed: 2.3395s/iter; left time: 38847.7648s
-30274.3s 1152 speed: 0.8310s/iter; left time: 13715.1564s
-30274.3s 1153 speed: 0.8309s/iter; left time: 13630.7413s
-30274.3s 1154 speed: 0.8303s/iter; left time: 13537.9698s
-30274.3s 1155 speed: 0.8309s/iter; left time: 13464.8954s
-30274.3s 1156 speed: 0.8306s/iter; left time: 13376.2683s
-30274.3s 1157 speed: 0.8301s/iter; left time: 13286.4911s
-30274.3s 1158 speed: 0.8301s/iter; left time: 13202.6836s
-30274.3s 1159 speed: 0.8295s/iter; left time: 13110.6508s
-30274.3s 1160 speed: 0.8276s/iter; left time: 12998.2127s
-30274.3s 1161 speed: 0.8275s/iter; left time: 12913.2480s
-30274.3s 1162 speed: 0.8276s/iter; left time: 12831.6766s
-30274.3s 1163 speed: 0.8268s/iter; left time: 12736.1460s
-30274.3s 1164 speed: 0.8272s/iter; left time: 12659.9862s
-30274.3s 1165 speed: 0.8258s/iter; left time: 12555.7291s
-30274.3s 1166 speed: 0.8269s/iter; left time: 12490.9085s
-30274.3s 1167 speed: 0.8253s/iter; left time: 12383.7874s
-30274.3s 1168 speed: 0.8234s/iter; left time: 12272.0464s
-30274.3s 1169 Epoch: 2 cost time: 1536.5247120857239
-30274.3s 1170 Epoch: 2, Steps: 1856 | Train Loss: -48.9046200 Vali Loss: -48.9107574
-30274.3s 1171 EarlyStopping counter: 1 out of 3
-30274.3s 1172 Updating learning rate to 5e-05
-30274.3s 1173 speed: 2.3220s/iter; left time: 34247.0350s
-30274.3s 1174 speed: 0.8237s/iter; left time: 12066.4231s
-30274.3s 1175 speed: 0.8236s/iter; left time: 11982.9684s
-30274.3s 1176 speed: 0.8224s/iter; left time: 11883.3040s
-30274.3s 1177 speed: 0.8221s/iter; left time: 11795.9064s
-30274.3s 1178 speed: 0.8226s/iter; left time: 11720.6455s
-30274.3s 1179 speed: 0.8224s/iter; left time: 11636.2562s
-30274.3s 1180 speed: 0.8236s/iter; left time: 11570.7748s
-30274.3s 1181 speed: 0.8223s/iter; left time: 11470.3102s
-30274.3s 1182 speed: 0.8257s/iter; left time: 11434.8879s
-30274.3s 1183 speed: 0.8234s/iter; left time: 11321.4097s
-30274.3s 1184 speed: 0.8231s/iter; left time: 11234.8429s
-30274.3s 1185 speed: 0.8223s/iter; left time: 11141.6537s
-30274.3s 1186 speed: 0.8201s/iter; left time: 11029.2233s
-30274.3s 1187 speed: 0.8119s/iter; left time: 10838.0234s
-30274.3s 1188 speed: 0.8188s/iter; left time: 10848.9090s
-30274.3s 1189 speed: 0.8230s/iter; left time: 10821.6023s
-30274.3s 1190 speed: 0.8250s/iter; left time: 10765.5495s
-30274.3s 1191 Epoch: 3 cost time: 1525.297641992569
-30274.3s 1192 Epoch: 3, Steps: 1856 | Train Loss: -48.9762002 Vali Loss: -48.9579379
-30274.3s 1193 EarlyStopping counter: 2 out of 3
-30274.3s 1194 Updating learning rate to 2.5e-05
-30274.3s 1195 speed: 2.3031s/iter; left time: 29693.7924s
-30274.3s 1196 speed: 0.8138s/iter; left time: 10410.9902s
-30274.3s 1197 speed: 0.8121s/iter; left time: 10307.4681s
-30274.3s 1198 speed: 0.8108s/iter; left time: 10210.3122s
-30274.3s 1199 speed: 0.8108s/iter; left time: 10129.7440s
-30274.3s 1200 speed: 0.8112s/iter; left time: 10053.5476s
-30274.3s 1201 speed: 0.8110s/iter; left time: 9970.1665s
-30274.3s 1202 speed: 0.8154s/iter; left time: 9942.3014s
-30274.3s 1203 speed: 0.8131s/iter; left time: 9833.1966s
-30274.3s 1204 speed: 0.8101s/iter; left time: 9715.5923s
-30274.3s 1205 speed: 0.8144s/iter; left time: 9685.6683s
-30274.3s 1206 speed: 0.8152s/iter; left time: 9613.9018s
-30274.3s 1207 speed: 0.8113s/iter; left time: 9486.3078s
-30274.3s 1208 speed: 0.8106s/iter; left time: 9397.8583s
-30274.3s 1209 speed: 0.8126s/iter; left time: 9339.6706s
-30274.3s 1210 speed: 0.8152s/iter; left time: 9288.0341s
-30274.3s 1211 speed: 0.8118s/iter; left time: 9167.3763s
-30274.3s 1212 speed: 0.8106s/iter; left time: 9073.1309s
-30274.3s 1213 Epoch: 4 cost time: 1507.1359100341797
-30274.3s 1214 Epoch: 4, Steps: 1856 | Train Loss: -48.9875092 Vali Loss: -48.9671553
-30274.3s 1215 EarlyStopping counter: 3 out of 3
-30274.3s 1216 Early stopping
-30275.0s 1217 [DONE] anomaly_transformer_nasa_random_discharge_rw7_ch3
-30275.0s 1218 
-30275.0s 1219 [19/24] omnianomaly_nasa_random_discharge_rw7_ch3
-30275.0s 1220 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/OmniAnomaly
-30275.0s 1221 COMMAND : /usr/bin/python3 main.py --dataset NASA_RANDOM_DISCHARGE_RW7 --max_epoch 10 --result_dir result/ch3_nasa_random_discharge_rw7 --save_dir model/ch3_nasa_random_discharge_rw7
-30275.7s 1222 2026-05-13 01:25:08.500012: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:467] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
-30275.7s 1223 WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
-30275.7s 1224 E0000 00:00:1778635508.526894     384 cuda_dnn.cc:8579] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
-30275.7s 1225 E0000 00:00:1778635508.535843     384 cuda_blas.cc:1407] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
-30275.7s 1226 W0000 00:00:1778635508.557891     384 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-30275.7s 1227 W0000 00:00:1778635508.557923     384 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-30275.7s 1228 W0000 00:00:1778635508.557926     384 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-30275.7s 1229 W0000 00:00:1778635508.557929     384 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-30282.0s 1230 Traceback (most recent call last):
-30282.0s 1231 File "/kaggle/working/EnhancedMTADGAT/external_baselines/OmniAnomaly/main.py", line 13, in <module>
-30282.0s 1232 from tfsnippet.examples.utils import MLResults, print_with_title
-30282.0s 1233 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/__init__.py", line 4, in <module>
-30282.0s 1234 from . import (dataflows, datasets, distributions, layers, ops,
-30282.0s 1235 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/dataflows/__init__.py", line 1, in <module>
-30282.0s 1236 from .array_flow import *
-30282.0s 1237 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/dataflows/array_flow.py", line 4, in <module>
-30282.0s 1238 from tfsnippet.utils import minibatch_slices_iterator
-30282.0s 1239 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/__init__.py", line 4, in <module>
-30282.0s 1240 from .config_ import *
-30282.0s 1241 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/config_.py", line 1, in <module>
-30282.0s 1242 from .config_utils import Config, ConfigField
-30282.0s 1243 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/config_utils.py", line 10, in <module>
-30282.0s 1244 from .type_utils import is_integer, is_float
-30282.0s 1245 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/type_utils.py", line 19, in <module>
-30282.0s 1246 (np.integer, np.int, np.uint,
-30282.0s 1247 ^^^^^^
-30282.0s 1248 File "/usr/local/lib/python3.12/dist-packages/numpy/__init__.py", line 324, in __getattr__
-30282.0s 1249 raise AttributeError(__former_attrs__[attr])
-30282.0s 1250 AttributeError: module 'numpy' has no attribute 'int'.
-30282.0s 1251 `np.int` was a deprecated alias for the builtin `int`. To avoid this error in existing code, use `int` by itself. Doing this will not modify any behavior and is safe. When replacing `np.int`, you may wish to use e.g. `np.int64` or `np.int32` to specify the precision. If you wish to review your current use, check the release note link for additional information.
-30282.0s 1252 The aliases was originally deprecated in NumPy 1.20; for more details and guidance see the original release note at:
-30282.0s 1253 https://numpy.org/devdocs/release/1.20.0-notes.html#deprecations. Did you mean: 'inf'?
-30282.9s 1254 [FAILED] omnianomaly_nasa_random_discharge_rw7_ch3 -> return code 1
-30282.9s 1255 
-30282.9s 1256 [20/24] gdn_nasa_random_discharge_rw7_ch3
-30282.9s 1257 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/GDN
-30282.9s 1258 COMMAND : /usr/bin/python3 main.py -dataset NASA_RANDOM_DISCHARGE_RW7 -device cpu -epoch 10 -batch 128 -slide_win 15 -slide_stride 5 -save_path_pattern ch3_gdn_nasa_random_discharge_rw7
-30285.9s 1259 Traceback (most recent call last):
-30285.9s 1260 File "/kaggle/working/EnhancedMTADGAT/external_baselines/GDN/main.py", line 18, in <module>
-30285.9s 1261 from models.GDN import GDN
-30285.9s 1262 File "/kaggle/working/EnhancedMTADGAT/external_baselines/GDN/models/GDN.py", line 8, in <module>
-30285.9s 1263 from torch_geometric.nn import GCNConv, GATConv, EdgeConv
-30285.9s 1264 ModuleNotFoundError: No module named 'torch_geometric'
-30286.4s 1265 [FAILED] gdn_nasa_random_discharge_rw7_ch3 -> return code 1
-30286.4s 1266 
-30286.4s 1267 [21/24] tranad_nasa_random_discharge_rw8_ch3
-30286.4s 1268 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/TranAD
-30286.4s 1269 COMMAND : /usr/bin/python3 main.py --retrain --dataset NASA_RANDOM_DISCHARGE_RW8 --model TranAD
-30290.4s 1270 Traceback (most recent call last):
-30290.4s 1271 File "/usr/local/lib/python3.12/dist-packages/matplotlib/style/core.py", line 129, in use
-30290.4s 1272 style = _rc_params_in_file(style)
-30290.4s 1273 ^^^^^^^^^^^^^^^^^^^^^^^^^
-30290.4s 1274 File "/usr/local/lib/python3.12/dist-packages/matplotlib/__init__.py", line 903, in _rc_params_in_file
-30290.4s 1275 with _open_file_or_url(fname) as fd:
-30290.4s 1276 ^^^^^^^^^^^^^^^^^^^^^^^^
-30290.4s 1277 File "/usr/lib/python3.12/contextlib.py", line 137, in __enter__
-30290.4s 1278 return next(self.gen)
-30290.4s 1279 ^^^^^^^^^^^^^^
-30290.4s 1280 File "/usr/local/lib/python3.12/dist-packages/matplotlib/__init__.py", line 880, in _open_file_or_url
-30290.4s 1281 with open(fname, encoding='utf-8') as f:
-30290.4s 1282 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-30290.4s 1283 FileNotFoundError: [Errno 2] No such file or directory: 'science'
-30290.4s 1284 
-30290.4s 1285 The above exception was the direct cause of the following exception:
-30290.4s 1286 
-30290.4s 1287 Traceback (most recent call last):
-30290.4s 1288 File "/kaggle/working/EnhancedMTADGAT/external_baselines/TranAD/main.py", line 8, in <module>
-30290.4s 1289 from src.plotting import *
-30290.4s 1290 File "/kaggle/working/EnhancedMTADGAT/external_baselines/TranAD/src/plotting.py", line 7, in <module>
-30290.4s 1291 plt.style.use(['science', 'ieee'])
-30290.4s 1292 File "/usr/local/lib/python3.12/dist-packages/matplotlib/style/core.py", line 131, in use
-30290.4s 1293 raise OSError(
-30290.4s 1294 OSError: 'science' is not a valid package style, path of style file, URL of style file, or library style name (library styles are listed in `style.available`)
-30291.0s 1295 [FAILED] tranad_nasa_random_discharge_rw8_ch3 -> return code 1
-30291.0s 1296 
-30291.0s 1297 [22/24] anomaly_transformer_nasa_random_discharge_rw8_ch3
-30291.0s 1298 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/Anomaly-Transformer
-30291.0s 1299 COMMAND : /usr/bin/python3 main.py --dataset NASA_RANDOM_DISCHARGE_RW8 --mode train --data_path . --model_save_path ./checkpoints/ch3_nasa_random_discharge_rw8 --input_c 4 --output_c 4 --num_epochs 10 --batch_size 256 --win_size 100 --anormly_ratio 4.0
-36472.6s 1300 ------------ Options -------------
-36472.6s 1301 anormly_ratio: 4.0
-36472.6s 1302 batch_size: 256
-36472.6s 1303 data_path: .
-36472.6s 1304 dataset: NASA_RANDOM_DISCHARGE_RW8
-36472.6s 1305 input_c: 4
-36472.6s 1306 k: 3
-36472.6s 1307 lr: 0.0001
-36472.6s 1308 mode: train
-36472.6s 1309 model_save_path: ./checkpoints/ch3_nasa_random_discharge_rw8
-36472.6s 1310 num_epochs: 10
-36472.6s 1311 output_c: 4
-36472.6s 1312 pretrained_model: None
-36472.6s 1313 win_size: 100
-36472.6s 1314 -------------- End ----------------
-36472.6s 1315 Loading NASA_RANDOM_DISCHARGE_RW8 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-36472.6s 1316 test: (111640, 4)
-36472.6s 1317 train: (446556, 4)
-36472.6s 1318 Loading NASA_RANDOM_DISCHARGE_RW8 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-36472.6s 1319 test: (111640, 4)
-36472.6s 1320 train: (446556, 4)
-36472.6s 1321 Loading NASA_RANDOM_DISCHARGE_RW8 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-36472.6s 1322 test: (111640, 4)
-36472.6s 1323 train: (446556, 4)
-36472.6s 1324 Loading NASA_RANDOM_DISCHARGE_RW8 from project processed dir: /kaggle/working/EnhancedMTADGAT/datasets/NASA_RANDOM_DISCHARGE/processed
-36472.6s 1325 test: (111640, 4)
-36472.6s 1326 train: (446556, 4)
-36472.6s 1327 ======================TRAIN MODE======================
-36472.6s 1328 speed: 0.8442s/iter; left time: 14638.7549s
-36472.6s 1329 speed: 0.8351s/iter; left time: 14397.2365s
-36472.6s 1330 speed: 0.8353s/iter; left time: 14317.9777s
-36472.6s 1331 speed: 0.8418s/iter; left time: 14344.8641s
-36472.6s 1332 speed: 0.8333s/iter; left time: 14116.3627s
-36472.6s 1333 speed: 0.8313s/iter; left time: 14000.3039s
-36472.6s 1334 speed: 0.8312s/iter; left time: 13914.9255s
-36472.6s 1335 speed: 0.8323s/iter; left time: 13850.0228s
-36472.6s 1336 speed: 0.8313s/iter; left time: 13750.9100s
-36472.6s 1337 speed: 0.8299s/iter; left time: 13645.1991s
-36472.6s 1338 speed: 0.8285s/iter; left time: 13539.0487s
-36472.6s 1339 speed: 0.8277s/iter; left time: 13443.0588s
-36472.6s 1340 speed: 0.8271s/iter; left time: 13350.0496s
-36472.6s 1341 speed: 0.8309s/iter; left time: 13327.8758s
-36472.6s 1342 speed: 0.8322s/iter; left time: 13265.3488s
-36472.6s 1343 speed: 0.8312s/iter; left time: 13167.7417s
-36472.6s 1344 speed: 0.8286s/iter; left time: 13042.6222s
-36472.6s 1345 Epoch: 1 cost time: 1452.48086977005
-36472.6s 1346 Epoch: 1, Steps: 1744 | Train Loss: -47.3403066 Vali Loss: -48.8001900
-36472.6s 1347 Validation loss decreased (inf --> -48.800190).  Saving model ...
-36472.6s 1348 Updating learning rate to 0.0001
-36472.6s 1349 speed: 2.1831s/iter; left time: 34050.3824s
-36472.6s 1350 speed: 0.8310s/iter; left time: 12877.8591s
-36472.6s 1351 speed: 0.8275s/iter; left time: 12741.0366s
-36472.6s 1352 speed: 0.8297s/iter; left time: 12692.1505s
-36472.6s 1353 speed: 0.8316s/iter; left time: 12637.6494s
-36472.6s 1354 speed: 0.8293s/iter; left time: 12520.0329s
-36472.6s 1355 speed: 0.8282s/iter; left time: 12419.8930s
-36472.6s 1356 speed: 0.8311s/iter; left time: 12381.4741s
-36472.6s 1357 speed: 0.8318s/iter; left time: 12307.9350s
-36472.6s 1358 speed: 0.8284s/iter; left time: 12175.1431s
-36472.6s 1359 speed: 0.8250s/iter; left time: 12042.1378s
-36472.6s 1360 speed: 0.8302s/iter; left time: 12035.0784s
-36472.6s 1361 speed: 0.8304s/iter; left time: 11954.6933s
-36472.6s 1362 speed: 0.8240s/iter; left time: 11781.3346s
-36472.6s 1363 speed: 0.8248s/iter; left time: 11709.6573s
-36472.6s 1364 speed: 0.8310s/iter; left time: 11714.6720s
-36472.6s 1365 speed: 0.8315s/iter; left time: 11638.1826s
-36472.6s 1366 Epoch: 2 cost time: 1445.783488035202
-36472.6s 1367 Epoch: 2, Steps: 1744 | Train Loss: -48.9422798 Vali Loss: -48.9457749
-36472.6s 1368 EarlyStopping counter: 1 out of 3
-36472.6s 1369 Updating learning rate to 5e-05
-36472.6s 1370 speed: 2.1637s/iter; left time: 29973.7696s
-36472.6s 1371 speed: 0.8215s/iter; left time: 11298.7452s
-36472.6s 1372 speed: 0.8269s/iter; left time: 11289.7483s
-36472.6s 1373 speed: 0.8309s/iter; left time: 11261.8537s
-36472.6s 1374 speed: 0.8311s/iter; left time: 11180.5957s
-36472.6s 1375 speed: 0.8313s/iter; left time: 11099.7149s
-36472.6s 1376 speed: 0.8313s/iter; left time: 11017.4270s
-36472.6s 1377 speed: 0.8312s/iter; left time: 10933.2591s
-36472.6s 1378 speed: 0.8313s/iter; left time: 10850.4762s
-36472.6s 1379 speed: 0.8315s/iter; left time: 10770.3592s
-36472.6s 1380 speed: 0.8250s/iter; left time: 10603.9084s
-36472.6s 1381 speed: 0.8267s/iter; left time: 10542.4893s
-36472.6s 1382 speed: 0.8259s/iter; left time: 10450.4841s
-36472.6s 1383 speed: 0.8245s/iter; left time: 10350.3368s
-36472.6s 1384 speed: 0.8289s/iter; left time: 10321.6818s
-36472.6s 1385 speed: 0.8295s/iter; left time: 10246.2102s
-36472.6s 1386 speed: 0.8267s/iter; left time: 10130.0646s
-36472.6s 1387 Epoch: 3 cost time: 1443.5840315818787
-36472.6s 1388 Epoch: 3, Steps: 1744 | Train Loss: -48.9813999 Vali Loss: -48.9629040
-36472.6s 1389 EarlyStopping counter: 2 out of 3
-36472.6s 1390 Updating learning rate to 2.5e-05
-36472.6s 1391 speed: 2.1672s/iter; left time: 26242.2669s
-36472.6s 1392 speed: 0.8294s/iter; left time: 9960.2176s
-36472.6s 1393 speed: 0.8253s/iter; left time: 9828.0026s
-36472.6s 1394 speed: 0.8220s/iter; left time: 9707.5128s
-36472.6s 1395 speed: 0.8220s/iter; left time: 9624.3414s
-36472.6s 1396 speed: 0.8274s/iter; left time: 9604.7314s
-36472.6s 1397 speed: 0.8275s/iter; left time: 9523.7791s
-36472.6s 1398 speed: 0.8230s/iter; left time: 9389.5161s
-36472.6s 1399 speed: 0.8197s/iter; left time: 9269.5797s
-36472.6s 1400 speed: 0.8238s/iter; left time: 9233.5161s
-36472.6s 1401 speed: 0.8257s/iter; left time: 9172.6298s
-36472.6s 1402 speed: 0.8196s/iter; left time: 9022.4660s
-36472.6s 1403 speed: 0.8284s/iter; left time: 9037.3238s
-36472.6s 1404 speed: 0.8305s/iter; left time: 8977.0114s
-36472.6s 1405 speed: 0.8298s/iter; left time: 8885.8074s
-36472.6s 1406 speed: 0.8296s/iter; left time: 8801.1092s
-36472.6s 1407 speed: 0.8277s/iter; left time: 8698.1367s
-36472.6s 1408 Epoch: 4 cost time: 1439.408190727234
-36472.6s 1409 Epoch: 4, Steps: 1744 | Train Loss: -48.9964289 Vali Loss: -48.9859602
-36472.6s 1410 EarlyStopping counter: 3 out of 3
-36472.6s 1411 Early stopping
-36473.3s 1412 [DONE] anomaly_transformer_nasa_random_discharge_rw8_ch3
-36473.3s 1413 
-36473.3s 1414 [23/24] omnianomaly_nasa_random_discharge_rw8_ch3
-36473.3s 1415 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/OmniAnomaly
-36473.3s 1416 COMMAND : /usr/bin/python3 main.py --dataset NASA_RANDOM_DISCHARGE_RW8 --max_epoch 10 --result_dir result/ch3_nasa_random_discharge_rw8 --save_dir model/ch3_nasa_random_discharge_rw8
-36473.9s 1417 2026-05-13 03:08:26.697229: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:467] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
-36473.9s 1418 WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
-36473.9s 1419 E0000 00:00:1778641706.720429     442 cuda_dnn.cc:8579] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
-36473.9s 1420 E0000 00:00:1778641706.728186     442 cuda_blas.cc:1407] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
-36473.9s 1421 W0000 00:00:1778641706.752201     442 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-36473.9s 1422 W0000 00:00:1778641706.752235     442 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-36473.9s 1423 W0000 00:00:1778641706.752240     442 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-36473.9s 1424 W0000 00:00:1778641706.752244     442 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
-36479.7s 1425 Traceback (most recent call last):
-36479.7s 1426 File "/kaggle/working/EnhancedMTADGAT/external_baselines/OmniAnomaly/main.py", line 13, in <module>
-36479.7s 1427 from tfsnippet.examples.utils import MLResults, print_with_title
-36479.7s 1428 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/__init__.py", line 4, in <module>
-36479.7s 1429 from . import (dataflows, datasets, distributions, layers, ops,
-36479.7s 1430 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/dataflows/__init__.py", line 1, in <module>
-36479.7s 1431 from .array_flow import *
-36479.7s 1432 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/dataflows/array_flow.py", line 4, in <module>
-36479.7s 1433 from tfsnippet.utils import minibatch_slices_iterator
-36479.7s 1434 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/__init__.py", line 4, in <module>
-36479.7s 1435 from .config_ import *
-36479.7s 1436 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/config_.py", line 1, in <module>
-36479.7s 1437 from .config_utils import Config, ConfigField
-36479.7s 1438 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/config_utils.py", line 10, in <module>
-36479.7s 1439 from .type_utils import is_integer, is_float
-36479.7s 1440 File "/usr/local/lib/python3.12/dist-packages/tfsnippet/utils/type_utils.py", line 19, in <module>
-36479.7s 1441 (np.integer, np.int, np.uint,
-36479.7s 1442 ^^^^^^
-36479.7s 1443 File "/usr/local/lib/python3.12/dist-packages/numpy/__init__.py", line 324, in __getattr__
-36479.7s 1444 raise AttributeError(__former_attrs__[attr])
-36479.7s 1445 AttributeError: module 'numpy' has no attribute 'int'.
-36479.7s 1446 `np.int` was a deprecated alias for the builtin `int`. To avoid this error in existing code, use `int` by itself. Doing this will not modify any behavior and is safe. When replacing `np.int`, you may wish to use e.g. `np.int64` or `np.int32` to specify the precision. If you wish to review your current use, check the release note link for additional information.
-36479.7s 1447 The aliases was originally deprecated in NumPy 1.20; for more details and guidance see the original release note at:
-36479.7s 1448 https://numpy.org/devdocs/release/1.20.0-notes.html#deprecations. Did you mean: 'inf'?
-36480.5s 1449 [FAILED] omnianomaly_nasa_random_discharge_rw8_ch3 -> return code 1
-36480.5s 1450 
-36480.5s 1451 [24/24] gdn_nasa_random_discharge_rw8_ch3
-36480.5s 1452 CWD     : /kaggle/working/EnhancedMTADGAT/external_baselines/GDN
-36480.5s 1453 COMMAND : /usr/bin/python3 main.py -dataset NASA_RANDOM_DISCHARGE_RW8 -device cpu -epoch 10 -batch 128 -slide_win 15 -slide_stride 5 -save_path_pattern ch3_gdn_nasa_random_discharge_rw8
-36483.2s 1454 Traceback (most recent call last):
-36483.2s 1455 File "/kaggle/working/EnhancedMTADGAT/external_baselines/GDN/main.py", line 18, in <module>
-36483.2s 1456 from models.GDN import GDN
-36483.2s 1457 File "/kaggle/working/EnhancedMTADGAT/external_baselines/GDN/models/GDN.py", line 8, in <module>
-36483.2s 1458 from torch_geometric.nn import GCNConv, GATConv, EdgeConv
-36483.2s 1459 ModuleNotFoundError: No module named 'torch_geometric'
-36483.6s 1460 [FAILED] gdn_nasa_random_discharge_rw8_ch3 -> return code 1
-36483.6s 1461 
-36483.6s 1462 External baseline batch finished
-36483.6s 1463 Registry : /kaggle/working/EnhancedMTADGAT/external_runs/ch3_external_baselines_20260512_170412/run_registry.json
-36483.6s 1464 Success  : 6
-36483.6s 1465 Failed   : 18
-36483.6s 1466 Skipped  : 0
-36483.6s 1467 Dry run  : 0
-36484.1s 1468 total 12
-36484.1s 1469 drwxr-xr-x 3 root root 4096 May 13 03:08 .
-36484.1s 1470 drwxr-xr-x 3 root root 4096 May 12 17:04 ..
-36484.1s 1471 drwxr-xr-x 5 root root 4096 May 12 17:04 output
-36487.0s 1472 /usr/local/lib/python3.12/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
-36487.0s 1473 cells[i][c] = re.sub('\\\\\|', '|', cell)
-36487.1s 1474 /usr/local/lib/python3.12/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
-36487.1s 1475 text = re.sub(r'_', '\_', text) # Escape underscores in display text
-36487.7s 1476 [NbConvertApp] Converting notebook __notebook__.ipynb to notebook
-36488.0s 1477 [NbConvertApp] Writing 108912 bytes to __notebook__.ipynb
-36490.3s 1478 [NbConvertApp] Converting notebook __notebook__.ipynb to html
-36491.1s 1479 [NbConvertApp] Writing 366606 bytes to __results__.html

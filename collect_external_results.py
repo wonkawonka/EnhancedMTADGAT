@@ -48,6 +48,14 @@ def read_text_if_exists(file_path):
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def read_json_if_exists(file_path):
+    path = Path(file_path)
+    if not path.exists():
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 def find_last_float(pattern, text):
     matches = re.findall(pattern, text, flags=re.MULTILINE)
     if not matches:
@@ -103,19 +111,6 @@ def parse_anomaly_transformer_metrics(log_text):
     return result
 
 
-def parse_omnianomaly_metrics(log_text):
-    return {
-        "metric_best_f1": find_last_float(r"'best-f1':\s*([-+0-9.eE]+)", log_text),
-        "metric_precision": find_last_float(r"'precision':\s*([-+0-9.eE]+)", log_text),
-        "metric_recall": find_last_float(r"'recall':\s*([-+0-9.eE]+)", log_text),
-        "metric_threshold": find_last_float(r"'threshold':\s*([-+0-9.eE]+)", log_text),
-        "metric_pot_f1": find_last_float(r"'pot-f1':\s*([-+0-9.eE]+)", log_text),
-        "metric_pot_precision": find_last_float(r"'pot-precision':\s*([-+0-9.eE]+)", log_text),
-        "metric_pot_recall": find_last_float(r"'pot-recall':\s*([-+0-9.eE]+)", log_text),
-        "metric_pot_threshold": find_last_float(r"'pot-threshold':\s*([-+0-9.eE]+)", log_text),
-    }
-
-
 def parse_gdn_metrics(log_text):
     return {
         "metric_f1": find_last_float(r"F1 score:\s*([-+0-9.eE]+)", log_text),
@@ -145,8 +140,6 @@ def parse_metrics_for_baseline(baseline_name, log_text):
         return parse_tranad_metrics(log_text)
     if baseline_name == "Anomaly-Transformer":
         return parse_anomaly_transformer_metrics(log_text)
-    if baseline_name == "OmniAnomaly":
-        return parse_omnianomaly_metrics(log_text)
     if baseline_name == "GDN":
         return parse_gdn_metrics(log_text)
     if baseline_name == "DCdetector":
@@ -194,6 +187,15 @@ def adapt_metrics_for_dataset(dataset_name, metrics):
 def build_artifact_fields(registry_experiment, plan_experiment):
     cwd = Path(registry_experiment.get("cwd", ""))
     fields = {}
+    output_dir_value = registry_experiment.get("output_dir", "")
+    output_dir = Path(output_dir_value) if output_dir_value else None
+
+    if output_dir:
+        fields["artifact_output_dir"] = str(output_dir)
+        fields["artifact_summary_metrics"] = str(output_dir / "summary_metrics.json")
+        fields["artifact_thresholds"] = str(output_dir / "thresholds.json")
+        fields["artifact_test_output"] = str(output_dir / "test_output.pkl")
+        fields["artifact_train_output"] = str(output_dir / "train_output.pkl")
 
     skip_marker = registry_experiment.get("skip_marker", "")
     if skip_marker:
@@ -203,22 +205,22 @@ def build_artifact_fields(registry_experiment, plan_experiment):
     baseline = registry_experiment.get("baseline", "")
     args = plan_experiment.get("args", {}) if plan_experiment else {}
 
-    if baseline == "OmniAnomaly":
-        result_dir = args.get("result_dir")
-        save_dir = args.get("save_dir")
-        if result_dir:
-            fields["artifact_result_dir"] = str((cwd / result_dir).resolve())
-        if save_dir:
-            fields["artifact_model_dir"] = str((cwd / save_dir).resolve())
-    elif baseline == "GDN":
-        save_pattern = args.get("-save_path_pattern")
-        if save_pattern:
-            fields["artifact_pretrained_dir"] = str((cwd / "pretrained" / save_pattern).resolve())
-            fields["artifact_results_dir"] = str((cwd / "results" / save_pattern).resolve())
+    if baseline == "GDN":
+        if output_dir:
+            fields["artifact_pretrained_dir"] = str(output_dir / "checkpoints")
+            fields["artifact_results_dir"] = str(output_dir / "native_results")
+        else:
+            save_pattern = args.get("-save_path_pattern")
+            if save_pattern:
+                fields["artifact_pretrained_dir"] = str((cwd / "pretrained" / save_pattern).resolve())
+                fields["artifact_results_dir"] = str((cwd / "results" / save_pattern).resolve())
     elif baseline == "Anomaly-Transformer":
-        model_save_path = args.get("model_save_path")
-        if model_save_path:
-            fields["artifact_model_dir"] = str((cwd / model_save_path).resolve())
+        if output_dir:
+            fields["artifact_model_dir"] = str(output_dir / "checkpoints")
+        else:
+            model_save_path = args.get("model_save_path")
+            if model_save_path:
+                fields["artifact_model_dir"] = str((cwd / model_save_path).resolve())
     elif baseline == "TranAD" and skip_marker:
         fields["artifact_checkpoint"] = skip_marker
 
@@ -237,6 +239,8 @@ def collect_rows(registry_path):
         dataset_name = infer_dataset_name(plan_experiment, experiment)
         log_path = experiment.get("log_path", "")
         log_text = read_text_if_exists(log_path)
+        output_dir = experiment.get("output_dir", "")
+        standardized_metrics = read_json_if_exists(Path(output_dir) / "summary_metrics.json") if output_dir else {}
         row = {
             "experiment_name": name,
             "baseline": experiment.get("baseline", ""),
@@ -244,6 +248,7 @@ def collect_rows(registry_path):
             "status": experiment.get("status", ""),
             "return_code": experiment.get("return_code"),
             "cwd": experiment.get("cwd", ""),
+            "output_dir": output_dir,
             "log_path": log_path,
             "log_exists": bool(log_text),
         }
@@ -255,7 +260,7 @@ def collect_rows(registry_path):
         row.update(
             adapt_metrics_for_dataset(
                 dataset_name,
-                parse_metrics_for_baseline(row["baseline"], log_text),
+                standardized_metrics or parse_metrics_for_baseline(row["baseline"], log_text),
             )
         )
         rows.append(row)

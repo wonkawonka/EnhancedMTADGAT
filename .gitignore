@@ -3,6 +3,8 @@ __pycache__/
 .idea/
 .DS_Store
 .conda/
+/.python312/
+.python312/
 datasets/**
 !datasets/**/
 !datasets/**/processed/

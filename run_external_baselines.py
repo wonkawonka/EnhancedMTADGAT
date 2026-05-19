@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -11,10 +12,7 @@ from pathlib import Path
 BASELINE_DIR_MAP = {
     "GDN": "GDN",
     "Anomaly-Transformer": "Anomaly-Transformer",
-    "USAD": "USAD",
     "TranAD": "TranAD",
-    "LSTM-AE": "LSTM-AE",
-    "OmniAnomaly": "OmniAnomaly",
     "DCdetector": "DCdetector",
     "GANF": "GANF",
 }
@@ -130,6 +128,19 @@ def stream_subprocess(command, cwd, log_path, extra_env=None):
         return process.wait()
 
 
+def pack_experiment_output(output_dir):
+    output_dir = Path(output_dir)
+    if not output_dir.exists():
+        return None
+    zip_path = output_dir.parent / f"{output_dir.name}.zip"
+    if zip_path.exists():
+        zip_path.unlink()
+    shutil.make_archive(str(zip_path.with_suffix("")), "zip", str(output_dir))
+    size_mb = zip_path.stat().st_size / (1024 * 1024)
+    print(f"[PACK] {zip_path.name} ({size_mb:.1f} MB)")
+    return zip_path
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Batch runner for external baseline repositories.")
     parser.add_argument("--plan", type=str, required=True, help="Path to a JSON external baseline plan.")
@@ -229,6 +240,7 @@ def main():
             "name": name,
             "baseline": experiment.get("baseline", ""),
             "cwd": str(cwd),
+            "output_dir": str(output_dir),
             "command": command,
             "log_path": str(log_path),
             "skip_marker": str(skip_marker) if skip_marker else "",
@@ -260,6 +272,10 @@ def main():
         return_code = stream_subprocess(command, cwd=cwd, log_path=log_path, extra_env=env_payload)
         record["return_code"] = return_code
         record["status"] = "done" if return_code == 0 else "failed"
+        if return_code == 0:
+            packed_output = pack_experiment_output(output_dir)
+            if packed_output is not None:
+                record["packed_output"] = str(packed_output)
         registry["experiments"].append(record)
 
         registry_path = batch_root / "run_registry.json"

@@ -52,6 +52,17 @@ def resolve_project_processed_stem(dataset):
 		return str(dataset)
 	return None
 
+def adapt_project_labels_for_tranad(dataset, labels, feature_dim):
+	labels = np.asarray(labels)
+	custom_single_label = str(dataset).startswith(('NASA_RANDOM_CHARGE_', 'NASA_RANDOM_DISCHARGE_', 'NASA_', 'BMS_'))
+	if not custom_single_label:
+		return labels
+	if labels.ndim == 1:
+		return np.repeat(labels.reshape(-1, 1), feature_dim, axis=1)
+	if labels.ndim == 2 and labels.shape[1] == 1:
+		return np.repeat(labels, feature_dim, axis=1)
+	return labels
+
 def convert_to_windows(data, model):
 	windows = []; w_size = model.n_window
 	for i, g in enumerate(data): 
@@ -76,7 +87,7 @@ def load_dataset(dataset):
 				loader[0] = cut_array(0.2, loader[0])
 			train_loader = DataLoader(loader[0], batch_size=loader[0].shape[0])
 			test_loader = DataLoader(loader[1], batch_size=loader[1].shape[0])
-			labels = loader[2].reshape(-1)
+			labels = adapt_project_labels_for_tranad(dataset, loader[2], loader[1].shape[1])
 			print(f'Loading {dataset} from project processed dir: {project_root}')
 			return train_loader, test_loader, labels
 

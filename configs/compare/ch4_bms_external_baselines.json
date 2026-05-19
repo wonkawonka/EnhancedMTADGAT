@@ -6,7 +6,8 @@
     "TranAD 已支持直接读取主仓 BMS cluster 的 processed 数据。",
     "Anomaly-Transformer 已支持直接读取主仓 BMS cluster 的 processed 数据。",
     "GDN 已支持直接读取主仓 BMS cluster 的 processed 数据。",
-    "DCdetector 已支持直接读取主仓 BMS cluster 的 processed 数据。"
+    "DCdetector 已支持直接读取主仓 BMS cluster 的 processed 数据。",
+    "GANF 已支持直接读取主仓 BMS cluster 的 processed 数据。"
   ],
   "_pending_now": [],
   "_thesis_scope_note": "本计划只服务于第四章 BMS 外部基线对比，不包含 RANDOM。",

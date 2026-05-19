@@ -1,5 +1,6 @@
 import os
 import argparse
+from pathlib import Path
 
 from torch.backends import cudnn
 from utils.utils import *
@@ -44,6 +45,10 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', type=str, default='')
 
     config = parser.parse_args()
+    if config.output_dir:
+        config.model_save_path = str(Path(config.output_dir) / "checkpoints")
+        if config.pretrained_model and not os.path.isabs(config.pretrained_model):
+            config.pretrained_model = str(Path(config.output_dir) / "checkpoints" / config.pretrained_model)
 
     args = vars(config)
     print('------------ Options -------------')

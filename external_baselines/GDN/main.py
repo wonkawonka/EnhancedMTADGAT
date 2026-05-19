@@ -269,18 +269,24 @@ class Main():
 
 
     def get_save_path(self, feature_name=''):
-
-        dir_path = self.env_config['save_path']
-        
         if self.datestr is None:
             now = datetime.now()
             self.datestr = now.strftime('%m|%d-%H:%M:%S')
-        datestr = self.datestr          
+        datestr = self.datestr
 
-        paths = [
-            f'./pretrained/{dir_path}/best_{datestr}.pt',
-            f'./results/{dir_path}/{datestr}.csv',
-        ]
+        output_dir = self.env_config.get('output_dir', '')
+        if output_dir:
+            output_root = Path(output_dir)
+            paths = [
+                str(output_root / 'checkpoints' / f'best_{datestr}.pt'),
+                str(output_root / 'native_results' / f'{datestr}.csv'),
+            ]
+        else:
+            dir_path = self.env_config['save_path']
+            paths = [
+                f'./pretrained/{dir_path}/best_{datestr}.pt',
+                f'./results/{dir_path}/{datestr}.csv',
+            ]
 
         for path in paths:
             dirname = os.path.dirname(path)
