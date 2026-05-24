@@ -190,6 +190,9 @@ def maybe_compile_model(model):
     if os.environ.get("DISABLE_TORCH_COMPILE", "").lower() in {"1", "true", "yes"}:
         print("Skipping torch.compile because DISABLE_TORCH_COMPILE is set.")
         return model
+    if os.environ.get("ENABLE_TORCH_COMPILE", "").lower() not in {"1", "true", "yes"}:
+        print("Skipping torch.compile by default. Set ENABLE_TORCH_COMPILE=1 to enable.")
+        return model
     if hasattr(torch, "compile"):
         try:
             print("Using torch.compile for model optimization...")
