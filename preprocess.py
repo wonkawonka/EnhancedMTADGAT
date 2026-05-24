@@ -423,14 +423,22 @@ def _process_nasa_random_dataset(dataset_folder, output_folder, file_prefix, app
         # each battery is split into train/test during preprocessing, and runtime
         # code only reuses the saved processed files.
         train_segments, test_segments = _split_nasa_random_segments(segments, train_ratio=0.8)
-        train_data = np.vstack(train_segments).astype(np.float32, copy=False)
-        test_data = np.vstack(test_segments).astype(np.float32, copy=False)
-        test_labels = np.zeros(len(test_data), dtype=np.int32)
+        train_data = [segment.astype(np.float32, copy=False) for segment in train_segments]
+        test_data = [segment.astype(np.float32, copy=False) for segment in test_segments]
+        test_labels = [np.zeros(len(segment), dtype=np.int32) for segment in test_data]
 
         if apply_sr_cleaning:
             print(f"[{file_prefix}][{battery_id}] Applying spectral residual cleaning to train split...")
-            train_data = apply_spectral_residual_cleaning(train_data, threshold=3.0).astype(np.float32, copy=False)
-            print(f"[{file_prefix}][{battery_id}] Cleaning completed. Train shape: {train_data.shape}")
+            cleaned_train_data = []
+            for segment in train_data:
+                cleaned_segment = apply_spectral_residual_cleaning(segment, threshold=3.0).astype(np.float32, copy=False)
+                cleaned_train_data.append(cleaned_segment)
+            train_data = cleaned_train_data
+            print(
+                f"[{file_prefix}][{battery_id}] Cleaning completed. "
+                f"Train segments: {len(train_data)}, "
+                f"steps: {sum(len(segment) for segment in train_data)}"
+            )
 
         with open(path.join(output_folder, f"{file_prefix}_{battery_id}_train.pkl"), "wb") as file:
             dump(train_data, file)
@@ -441,9 +449,9 @@ def _process_nasa_random_dataset(dataset_folder, output_folder, file_prefix, app
 
         print(
             f"[{file_prefix}][{battery_id}] Saved segments -> "
-            f"train: {train_data.shape}, "
-            f"test: {test_data.shape}, "
-            f"labels: {test_labels.shape}"
+            f"train_segments={len(train_data)}, train_steps={sum(len(segment) for segment in train_data)}, "
+            f"test_segments={len(test_data)}, test_steps={sum(len(segment) for segment in test_data)}, "
+            f"label_segments={len(test_labels)}"
         )
 
 

@@ -26,4 +26,8 @@ parser.add_argument('--output_dir',
 					type=str, 
 					default='',
                     help="directory for standardized output")
+parser.add_argument('--num_epochs',
+					type=int,
+					default=5,
+                    help="number of training epochs")
 args = parser.parse_args()

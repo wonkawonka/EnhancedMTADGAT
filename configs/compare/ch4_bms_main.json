@@ -1,14 +1,14 @@
 {
-  "plan_name": "ch4_bms_main",
-  "_comment": "第四章 BMS 主结果计划：只保留第四章新增的 c4 主结果。c4 以第三章的工况感知门控 Transformer 残差增强为基础，再增加 BMS 层级残差双分支检测。BMS 上的 baseline 和 c3 结果直接复用第三章主结果计划。",
-  "_usage": "建议在第三章主结果跑通后运行本文件；主要服务于第四章 BMS 主表和案例分析，不再重复跑 BMS baseline/c3，也不再包含 RANDOM 电池域补充验证。第四章消融请使用 ch4_bms_ablation.json。",
+  "plan_name": "ch4_battery_main",
+  "_comment": "第四章电池主结果计划：以物理知识注入为主线。NASA_RANDOM_DISCHARGE 使用 c3+physics 作为随机工况电池域验证；BMS 先跑 c3+physics，再在此基础上增加层级一致性残差分支形成 c4+physics，用于说明物理增强是主线、层级一致性是 BMS 场景的辅助结构增强。",
+  "_usage": "建议在第三章主结果跑通后运行本文件；主要服务于第四章主表、案例分析和物理增强结果展示。第四章模块消融请使用 ch4_bms_ablation.json。",
   "_experiment_mapping": [
-    "bms_c4_full：第四章完整模型，在第三章工况感知门控 Transformer 残差增强基础上增加层级残差双分支检测。"
+    "nasa_random_discharge_rw*_c3_physics：第四章在随机工况电池域的物理增强结果，使用 c3 主干 + 时间步级物理状态编码 + 物理正则化。",
+    "bms_c3_physics_full：第四章 BMS 物理主线结果，在 c3 基础上加入时间步级物理状态编码与物理正则化。",
+    "bms_c4_physics_full：第四章 BMS 完整模型，在 c3+physics 基础上进一步增加层级一致性残差分支。"
   ],
   "_kaggle_tip": "run_id 已固定；若某个实验之前已完整训练并写出 model.pt，配合 --skip-existing 可直接跳过。",
   "common_args": {
-    "dataset": "BMS",
-    "model_name": "mtad_gat_c4",
     "epochs": 30,
     "bs": 256,
     "lookback": 100,
@@ -20,6 +20,10 @@
     "event_low_ratio": 0.5,
     "event_min_length": 3,
     "hier_score_weight": 0.5,
+    "use_physical_state_encoding": true,
+    "use_physical_regularization": true,
+    "physical_alg_lambda": 0.1,
+    "physical_smooth_lambda": 0.01,
     "normalize": true,
     "init_lr": 0.001,
     "dropout": 0.3,
@@ -30,12 +34,70 @@
   },
   "experiments": [
     {
-      "name": "bms_c4_full",
-      "comment": "BMS 第四章完整模型：以第三章工况感知门控 Transformer 残差增强为基础，再增加层级残差双分支检测，作为主结果。",
+      "name": "nasa_random_discharge_rw1_c3_physics",
+      "comment": "第四章随机工况电池域主结果：RW1 上使用 c3 主干 + 物理状态编码 + 物理正则化。",
       "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE",
+        "nasa_battery_id": "RW1",
+        "model_name": "mtad_gat_c3",
+        "window_stride": 2,
+        "run_id": "c4cmp_nasa_random_rw1_phys"
+      }
+    },
+    {
+      "name": "nasa_random_discharge_rw2_c3_physics",
+      "comment": "第四章随机工况电池域主结果：RW2 上使用 c3 主干 + 物理状态编码 + 物理正则化。",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE",
+        "nasa_battery_id": "RW2",
+        "model_name": "mtad_gat_c3",
+        "window_stride": 2,
+        "run_id": "c4cmp_nasa_random_rw2_phys"
+      }
+    },
+    {
+      "name": "nasa_random_discharge_rw7_c3_physics",
+      "comment": "第四章随机工况电池域主结果：RW7 上使用 c3 主干 + 物理状态编码 + 物理正则化。",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE",
+        "nasa_battery_id": "RW7",
+        "model_name": "mtad_gat_c3",
+        "window_stride": 2,
+        "run_id": "c4cmp_nasa_random_rw7_phys"
+      }
+    },
+    {
+      "name": "nasa_random_discharge_rw8_c3_physics",
+      "comment": "第四章随机工况电池域主结果：RW8 上使用 c3 主干 + 物理状态编码 + 物理正则化。",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE",
+        "nasa_battery_id": "RW8",
+        "model_name": "mtad_gat_c3",
+        "window_stride": 2,
+        "run_id": "c4cmp_nasa_random_rw8_phys"
+      }
+    },
+    {
+      "name": "bms_c3_physics_full",
+      "comment": "第四章 BMS 物理主线结果：以第三章 c3 为基础，启用物理状态编码与物理正则化。",
+      "args": {
+        "dataset": "BMS",
+        "model_name": "mtad_gat_c3",
+        "window_stride": 4,
+        "physical_smooth_lambda": 0.005,
+        "run_id": "c4cmp_bms_c3_phys"
+      }
+    },
+    {
+      "name": "bms_c4_physics_full",
+      "comment": "第四章 BMS 完整主结果：在 c3+physics 基础上进一步增加层级一致性残差分支。",
+      "args": {
+        "dataset": "BMS",
         "model_name": "mtad_gat_c4",
+        "window_stride": 4,
         "hier_score_weight": 0.5,
-        "run_id": "c4cmp_bms_c4"
+        "physical_smooth_lambda": 0.005,
+        "run_id": "c4cmp_bms_c4_phys"
       }
     }
   ]

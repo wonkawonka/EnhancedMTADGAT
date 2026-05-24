@@ -1,4 +1,5 @@
 import json
+import os
 import random
 from datetime import datetime
 
@@ -6,8 +7,8 @@ import torch.nn as nn
 import numpy as np
 import torch
 
-from args import get_parser
-from model_factory import build_model, resolve_model_args
+from args import apply_dataset_defaults, get_parser
+from model_factory import build_model, resolve_model_args, resolve_physical_state_config
 from prediction import Predictor
 from training import Trainer
 from utils import *
@@ -30,12 +31,14 @@ def _get_first_sequence_tensor(sequence_data):
     return sequence_data
 
 
-def _build_concat_window_dataset(sequence_data, window_size, target_dims):
+def _build_concat_window_dataset(sequence_data, window_size, target_dims, window_stride=1):
     sub_datasets = []
     for seq in ensure_sequence_list(sequence_data):
         if len(seq) <= window_size:
             continue
-        sub_datasets.append(SlidingWindowDataset(seq, window_size, target_dims))
+        sub_datasets.append(
+            SlidingWindowDataset(seq, window_size, target_dims, stride=window_stride)
+        )
 
     if not sub_datasets:
         raise ValueError(f"No valid sequence is longer than lookback={window_size}")
@@ -51,15 +54,22 @@ def _get_sequence_lengths(sequence_data):
     return [len(sequence_data)]
 
 
-def _count_sequence_windows(sequence_data, window_size):
-    return sum(max(seq_len - window_size, 0) for seq_len in _get_sequence_lengths(sequence_data))
+def _count_sequence_windows(sequence_data, window_size, window_stride=1):
+    stride = max(int(window_stride), 1)
+    total = 0
+    for seq_len in _get_sequence_lengths(sequence_data):
+        available = seq_len - window_size
+        if available <= 0:
+            continue
+        total += 1 + (available - 1) // stride
+    return total
 
 
-def _print_nasa_random_window_summary(split_name, data_map, window_size, val_split=None):
+def _print_nasa_random_window_summary(split_name, data_map, window_size, window_stride=1, val_split=None):
     if not data_map:
         return
 
-    print(f"[NASA_RANDOM] {split_name} summary (lookback={window_size})")
+    print(f"[NASA_RANDOM] {split_name} summary (lookback={window_size}, stride={window_stride})")
 
     total_steps = 0
     total_segments = 0
@@ -69,7 +79,7 @@ def _print_nasa_random_window_summary(split_name, data_map, window_size, val_spl
         segment_lengths = _get_sequence_lengths(sequence_data)
         segment_count = len(segment_lengths)
         step_count = sum(segment_lengths)
-        window_count = _count_sequence_windows(sequence_data, window_size)
+        window_count = _count_sequence_windows(sequence_data, window_size, window_stride)
 
         total_steps += step_count
         total_segments += segment_count
@@ -142,6 +152,51 @@ def maybe_resume_trainer(trainer, args):
     if not resumed:
         print(f"No checkpoint found under {trainer.dload}, starting from scratch.")
     return resumed
+
+
+def build_trainer(model, optimizer, args, window_size, n_features, target_dims, save_path, log_dir, args_summary):
+    return Trainer(
+        model,
+        optimizer,
+        window_size,
+        n_features,
+        target_dims,
+        args.epochs,
+        args.bs,
+        args.init_lr,
+        nn.MSELoss(),
+        nn.MSELoss(),
+        args.use_cuda,
+        save_path,
+        log_dir,
+        args.print_every,
+        args.log_tensorboard,
+        args_summary,
+        use_physical_regularization=getattr(args, "use_physical_regularization", False),
+        physical_reg_config=resolve_physical_state_config(args),
+        physical_reg_warmup_ratio=getattr(args, "physical_reg_warmup_ratio", 0.2),
+        physical_alg_lambda=getattr(args, "physical_alg_lambda", 0.1),
+        physical_smooth_lambda=getattr(args, "physical_smooth_lambda", 0.01),
+        physical_transition_threshold=getattr(args, "physical_transition_threshold", 0.05),
+        physical_transition_relax=getattr(args, "physical_transition_relax", 0.1),
+        num_workers=getattr(args, "num_workers", 4),
+        persistent_workers=getattr(args, "persistent_workers", True),
+        prefetch_factor=getattr(args, "prefetch_factor", 2),
+        window_stride=getattr(args, "window_stride", 1),
+    )
+
+
+def maybe_compile_model(model):
+    if os.environ.get("DISABLE_TORCH_COMPILE", "").lower() in {"1", "true", "yes"}:
+        print("Skipping torch.compile because DISABLE_TORCH_COMPILE is set.")
+        return model
+    if hasattr(torch, "compile"):
+        try:
+            print("Using torch.compile for model optimization...")
+            return torch.compile(model)
+        except Exception as e:
+            print(f"torch.compile failed, falling back to eager mode: {e}")
+    return model
 
 
 def train_universal_model(args):
@@ -227,37 +282,19 @@ def train_universal_model(args):
     # 创建模型。当前默认仍为 MTAD-GAT，后续 baseline 通过 model_factory 扩展。
     model = build_model(args, n_features, window_size, out_dim, target_dims=target_dims)
 
-    # 尝试使用 torch.compile 加速 (PyTorch 2.0+)
-    if hasattr(torch, "compile"):
-        try:
-            print("Using torch.compile for model optimization...")
-            model = torch.compile(model)
-        except Exception as e:
-            print(f"torch.compile failed, falling back to eager mode: {e}")
+    model = maybe_compile_model(model)
     
-    # 设置优化器和损失函数
     optimizer = torch.optim.Adam(model.parameters(), lr=args.init_lr)
-    forecast_criterion = nn.MSELoss()
-    recon_criterion = nn.MSELoss()
-    
-    # 创建训练器
-    trainer = Trainer(
+    trainer = build_trainer(
         model,
         optimizer,
+        args,
         window_size,
         n_features,
         target_dims,
-        n_epochs,
-        batch_size,
-        init_lr,
-        forecast_criterion,
-        recon_criterion,
-        use_cuda,
         save_path,
         log_dir,
-        print_every,
-        log_tensorboard,
-        args_summary
+        args_summary,
     )
     maybe_resume_trainer(trainer, args)
     
@@ -363,7 +400,7 @@ def train_universal_model(args):
 
 if __name__ == "__main__":
     parser = get_parser()
-    args = parser.parse_args()
+    args = apply_dataset_defaults(parser.parse_args())
     resolve_model_args(args)
     
     # 设置随机种子以确保实验可重现性
@@ -480,54 +517,90 @@ if __name__ == "__main__":
         if dataset in NASA_ENTITY_DATASETS and nasa_train_tensors is not None:
             train_sub_datasets = []
             for battery_tensor in nasa_train_tensors.values():
-                train_sub_datasets.append(_build_concat_window_dataset(battery_tensor, window_size, target_dims))
+                train_sub_datasets.append(
+                    _build_concat_window_dataset(
+                        battery_tensor,
+                        window_size,
+                        target_dims,
+                        window_stride=args.window_stride,
+                    )
+                )
             if len(train_sub_datasets) == 1:
                 train_dataset = train_sub_datasets[0]
             else:
                 train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
         elif dataset == "BMS" and bms_train_tensors is not None:
             train_sub_datasets = [
-                SlidingWindowDataset(cluster_tensor, window_size, target_dims)
+                SlidingWindowDataset(cluster_tensor, window_size, target_dims, stride=args.window_stride)
                 for cluster_tensor in bms_train_tensors.values()
             ]
             train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
         else:
-            train_dataset = SlidingWindowDataset(x_train, window_size, target_dims)
+            train_dataset = SlidingWindowDataset(
+                x_train,
+                window_size,
+                target_dims,
+                stride=args.window_stride,
+            )
 
         if dataset in {"NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"} and nasa_train_tensors is not None:
-            _print_nasa_random_window_summary("train", nasa_train_tensors, window_size, val_split=val_split)
-            _print_nasa_random_window_summary("test", nasa_test_tensors, window_size)
+            _print_nasa_random_window_summary(
+                "train",
+                nasa_train_tensors,
+                window_size,
+                window_stride=args.window_stride,
+                val_split=val_split,
+            )
+            _print_nasa_random_window_summary(
+                "test",
+                nasa_test_tensors,
+                window_size,
+                window_stride=args.window_stride,
+            )
             test_dataset = None
         else:
-            test_dataset = SlidingWindowDataset(x_test, window_size, target_dims)
+            if is_sequence_container(x_test):
+                test_dataset = _build_concat_window_dataset(
+                    x_test,
+                    window_size,
+                    target_dims,
+                    window_stride=args.window_stride,
+                )
+            else:
+                test_dataset = SlidingWindowDataset(
+                    x_test,
+                    window_size,
+                    target_dims,
+                    stride=args.window_stride,
+                )
 
         train_loader, val_loader, test_loader = create_data_loaders(
-            train_dataset, batch_size, val_split, shuffle_dataset, test_dataset=test_dataset
+            train_dataset,
+            batch_size,
+            val_split,
+            shuffle_dataset,
+            test_dataset=test_dataset,
+            num_workers=args.num_workers,
+            pin_memory=torch.cuda.is_available(),
+            persistent_workers=args.persistent_workers,
+            prefetch_factor=args.prefetch_factor,
         )
 
         model = build_model(args, n_features, window_size, out_dim, target_dims=target_dims)
+        model = maybe_compile_model(model)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=args.init_lr)
-        forecast_criterion = nn.MSELoss()
-        recon_criterion = nn.MSELoss()
 
-        trainer = Trainer(
+        trainer = build_trainer(
             model,
             optimizer,
+            args,
             window_size,
             n_features,
             target_dims,
-            n_epochs,
-            batch_size,
-            init_lr,
-            forecast_criterion,
-            recon_criterion,
-            use_cuda,
             save_path,
             log_dir,
-            print_every,
-            log_tensorboard,
-            args_summary
+            args_summary,
         )
         maybe_resume_trainer(trainer, args)
 
@@ -535,19 +608,31 @@ if __name__ == "__main__":
 
         plot_losses(trainer.losses, save_path=save_path, plot=False)
 
+        if os.environ.get("SPEED_BENCHMARK_TRAIN_ONLY", "").lower() in {"1", "true", "yes"}:
+            print("Skipping test/predict because SPEED_BENCHMARK_TRAIN_ONLY is set.")
+            raise SystemExit(0)
+
         # Check test loss
         if dataset in NASA_ENTITY_DATASETS and nasa_test_tensors is not None:
-            num_workers = 2 if os.name == 'nt' else 4
-            pin_memory = torch.cuda.is_available()
+            loader_options = resolve_dataloader_options(
+                num_workers=args.num_workers,
+                pin_memory=torch.cuda.is_available(),
+                persistent_workers=args.persistent_workers,
+                prefetch_factor=args.prefetch_factor,
+            )
             battery_test_losses = {}
             for battery_name, battery_tensor in nasa_test_tensors.items():
-                battery_test_dataset = _build_concat_window_dataset(battery_tensor, window_size, target_dims)
+                battery_test_dataset = _build_concat_window_dataset(
+                    battery_tensor,
+                    window_size,
+                    target_dims,
+                    window_stride=args.window_stride,
+                )
                 battery_test_loader = torch.utils.data.DataLoader(
                     battery_test_dataset,
                     batch_size=batch_size,
                     shuffle=False,
-                    num_workers=num_workers,
-                    pin_memory=pin_memory
+                    **loader_options,
                 )
                 battery_test_losses[battery_name] = trainer.evaluate(battery_test_loader)
                 print(f"[{battery_name}] Test forecast loss: {battery_test_losses[battery_name][0]:.5f}")
@@ -559,17 +644,25 @@ if __name__ == "__main__":
             print(f"Mean test reconstruction loss: {mean_test_loss[1]:.5f}")
             print(f"Mean test total loss: {mean_test_loss[2]:.5f}")
         elif dataset == "BMS" and bms_test_tensors is not None:
-            num_workers = 2 if os.name == 'nt' else 4
-            pin_memory = torch.cuda.is_available()
+            loader_options = resolve_dataloader_options(
+                num_workers=args.num_workers,
+                pin_memory=torch.cuda.is_available(),
+                persistent_workers=args.persistent_workers,
+                prefetch_factor=args.prefetch_factor,
+            )
             cluster_test_losses = {}
             for cluster_name, cluster_tensor in bms_test_tensors.items():
-                cluster_test_dataset = SlidingWindowDataset(cluster_tensor, window_size, target_dims)
+                cluster_test_dataset = SlidingWindowDataset(
+                    cluster_tensor,
+                    window_size,
+                    target_dims,
+                    stride=args.window_stride,
+                )
                 cluster_test_loader = torch.utils.data.DataLoader(
                     cluster_test_dataset,
                     batch_size=batch_size,
                     shuffle=False,
-                    num_workers=num_workers,
-                    pin_memory=pin_memory
+                    **loader_options,
                 )
                 cluster_test_losses[cluster_name] = trainer.evaluate(cluster_test_loader)
                 print(f"[{cluster_name}] Test forecast loss: {cluster_test_losses[cluster_name][0]:.5f}")

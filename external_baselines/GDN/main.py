@@ -47,8 +47,6 @@ PROJECT_PROCESSED_ROOTS = [
     PROJECT_ROOT / 'datasets' / 'ServerMachineDataset' / 'processed',
     PROJECT_ROOT / 'datasets' / 'BMS' / 'processed',
     PROJECT_ROOT / 'datasets' / 'NASA' / 'processed',
-    PROJECT_ROOT / 'datasets' / 'NASA_RANDOM_CHARGE' / 'processed',
-    PROJECT_ROOT / 'datasets' / 'NASA_RANDOM_DISCHARGE' / 'processed',
     PROJECT_ROOT / 'datasets' / 'CALCE' / 'processed',
 ]
 
@@ -79,17 +77,20 @@ def build_fc_graph_from_features(feature_map):
     return {ft: [other for other in feature_map if other != ft] for ft in feature_map}
 
 
+def load_project_processed_array(file_path):
+    with open(file_path, 'rb') as f:
+        data = pickle.load(f)
+    return np.asarray(data)
+
+
 def load_project_processed_frames(dataset_name):
     train_path, test_path, label_path, resolved_stem = resolve_project_processed_paths(dataset_name)
     if train_path is None:
         return None
 
-    with open(train_path, 'rb') as f:
-        train = np.asarray(pickle.load(f), dtype=np.float32)
-    with open(test_path, 'rb') as f:
-        test = np.asarray(pickle.load(f), dtype=np.float32)
-    with open(label_path, 'rb') as f:
-        labels = np.asarray(pickle.load(f)).reshape(-1)
+    train = load_project_processed_array(train_path).astype(np.float32, copy=False)
+    test = load_project_processed_array(test_path).astype(np.float32, copy=False)
+    labels = load_project_processed_array(label_path).reshape(-1)
 
     feature_map = [f'f{i}' for i in range(train.shape[1])]
     train_df = pd.DataFrame(train, columns=feature_map)
@@ -271,7 +272,7 @@ class Main():
     def get_save_path(self, feature_name=''):
         if self.datestr is None:
             now = datetime.now()
-            self.datestr = now.strftime('%m|%d-%H:%M:%S')
+            self.datestr = now.strftime('%m%d-%H%M%S')
         datestr = self.datestr
 
         output_dir = self.env_config.get('output_dir', '')

@@ -1,74 +1,77 @@
 # 对比实验计划总览
 
-## 主线必跑
+## 当前有效计划
+
+当前建议实际运行的计划一共 `6` 个：
 
 - `ch3_main_results.json`
-  - 主仓主结果计划。
-  - 用途：第三章主表。
-  - 覆盖：`SMAP`、`MSL`、`NASA_RANDOM_DISCHARGE(RW1/RW2/RW7/RW8)`、`BMS`。
-
-- `ch4_bms_main.json`
-  - 第四章 `BMS` 主结果计划。
-  - 用途：只跑第四章主结果，不重复跑 `BMS baseline/c3`。
-  - 覆盖：`BMS c4` 主结果。
+  - 第三章主结果。
+  - 覆盖：`SMAP`、`MSL`、`NASA_RANDOM_DISCHARGE(RW1/RW2/RW7/RW8)`、`BMS` 的 `baseline/c3`。
 
 - `ch3_external_baselines.json`
-  - 第三章外部基线计划。
-  - 用途：补 `SMAP`、`MSL`、`NASA_RANDOM_DISCHARGE` 的外部对比。
-  - 不含：`BMS`。
-
-- `ch4_bms_external_baselines.json`
-  - 第四章 `BMS-only` 外部基线计划。
-  - 用途：专门补 `BMS` 的外部对比。
-  - 覆盖：`TranAD`、`Anomaly-Transformer`、`OmniAnomaly`、`GDN`。
-
-## 可选补充
+  - 第三章外部基线。
+  - 覆盖：仅 `SMAP`、`MSL` 的 `TranAD / Anomaly-Transformer / GDN / DCdetector`。
 
 - `ch3_ablation.json`
-  - 第三章消融计划。
-  - 用途：只有在你要补论文消融表时再跑。
+  - 第三章标准消融。
+  - 覆盖：`SMAP`、`MSL` 的 `no_transformer / no_regime / no_revin / fixed_fusion / no_event`。
+
+- `ch3_battery_ablation.json`
+  - 第三章电池侧补充消融。
+  - 覆盖：`RW1` 与 `BMS` 的小规模 c3 消融。
+
+- `ch4_bms_main.json`
+  - 第四章电池主结果。
+  - 覆盖：`NASA_RANDOM_DISCHARGE RW1/RW2/RW7/RW8` 的 `c3+physics`，以及 `BMS c3+physics / c4+physics`。
 
 - `ch4_bms_ablation.json`
-  - 第四章消融计划。
-  - 用途：第四章需要补机制分析和消融表时再跑。
+  - 第四章消融。
+  - 覆盖：`BMS` 与代表性 `RW1` 的物理增强/结构增强消融。
+
+## 暂不运行
+
+- `ch4_bms_external_baselines.json`
+  - 当前不作为主线计划运行。
+  - 原因：第四章不再重复做 `BMS` 外部基线，主叙事改为“第三章对外部，第四章做内部递进”。
 
 - `plan_template.json`
-  - 通用模板。
-  - 用途：参考参数组织方式，不作为当前主线直接运行文件。
+  - 仅作模板参考，不直接运行。
 
-## 最小运行集合
+## 运行口径
 
-如果你现在只想把论文主线先跑通，只需要这 4 个：
+如果你现在只想把论文主线先跑通，先跑这 `3` 个：
 
 ```text
 configs/compare/ch3_main_results.json
-configs/compare/ch4_bms_main.json
 configs/compare/ch3_external_baselines.json
-configs/compare/ch4_bms_external_baselines.json
+configs/compare/ch4_bms_main.json
+```
+
+如果你要把论文当前规划的主结果 + 消融一次性补齐，就跑这 `6` 个：
+
+```text
+configs/compare/ch3_main_results.json
+configs/compare/ch3_external_baselines.json
+configs/compare/ch3_ablation.json
+configs/compare/ch3_battery_ablation.json
+configs/compare/ch4_bms_main.json
+configs/compare/ch4_bms_ablation.json
 ```
 
 ## 对应命令
 
-主仓主结果：
+主仓计划：
 
 ```bash
 python compare_experiments.py --plan configs/compare/ch3_main_results.json --skip-existing
-```
-
-第四章 BMS 深化：
-
-```bash
+python compare_experiments.py --plan configs/compare/ch3_ablation.json --skip-existing
+python compare_experiments.py --plan configs/compare/ch3_battery_ablation.json --skip-existing
 python compare_experiments.py --plan configs/compare/ch4_bms_main.json --skip-existing
+python compare_experiments.py --plan configs/compare/ch4_bms_ablation.json --skip-existing
 ```
 
-第三章外部基线：
+外部基线：
 
 ```bash
 python run_external_baselines.py --plan configs/compare/ch3_external_baselines.json --skip-existing
-```
-
-第四章 BMS 外部基线：
-
-```bash
-python run_external_baselines.py --plan configs/compare/ch4_bms_external_baselines.json --skip-existing
 ```

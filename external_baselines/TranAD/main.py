@@ -32,10 +32,6 @@ def resolve_project_processed_root(dataset):
 		return PROJECT_ROOT / 'datasets' / 'data' / 'processed'
 	if dataset == 'SMD':
 		return PROJECT_ROOT / 'datasets' / 'ServerMachineDataset' / 'processed'
-	if str(dataset).startswith('NASA_RANDOM_CHARGE_'):
-		return PROJECT_ROOT / 'datasets' / 'NASA_RANDOM_CHARGE' / 'processed'
-	if str(dataset).startswith('NASA_RANDOM_DISCHARGE_'):
-		return PROJECT_ROOT / 'datasets' / 'NASA_RANDOM_DISCHARGE' / 'processed'
 	if str(dataset).startswith('NASA_'):
 		return PROJECT_ROOT / 'datasets' / 'NASA' / 'processed'
 	if str(dataset).startswith('BMS_'):
@@ -48,13 +44,13 @@ def resolve_project_processed_stem(dataset):
 		return dataset
 	if dataset == 'SMD':
 		return 'machine-1-1'
-	if str(dataset).startswith(('NASA_RANDOM_CHARGE_', 'NASA_RANDOM_DISCHARGE_', 'NASA_', 'BMS_')):
+	if str(dataset).startswith(('NASA_', 'BMS_')):
 		return str(dataset)
 	return None
 
 def adapt_project_labels_for_tranad(dataset, labels, feature_dim):
 	labels = np.asarray(labels)
-	custom_single_label = str(dataset).startswith(('NASA_RANDOM_CHARGE_', 'NASA_RANDOM_DISCHARGE_', 'NASA_', 'BMS_'))
+	custom_single_label = str(dataset).startswith(('NASA_', 'BMS_'))
 	if not custom_single_label:
 		return labels
 	if labels.ndim == 1:
@@ -62,6 +58,12 @@ def adapt_project_labels_for_tranad(dataset, labels, feature_dim):
 	if labels.ndim == 2 and labels.shape[1] == 1:
 		return np.repeat(labels, feature_dim, axis=1)
 	return labels
+
+
+def load_project_processed_array(file_path):
+	with open(file_path, 'rb') as f:
+		data = pickle.load(f)
+	return np.asarray(data)
 
 def convert_to_windows(data, model):
 	windows = []; w_size = model.n_window
@@ -81,8 +83,7 @@ def load_dataset(dataset):
 		if train_path.exists() and test_path.exists() and label_path.exists():
 			loader = []
 			for file_path in [train_path, test_path, label_path]:
-				with open(file_path, 'rb') as f:
-					loader.append(np.asarray(pickle.load(f)))
+				loader.append(load_project_processed_array(file_path))
 			if args.less:
 				loader[0] = cut_array(0.2, loader[0])
 			train_loader = DataLoader(loader[0], batch_size=loader[0].shape[0])
@@ -393,7 +394,7 @@ if __name__ == '__main__':
 	### Training phase
 	if not args.test:
 		print(f'{color.HEADER}Training {args.model} on {args.dataset}{color.ENDC}')
-		num_epochs = 5; e = epoch + 1; start = time()
+		num_epochs = args.num_epochs; e = epoch + 1; start = time()
 		train_losses = []
 		for e in tqdm(list(range(epoch+1, epoch+num_epochs+1))):
 			lossT, lr = backprop(e, model, trainD, trainO, optimizer, scheduler)
@@ -423,10 +424,18 @@ if __name__ == '__main__':
 	### Scores
 	df = pd.DataFrame()
 	lossT, _ = backprop(0, model, trainD, trainO, optimizer, scheduler, training=False)
+	if lossT.ndim == 1:
+		lossT = lossT.reshape(-1, 1)
+	if loss.ndim == 1:
+		loss = loss.reshape(-1, 1)
+	if labels.ndim == 1:
+		labels = labels.reshape(-1, 1)
+	if labels.shape[1] == 1 and loss.shape[1] > 1:
+		labels = np.repeat(labels, loss.shape[1], axis=1)
 	for i in range(loss.shape[1]):
 		lt, l, ls = lossT[:, i], loss[:, i], labels[:, i]
 		result, pred = pot_eval(lt, l, ls); preds.append(pred)
-		df = df.append(result, ignore_index=True)
+		df = pd.concat([df, pd.DataFrame([result])], ignore_index=True)
 	# preds = np.concatenate([i.reshape(-1, 1) + 0 for i in preds], axis=1)
 	# pd.DataFrame(preds, columns=[str(i) for i in range(10)]).to_csv('labels.csv')
 	lossTfinal, lossFinal = np.mean(lossT, axis=1), np.mean(loss, axis=1)
@@ -443,14 +452,14 @@ if __name__ == '__main__':
 		save_standardized_output(
 			output_dir=output_dir,
 			metrics={
-				"metric_f1": result.get("f1", 0),
-				"metric_precision": result.get("precision", 0),
-				"metric_recall": result.get("recall", 0),
-				"metric_auroc": result.get("roc_auc", 0),
-				"metric_threshold": result.get("threshold", 0),
+				"metric_f1": float(result.get("f1", 0)),
+				"metric_precision": float(result.get("precision", 0)),
+				"metric_recall": float(result.get("recall", 0)),
+				"metric_auroc": float(result.get("roc_auc", 0)),
+				"metric_threshold": float(result.get("threshold", 0)),
 			},
 			thresholds={
-				"global_threshold": result.get("threshold", 0),
+				"global_threshold": float(result.get("threshold", 0)),
 			},
 			test_scores=lossFinal,
 			test_labels=labelsFinal if labels is not None else None,

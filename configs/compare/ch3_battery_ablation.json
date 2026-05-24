@@ -1,0 +1,108 @@
+{
+  "plan_name": "ch3_battery_ablation",
+  "_comment": "第三章电池侧补充消融计划：在标准的 SMAP/MSL 模块消融之外，额外针对 NASA_RANDOM_DISCHARGE 和 BMS 做小规模 c3 补充消融，用于说明 c3 公共增强在电池场景中的实际收益来源。该计划不追求完整复刻五项标准消融，而是聚焦更能解释电池结果的关键模块。",
+  "_usage": "建议在 ch3_main_results 跑完后执行；主要服务于第三章后半段过渡和第四章前置动机说明。",
+  "_experiment_mapping": [
+    "rw1_c3_no_transformer：关闭 Transformer 残差分支，验证随机工况电池上长程时序建模增强的贡献。",
+    "rw1_c3_no_regime：关闭工况感知关系建模，验证 phase 切换下工况感知建模的作用。",
+    "rw1_c3_no_revin：关闭 RevIN，验证跨 segment / 跨阶段统计变化下归一化增强的作用。",
+    "bms_c3_no_transformer：关闭 Transformer 残差分支，验证调频工况下长程时序建模增强的贡献。",
+    "bms_c3_no_revin：关闭 RevIN，验证 BMS 尺度漂移与工况变化下归一化增强的作用。",
+    "bms_c3_fixed_fusion：将 quality-aware 融合退回 fixed 融合，验证双分支得分融合策略在 BMS 上的贡献。"
+  ],
+  "_kaggle_tip": "如果预算有限，可先跑 RW1 和 BMS 各 2 组，再决定是否补齐剩余实验。",
+  "common_args": {
+    "model_name": "mtad_gat_c3",
+    "epochs": 30,
+    "bs": 256,
+    "lookback": 100,
+    "use_transformer": true,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": true,
+    "use_regime_condition": true,
+    "regime_emb_dim": 32,
+    "regime_condition_mode": "transformer_residual",
+    "regime_stat_features": "mean,std,last,delta",
+    "score_fusion_mode": "quality_aware",
+    "use_event_consistency": true,
+    "event_low_ratio": 0.5,
+    "event_min_length": 3,
+    "use_hier_consistency": false,
+    "hier_score_weight": 0.5,
+    "use_physical_state_encoding": false,
+    "use_physical_regularization": false,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_cuda": true,
+    "log_tensorboard": false,
+    "print_every": 1,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "nasa_random_rw1_c3_no_transformer",
+      "comment": "NASA_RANDOM_DISCHARGE RW1 补充消融：关闭 Transformer 残差分支。",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE",
+        "nasa_battery_id": "RW1",
+        "window_stride": 2,
+        "use_transformer": false,
+        "run_id": "ch3batt_rw1_no_transformer"
+      }
+    },
+    {
+      "name": "nasa_random_rw1_c3_no_regime",
+      "comment": "NASA_RANDOM_DISCHARGE RW1 补充消融：关闭工况感知关系建模。",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE",
+        "nasa_battery_id": "RW1",
+        "window_stride": 2,
+        "use_regime_condition": false,
+        "run_id": "ch3batt_rw1_no_regime"
+      }
+    },
+    {
+      "name": "nasa_random_rw1_c3_no_revin",
+      "comment": "NASA_RANDOM_DISCHARGE RW1 补充消融：关闭 RevIN。",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE",
+        "nasa_battery_id": "RW1",
+        "window_stride": 2,
+        "use_revin": false,
+        "run_id": "ch3batt_rw1_no_revin"
+      }
+    },
+    {
+      "name": "bms_c3_no_transformer",
+      "comment": "BMS 补充消融：关闭 Transformer 残差分支。",
+      "args": {
+        "dataset": "BMS",
+        "window_stride": 4,
+        "use_transformer": false,
+        "run_id": "ch3batt_bms_no_transformer"
+      }
+    },
+    {
+      "name": "bms_c3_no_revin",
+      "comment": "BMS 补充消融：关闭 RevIN。",
+      "args": {
+        "dataset": "BMS",
+        "window_stride": 4,
+        "use_revin": false,
+        "run_id": "ch3batt_bms_no_revin"
+      }
+    },
+    {
+      "name": "bms_c3_fixed_fusion",
+      "comment": "BMS 补充消融：将 quality-aware 融合退回 fixed 融合。",
+      "args": {
+        "dataset": "BMS",
+        "window_stride": 4,
+        "score_fusion_mode": "fixed",
+        "run_id": "ch3batt_bms_fixed_fusion"
+      }
+    }
+  ]
+}

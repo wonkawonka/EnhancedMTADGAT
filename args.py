@@ -12,6 +12,17 @@ def str2bool(v):
         raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
+def apply_dataset_defaults(args):
+    dataset = str(getattr(args, "dataset", "")).upper()
+    default_window_stride = {
+        "BMS": 4,
+        "NASA_RANDOM_DISCHARGE": 2,
+    }
+    if getattr(args, "window_stride", None) is None:
+        args.window_stride = default_window_stride.get(dataset, 1)
+    return args
+
+
 def get_parser():
     parser = argparse.ArgumentParser()
     # -- enhanced params ---
@@ -37,6 +48,54 @@ def get_parser():
     parser.add_argument("--revin_affine", type=str2bool, default=True, help="RevIN 是否启用可学习仿射参数")
     parser.add_argument("--use_regime_condition", type=str2bool, default=False, help="是否启用工况感知关系建模")
     parser.add_argument("--regime_emb_dim", type=int, default=32, help="工况嵌入维度")
+    parser.add_argument(
+        "--use_physical_state_encoding",
+        type=str2bool,
+        default=False,
+        help="是否启用面向电池序列的时间步级物理状态编码（phase/I/q/V/T）",
+    )
+    parser.add_argument(
+        "--physical_state_hidden_dim",
+        type=int,
+        default=32,
+        help="物理状态编码投影到 Transformer 隐空间前的中间维度",
+    )
+    parser.add_argument(
+        "--use_physical_regularization",
+        type=str2bool,
+        default=False,
+        help="是否启用物理正则化约束（派生一致性 + 阶段感知平滑）",
+    )
+    parser.add_argument(
+        "--physical_reg_warmup_ratio",
+        type=float,
+        default=0.2,
+        help="物理正则权重从 0 线性升高到目标值的预热 epoch 比例",
+    )
+    parser.add_argument(
+        "--physical_alg_lambda",
+        type=float,
+        default=0.1,
+        help="派生一致性约束权重",
+    )
+    parser.add_argument(
+        "--physical_smooth_lambda",
+        type=float,
+        default=0.01,
+        help="阶段感知平滑约束权重",
+    )
+    parser.add_argument(
+        "--physical_transition_threshold",
+        type=float,
+        default=0.05,
+        help="基于电流近似划分阶段时的阈值",
+    )
+    parser.add_argument(
+        "--physical_transition_relax",
+        type=float,
+        default=0.1,
+        help="阶段切换点附近的平滑约束衰减系数",
+    )
     parser.add_argument(
         "--regime_condition_mode",
         type=str,
@@ -109,10 +168,14 @@ def get_parser():
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--val_split", type=float, default=0.1,help="验证集的占比")
     parser.add_argument("--bs", type=int, default=256,help="batch size")
+    parser.add_argument("--window_stride", type=int, default=None, help="滑窗采样步长，留空时按数据集自动设置")
     parser.add_argument("--init_lr", type=float, default=1e-3,help="初始学习率")
     parser.add_argument("--shuffle_dataset", type=str2bool, default=True,help="是否对数据集进行打乱")
     parser.add_argument("--dropout", type=float, default=0.3)
     parser.add_argument("--use_cuda", type=str2bool, default=True)
+    parser.add_argument("--num_workers", type=int, default=4, help="DataLoader 的 worker 数")
+    parser.add_argument("--persistent_workers", type=str2bool, default=True, help="是否保持 DataLoader worker 常驻")
+    parser.add_argument("--prefetch_factor", type=int, default=2, help="每个 worker 预取 batch 数")
     parser.add_argument("--print_every", type=int, default=1,help="每多少个 epoch 打印一次训练信息")
     parser.add_argument("--log_tensorboard", type=str2bool, default=True,help="是否将训练日志写入 TensorBoard")
 

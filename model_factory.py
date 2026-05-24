@@ -1,6 +1,7 @@
 import sys
 
 from mtad_gat import Enhanced_MTADGAT
+from utils import BMS_FEATURE_NAMES
 
 
 def normalize_model_name(model_name):
@@ -59,8 +60,45 @@ def resolve_model_args(args):
             setattr(args, key, default_val)
 
 
+def resolve_physical_state_config(args):
+    dataset = str(getattr(args, "dataset", "")).upper()
+    if dataset not in {"BMS", "NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"}:
+        return None
+
+    config = {
+        "dataset_name": dataset,
+        "current_index": None,
+        "voltage_index": None,
+        "temperature_index": None,
+        "step_type_index": None,
+        "soc_index": None,
+        "soh_index": None,
+        "smooth_voltage": False,
+        "smooth_temperature": True,
+    }
+
+    if dataset == "BMS":
+        config.update({
+            "current_index": BMS_FEATURE_NAMES.index("BMSnI"),
+            "voltage_index": BMS_FEATURE_NAMES.index("BMSnVmean"),
+            "temperature_index": BMS_FEATURE_NAMES.index("BMSnTmean"),
+            "smooth_voltage": False,
+        })
+        return config
+
+    config.update({
+        "step_type_index": 0,
+        "voltage_index": 1,
+        "current_index": 2,
+        "temperature_index": 3,
+        "smooth_voltage": True,
+    })
+    return config
+
+
 def build_model(args, n_features, window_size, out_dim, target_dims=None):
     model_name = normalize_model_name(getattr(args, "model_name", "mtad_gat"))
+    physical_state_config = resolve_physical_state_config(args)
 
     if model_name in {"mtad_gat", "mtad_gat_c3", "mtad_gat_c4"}:
         return Enhanced_MTADGAT(
@@ -101,6 +139,12 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
                 for stat in getattr(args, "regime_stat_features", "mean,std,last,delta").split(",")
                 if stat.strip()
             ],
+            use_physical_state_encoding=(
+                getattr(args, "use_physical_state_encoding", False)
+                and physical_state_config is not None
+            ),
+            physical_state_hidden_dim=getattr(args, "physical_state_hidden_dim", 32),
+            physical_state_config=physical_state_config,
         )
 
     supported = ", ".join(get_available_model_names())

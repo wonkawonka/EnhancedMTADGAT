@@ -490,6 +490,92 @@ class PositionalEncoding(nn.Module):
         return x
 
 
+class PhysicalStateEncoding(nn.Module):
+    """Project battery-oriented state features into the transformer hidden space."""
+
+    def __init__(self, d_model, hidden_dim=32, config=None, eps=1e-6):
+        super(PhysicalStateEncoding, self).__init__()
+        self.d_model = d_model
+        self.hidden_dim = hidden_dim
+        self.config = dict(config or {})
+        self.eps = eps
+
+        self.current_index = self.config.get("current_index")
+        self.voltage_index = self.config.get("voltage_index")
+        self.temperature_index = self.config.get("temperature_index")
+        self.step_type_index = self.config.get("step_type_index")
+        self.soc_index = self.config.get("soc_index")
+        self.soh_index = self.config.get("soh_index")
+
+        self.state_dim = 5
+        if self.soc_index is not None:
+            self.state_dim += 1
+        if self.soh_index is not None:
+            self.state_dim += 1
+
+        self.proj = nn.Sequential(
+            nn.Linear(self.state_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, d_model),
+        )
+
+    def forward(self, x):
+        # x: (batch, window, n_features)
+        current = self._get_channel(x, self.current_index)
+        phase = self._compute_phase(x, current)
+        current_norm = self._signed_normalize(current)
+        charge_flow = self._compute_charge_flow(current)
+        voltage_rel = self._compute_relative_position(self._get_channel(x, self.voltage_index))
+        temperature_rel = self._compute_relative_position(self._get_channel(x, self.temperature_index))
+
+        state_parts = [phase, current_norm, charge_flow, voltage_rel, temperature_rel]
+
+        if self.soc_index is not None:
+            state_parts.append(self._compute_absolute_state(self._get_channel(x, self.soc_index)))
+        if self.soh_index is not None:
+            state_parts.append(self._compute_absolute_state(self._get_channel(x, self.soh_index)))
+
+        state_tensor = torch.cat(state_parts, dim=2)
+        return self.proj(state_tensor)
+
+    def _get_channel(self, x, index):
+        if index is None or index < 0 or index >= x.size(2):
+            return x.new_zeros(x.size(0), x.size(1), 1)
+        return x[:, :, index:index + 1]
+
+    def _signed_normalize(self, value):
+        scale = value.abs().mean(dim=1, keepdim=True).clamp_min(self.eps)
+        return torch.tanh(value / scale)
+
+    def _compute_phase(self, x, current):
+        if self.step_type_index is not None:
+            step_type = self._get_channel(x, self.step_type_index)
+            return torch.clamp(step_type, -1.0, 1.0)
+
+        centered_current = current - current.mean(dim=1, keepdim=True)
+        scale = centered_current.abs().mean(dim=1, keepdim=True).clamp_min(self.eps)
+        return torch.tanh(centered_current / scale)
+
+    def _compute_charge_flow(self, current):
+        cumulative_current = torch.cumsum(current, dim=1)
+        scale = cumulative_current.abs().amax(dim=1, keepdim=True).clamp_min(self.eps)
+        return torch.clamp(cumulative_current / scale, -1.0, 1.0)
+
+    def _compute_relative_position(self, value):
+        value_min = value.amin(dim=1, keepdim=True)
+        value_max = value.amax(dim=1, keepdim=True)
+        return 2.0 * (value - value_min) / (value_max - value_min + self.eps) - 1.0
+
+    def _compute_absolute_state(self, value):
+        value_min = value.amin(dim=1, keepdim=True)
+        value_max = value.amax(dim=1, keepdim=True)
+        if torch.all((value_min >= -self.eps) & (value_max <= 1.0 + self.eps)):
+            return torch.clamp(2.0 * value - 1.0, -1.0, 1.0)
+
+        scale = value.abs().amax(dim=1, keepdim=True).clamp_min(self.eps)
+        return torch.clamp(value / scale, -1.0, 1.0)
+
+
 class GRULayer(nn.Module):
     """Gated Recurrent Unit (GRU) Layer
     :param in_dim: number of input features

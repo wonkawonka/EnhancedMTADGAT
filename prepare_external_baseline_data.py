@@ -80,6 +80,14 @@ def load_pickle(path: Path):
         return pickle.load(f)
 
 
+def _concat_sequence_segments(data, value_name: str):
+    if isinstance(data, list):
+        raise ValueError(
+            f"{value_name} is a segmented series. External baseline export no longer supports segmented datasets such as NASA_RANDOM."
+        )
+    return np.asarray(data)
+
+
 def list_series_names(source_dataset: str):
     root = DATASET_ROOTS[source_dataset]
     if not root.exists():
@@ -128,9 +136,9 @@ def load_processed_series(source_dataset: str, series_name: str):
     if not label_path.exists():
         raise FileNotFoundError(f"Label file not found: {label_path}")
 
-    train = np.asarray(load_pickle(train_path), dtype=np.float32)
-    test = np.asarray(load_pickle(test_path), dtype=np.float32)
-    labels = np.asarray(load_pickle(label_path))
+    train = _concat_sequence_segments(load_pickle(train_path), "train").astype(np.float32, copy=False)
+    test = _concat_sequence_segments(load_pickle(test_path), "test").astype(np.float32, copy=False)
+    labels = _concat_sequence_segments(load_pickle(label_path), "labels")
 
     if train.ndim != 2 or test.ndim != 2:
         raise ValueError("Processed train/test data must be 2-D arrays.")

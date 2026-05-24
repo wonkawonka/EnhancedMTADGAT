@@ -2,10 +2,25 @@ import argparse
 import datetime
 import json
 
-from args import get_parser, str2bool
+from args import apply_dataset_defaults, get_parser, str2bool
 from model_factory import build_model, resolve_model_args
 from prediction import Predictor
 from utils import *
+
+
+def _to_tensor_sequence_container(sequence_data):
+    if is_sequence_container(sequence_data):
+        return [torch.from_numpy(np.asarray(seq, dtype=np.float32)).float() for seq in ensure_sequence_list(sequence_data)]
+    return torch.from_numpy(np.asarray(sequence_data, dtype=np.float32)).float()
+
+
+def _get_first_sequence_tensor(sequence_data):
+    if is_sequence_container(sequence_data):
+        sequence_list = ensure_sequence_list(sequence_data)
+        if not sequence_list:
+            raise ValueError("No sequence data available")
+        return sequence_list[0]
+    return sequence_data
 
 
 if __name__ == "__main__":
@@ -15,7 +30,7 @@ if __name__ == "__main__":
                         help="ID (datetime) of pretrained model to use, '-1' for latest, '-2' for second latest, etc")
     parser.add_argument("--load_scores", type=str2bool, default=False, help="To use already computed anomaly scores")
     parser.add_argument("--save_output", type=str2bool, default=False)
-    args = parser.parse_args()
+    args = apply_dataset_defaults(parser.parse_args())
     resolve_model_args(args)
     print(args)
 
@@ -111,6 +126,14 @@ if __name__ == "__main__":
             nasa_train_batteries=model_args.nasa_train_batteries if hasattr(model_args, "nasa_train_batteries") else "",
             nasa_test_batteries=model_args.nasa_test_batteries if hasattr(model_args, "nasa_test_batteries") else "",
         )
+    elif dataset in ["NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"]:
+        (x_train, _), (x_test, y_test) = get_nasa_random_battery_data(
+            dataset,
+            normalize=normalize,
+            nasa_battery_id=model_args.nasa_battery_id if hasattr(model_args, "nasa_battery_id") else "",
+            nasa_train_batteries=model_args.nasa_train_batteries if hasattr(model_args, "nasa_train_batteries") else "",
+            nasa_test_batteries=model_args.nasa_test_batteries if hasattr(model_args, "nasa_test_batteries") else "",
+        )
     elif dataset == "BMS":
         (x_train, _), (x_test, y_test) = get_bms_cluster_data(normalize=normalize)
     else:
@@ -118,11 +141,16 @@ if __name__ == "__main__":
 
     nasa_train_tensors = None
     bms_train_tensors = None
-    if dataset == "NASA" and isinstance(x_train, dict):
+    if dataset in ["NASA", "NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"] and isinstance(x_train, dict):
         nasa_train_tensors = {battery_name: torch.from_numpy(battery_data).float()
+                              if not is_sequence_container(battery_data)
+                              else _to_tensor_sequence_container(battery_data)
                               for battery_name, battery_data in x_train.items()}
         first_train_battery = next(iter(nasa_train_tensors))
-        x_train = nasa_train_tensors[first_train_battery]
+        if dataset == "NASA":
+            x_train = nasa_train_tensors[first_train_battery]
+        else:
+            x_train = _get_first_sequence_tensor(nasa_train_tensors[first_train_battery])
     elif dataset == "BMS" and isinstance(x_train, dict):
         bms_train_tensors = {cluster_name: torch.from_numpy(cluster_data).float()
                              for cluster_name, cluster_data in x_train.items()}
@@ -133,11 +161,16 @@ if __name__ == "__main__":
 
     nasa_test_tensors = None
     bms_test_tensors = None
-    if dataset == "NASA" and isinstance(x_test, dict):
+    if dataset in ["NASA", "NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"] and isinstance(x_test, dict):
         nasa_test_tensors = {battery_name: torch.from_numpy(battery_data).float()
+                             if not is_sequence_container(battery_data)
+                             else _to_tensor_sequence_container(battery_data)
                              for battery_name, battery_data in x_test.items()}
         first_test_battery = next(iter(nasa_test_tensors))
-        x_test = nasa_test_tensors[first_test_battery]
+        if dataset == "NASA":
+            x_test = nasa_test_tensors[first_test_battery]
+        else:
+            x_test = _get_first_sequence_tensor(nasa_test_tensors[first_test_battery])
     elif dataset == "BMS" and isinstance(x_test, dict):
         bms_test_tensors = {cluster_name: torch.from_numpy(cluster_data).float()
                             for cluster_name, cluster_data in x_test.items()}
@@ -155,15 +188,19 @@ if __name__ == "__main__":
     else:
         out_dim = len(target_dims)
 
-    train_dataset = SlidingWindowDataset(x_train, window_size, target_dims)
-    test_dataset = SlidingWindowDataset(x_test, window_size, target_dims)
+    predict_window_stride = getattr(model_args, "window_stride", args.window_stride)
+    if predict_window_stride is None:
+        predict_window_stride = args.window_stride
+
+    train_dataset = SlidingWindowDataset(x_train, window_size, target_dims, stride=predict_window_stride)
+    test_dataset = SlidingWindowDataset(x_test, window_size, target_dims, stride=predict_window_stride)
 
     train_loader, val_loader, test_loader = create_data_loaders(
         train_dataset, batch_size, val_split, shuffle_dataset, test_dataset=test_dataset
     )
 
-    train_dataset = SlidingWindowDataset(x_train, window_size, target_dims)
-    test_dataset = SlidingWindowDataset(x_test, window_size, target_dims)
+    train_dataset = SlidingWindowDataset(x_train, window_size, target_dims, stride=predict_window_stride)
+    test_dataset = SlidingWindowDataset(x_test, window_size, target_dims, stride=predict_window_stride)
 
     model = build_model(model_args, n_features, window_size, out_dim, target_dims=target_dims)
 

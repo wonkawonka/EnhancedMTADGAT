@@ -524,9 +524,6 @@ class ProjectProcessedLoader(object):
         elif str(dataset_name).startswith("BMS_"):
             proc_dir = project_root / "datasets" / "BMS" / "processed"
             stem = dataset_name
-        elif str(dataset_name).startswith("NASA_RANDOM_DISCHARGE_"):
-            proc_dir = project_root / "datasets" / "NASA_RANDOM_DISCHARGE" / "processed"
-            stem = dataset_name
         elif str(dataset_name).startswith("NASA_"):
             proc_dir = project_root / "datasets" / "NASA" / "processed"
             stem = dataset_name

@@ -47,7 +47,7 @@ def resolve_dataset_profile(dataset_name):
 			percentile_profiles[dataset_name],
 		)
 
-	if str(dataset_name).startswith(('NASA_RANDOM_CHARGE_', 'NASA_RANDOM_DISCHARGE_', 'NASA_', 'BMS_')):
+	if str(dataset_name).startswith(('NASA_RANDOM_CHARGE_', 'NASA_RANDOMRANDOM_DISCHARGE_', 'NASA_', 'BMS_')):
 		return threshold_profiles['SMAP'], lr_profiles['SMAP'], percentile_profiles['SMAP']
 
 	raise KeyError(f"Unsupported TranAD dataset profile: {dataset_name}")

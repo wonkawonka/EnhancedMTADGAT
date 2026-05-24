@@ -760,33 +760,72 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
 
 
 class SlidingWindowDataset(Dataset):
-    def __init__(self, data, window, target_dim=None, horizon=1):
+    def __init__(self, data, window, target_dim=None, horizon=1, stride=1):
         self.data = data
         self.window = window
         self.target_dim = target_dim
         self.horizon = horizon
+        self.stride = max(int(stride), 1)
 
     def __getitem__(self, index):
-        x = self.data[index : index + self.window]
-        y = self.data[index + self.window : index + self.window + self.horizon]
+        start = index * self.stride
+        x = self.data[start : start + self.window]
+        y = self.data[start + self.window : start + self.window + self.horizon]
         return x, y
 
     def __len__(self):
-        return len(self.data) - self.window
+        available = len(self.data) - self.window
+        if available <= 0:
+            return 0
+        return 1 + (available - 1) // self.stride
 
 
-def create_data_loaders(train_dataset, batch_size, val_split=0.1, shuffle=True, test_dataset=None):
+def resolve_dataloader_options(
+    num_workers=4,
+    pin_memory=None,
+    persistent_workers=True,
+    prefetch_factor=2,
+):
+    if pin_memory is None:
+        pin_memory = torch.cuda.is_available()
+
+    num_workers = max(int(num_workers), 0)
+    options = {
+        "num_workers": num_workers,
+        "pin_memory": bool(pin_memory),
+    }
+    if num_workers > 0:
+        options["persistent_workers"] = bool(persistent_workers)
+        options["prefetch_factor"] = max(int(prefetch_factor), 1)
+    return options
+
+
+def create_data_loaders(
+    train_dataset,
+    batch_size,
+    val_split=0.1,
+    shuffle=True,
+    test_dataset=None,
+    num_workers=4,
+    pin_memory=None,
+    persistent_workers=True,
+    prefetch_factor=2,
+):
     train_loader, val_loader, test_loader = None, None, None
-    
-    # 优化参数：针对 GPU 开启 pin_memory，并使用多线程加载
-    num_workers = 2 if os.name == 'nt' else 4  # Windows 下 worker 数不宜过多
-    pin_memory = torch.cuda.is_available()
+    loader_options = resolve_dataloader_options(
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
+        prefetch_factor=prefetch_factor,
+    )
 
     if val_split == 0.0:
         print(f"train_size: {len(train_dataset)}")
         train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=batch_size, shuffle=shuffle, 
-            num_workers=num_workers, pin_memory=pin_memory
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            **loader_options,
         )
 
     else:
@@ -801,12 +840,16 @@ def create_data_loaders(train_dataset, batch_size, val_split=0.1, shuffle=True, 
         valid_sampler = SubsetRandomSampler(val_indices)
 
         train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=batch_size, sampler=train_sampler,
-            num_workers=num_workers, pin_memory=pin_memory
+            train_dataset,
+            batch_size=batch_size,
+            sampler=train_sampler,
+            **loader_options,
         )
         val_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=batch_size, sampler=valid_sampler,
-            num_workers=num_workers, pin_memory=pin_memory
+            train_dataset,
+            batch_size=batch_size,
+            sampler=valid_sampler,
+            **loader_options,
         )
 
         print(f"train_size: {len(train_indices)}")
@@ -814,8 +857,10 @@ def create_data_loaders(train_dataset, batch_size, val_split=0.1, shuffle=True, 
 
     if test_dataset is not None:
         test_loader = torch.utils.data.DataLoader(
-            test_dataset, batch_size=batch_size, shuffle=False,
-            num_workers=num_workers, pin_memory=pin_memory
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            **loader_options,
         )
         print(f"test_size: {len(test_dataset)}")
 

@@ -10,6 +10,7 @@ from modules import (
     Forecasting_Model,
     ReconstructionModel,
     PositionalEncoding,
+    PhysicalStateEncoding,
     RevIN,
     WindowRegimeEncoder,
     FiLMConditioner,
@@ -73,6 +74,9 @@ class Enhanced_MTADGAT(nn.Module):
             regime_emb_dim=32,
             regime_condition_mode="transformer_residual",
             regime_stat_features=None,
+            use_physical_state_encoding=False,
+            physical_state_hidden_dim=32,
+            physical_state_config=None,
     ):
         super(Enhanced_MTADGAT, self).__init__()
 
@@ -82,6 +86,8 @@ class Enhanced_MTADGAT(nn.Module):
         self.target_dims = target_dims
         self.use_regime_condition = use_regime_condition
         self.regime_condition_mode = regime_condition_mode
+        self.physical_state_config = dict(physical_state_config or {}) if physical_state_config is not None else None
+        self.use_physical_state_encoding = use_physical_state_encoding and (feature_att_trans or use_transformer)
         self.use_regime_transformer_residual = (
             self.use_regime_condition
             and self.use_transformer
@@ -138,6 +144,12 @@ class Enhanced_MTADGAT(nn.Module):
         if feature_att_trans:
             d_model = 2 * n_features  # 仅特征注意力输出 + 卷积输出
             self.pos_encoder = PositionalEncoding(d_model, dropout)
+            if self.use_physical_state_encoding:
+                self.physical_state_encoder = PhysicalStateEncoding(
+                    d_model,
+                    hidden_dim=physical_state_hidden_dim,
+                    config=physical_state_config,
+                )
             nhead = find_largest_valid_nhead(d_model)
             encoder_layer = nn.TransformerEncoderLayer(
                 d_model=d_model,
@@ -157,6 +169,12 @@ class Enhanced_MTADGAT(nn.Module):
             self.gru = GRULayer(d_model, gru_hid_dim, gru_n_layers, dropout)
             if use_transformer:
                 self.pos_encoder = PositionalEncoding(d_model, dropout)
+                if self.use_physical_state_encoding:
+                    self.physical_state_encoder = PhysicalStateEncoding(
+                        d_model,
+                        hidden_dim=physical_state_hidden_dim,
+                        config=physical_state_config,
+                    )
                 nhead = find_largest_valid_nhead(d_model)
                 encoder_layer = nn.TransformerEncoderLayer(
                     d_model=d_model,
@@ -177,6 +195,7 @@ class Enhanced_MTADGAT(nn.Module):
     def forward(self, x):
         # x shape (b, n, k): b - batch size, n - window size, k - number of features
 
+        state_input = x
         revin_stats = None
         if self.use_revin:
             x, revin_stats = self.revin(x, mode="norm")
@@ -199,6 +218,8 @@ class Enhanced_MTADGAT(nn.Module):
                 h_cat = self._apply_condition(h_cat, regime_embedding, self.fusion_conditioner)
             
             # 应用transformer
+            if self.use_physical_state_encoding:
+                h_cat = h_cat + self.physical_state_encoder(state_input)
             h_cat = self.pos_encoder(h_cat)
             trans_out = self.transformer_encoder(h_cat)
             h_end = trans_out.mean(dim=1)  # (b, d)
@@ -215,6 +236,8 @@ class Enhanced_MTADGAT(nn.Module):
             _, h_gru = self.gru(h_cat)
             h_end = h_gru
             if self.use_transformer:
+                if self.use_physical_state_encoding:
+                    h_cat = h_cat + self.physical_state_encoder(state_input)
                 h_cat = self.pos_encoder(h_cat)  # 添加位置信息
                 trans_out = self.transformer_encoder(h_cat)
                 h_trans = self.trans_proj(trans_out.mean(dim=1))
