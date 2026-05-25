@@ -1,5 +1,6 @@
 import json
 import random
+import gc
 from datetime import datetime
 
 import torch.nn as nn
@@ -672,6 +673,12 @@ if __name__ == "__main__":
                     train_reference = nasa_train_tensors if nasa_train_tensors is not None else x_train
                     predictor.predict_anomalies(train_reference, battery_tensor, battery_label)
 
+                    # 释放当前电池的资源
+                    del predictor
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    gc.collect()
+
                     _, raw_test_data, _ = load_nasa_processed_data(processed_prefix, battery_name)
                     raw_test_data = np.asarray(raw_test_data, dtype=np.float32)
                     capacities = raw_test_data[window_size:, -1] if raw_test_data.ndim == 2 and raw_test_data.shape[1] >= 7 else None
@@ -722,6 +729,12 @@ if __name__ == "__main__":
                 train_reference = nasa_train_tensors if nasa_train_tensors is not None else x_train
                 predictor.predict_anomalies(train_reference, battery_tensor, battery_label)
 
+                # 释放当前电池的资源
+                del predictor
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+
             print(f"{dataset}按电池输出已生成（联合训练、分电池测试）")
         elif dataset == "BMS" and bms_test_tensors is not None:
             for cluster_name, cluster_tensor in bms_test_tensors.items():
@@ -745,6 +758,12 @@ if __name__ == "__main__":
 
                 train_reference = bms_train_tensors if bms_train_tensors is not None else x_train
                 predictor.predict_anomalies(train_reference, cluster_tensor, cluster_label)
+
+                # 释放当前簇的资源
+                del predictor
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
 
             print("BMS按簇输出已生成（联合训练、分簇测试）")
         else:
