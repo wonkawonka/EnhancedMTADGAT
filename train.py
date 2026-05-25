@@ -1,3 +1,4 @@
+import gc
 import json
 import os
 import random
@@ -751,7 +752,9 @@ if __name__ == "__main__":
                 )
 
                 nasa_case_summaries = []
-                for battery_name, battery_tensor in nasa_test_tensors.items():
+                total_batteries = len(nasa_test_tensors)
+                for idx, (battery_name, battery_tensor) in enumerate(nasa_test_tensors.items(), 1):
+                    print(f"[NASA] Predicting battery {idx}/{total_batteries}: {battery_name}")
                     battery_save_path = save_path if len(nasa_test_tensors) == 1 else os.path.join(save_path, f"battery_{battery_name}")
                     if len(nasa_test_tensors) > 1:
                         os.makedirs(battery_save_path, exist_ok=True)
@@ -773,6 +776,11 @@ if __name__ == "__main__":
 
                     train_reference = nasa_train_tensors if nasa_train_tensors is not None else x_train
                     predictor.predict_anomalies(train_reference, battery_tensor, battery_label)
+
+                    del predictor
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    gc.collect()
 
                     _, raw_test_data, _ = load_nasa_processed_data(processed_prefix, battery_name)
                     raw_test_data = np.asarray(raw_test_data, dtype=np.float32)
@@ -801,7 +809,9 @@ if __name__ == "__main__":
                 import traceback
                 traceback.print_exc()
         elif dataset in {"NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"} and nasa_test_tensors is not None:
-            for battery_name, battery_tensor in nasa_test_tensors.items():
+            total_batteries = len(nasa_test_tensors)
+            for idx, (battery_name, battery_tensor) in enumerate(nasa_test_tensors.items(), 1):
+                print(f"[{dataset}] Predicting battery {idx}/{total_batteries}: {battery_name}")
                 battery_save_path = save_path if len(nasa_test_tensors) == 1 else os.path.join(save_path, f"battery_{battery_name}")
                 if len(nasa_test_tensors) > 1:
                     os.makedirs(battery_save_path, exist_ok=True)
@@ -824,9 +834,16 @@ if __name__ == "__main__":
                 train_reference = nasa_train_tensors if nasa_train_tensors is not None else x_train
                 predictor.predict_anomalies(train_reference, battery_tensor, battery_label)
 
+                del predictor
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+
             print(f"{dataset}按电池输出已生成（联合训练、分电池测试）")
         elif dataset == "BMS" and bms_test_tensors is not None:
-            for cluster_name, cluster_tensor in bms_test_tensors.items():
+            total_clusters = len(bms_test_tensors)
+            for idx, (cluster_name, cluster_tensor) in enumerate(bms_test_tensors.items(), 1):
+                print(f"[BMS] Predicting cluster {idx}/{total_clusters}: {cluster_name}")
                 cluster_save_path = os.path.join(save_path, cluster_name)
                 os.makedirs(cluster_save_path, exist_ok=True)
 
@@ -847,6 +864,11 @@ if __name__ == "__main__":
 
                 train_reference = bms_train_tensors if bms_train_tensors is not None else x_train
                 predictor.predict_anomalies(train_reference, cluster_tensor, cluster_label)
+
+                del predictor
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
 
             print("BMS按簇输出已生成（联合训练、分簇测试）")
         else:
