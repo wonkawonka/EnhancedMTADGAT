@@ -307,6 +307,19 @@ if __name__ == "__main__":
             )
     elif dataset == "BMS" and bms_test_tensors is not None:
         train_reference = bms_train_tensors if bms_train_tensors is not None else x_train
+
+        # 预计算训练数据分数（所有 cluster 共享，避免重复模型推理）
+        cache_predictor = Predictor(
+            model,
+            window_size,
+            n_features,
+            dict(prediction_args, save_path=save_path),
+        )
+        cached_train_df = cache_predictor.get_score_for_sequences(train_reference)
+        del cache_predictor
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         for cluster_name, cluster_tensor in bms_test_tensors.items():
             cluster_save_path = os.path.join(save_path, cluster_name)
             os.makedirs(cluster_save_path, exist_ok=True)
@@ -342,6 +355,7 @@ if __name__ == "__main__":
                 cluster_label,
                 load_scores=args.load_scores,
                 save_output=args.save_output,
+                cached_train_pred_df=cached_train_df,
             )
     else:
         label = y_test[window_size:] if y_test is not None else None

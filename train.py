@@ -842,6 +842,20 @@ if __name__ == "__main__":
             print(f"{dataset}按电池输出已生成（联合训练、分电池测试）")
         elif dataset == "BMS" and bms_test_tensors is not None:
             total_clusters = len(bms_test_tensors)
+            train_reference = bms_train_tensors if bms_train_tensors is not None else x_train
+
+            # 预计算训练数据分数（所有 cluster 共享，避免重复模型推理）
+            cache_predictor = Predictor(
+                best_model,
+                window_size,
+                n_features,
+                dict(prediction_args, save_path=save_path),
+            )
+            cached_train_df = cache_predictor.get_score_for_sequences(train_reference)
+            del cache_predictor
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
             for idx, (cluster_name, cluster_tensor) in enumerate(bms_test_tensors.items(), 1):
                 print(f"[BMS] Predicting cluster {idx}/{total_clusters}: {cluster_name}")
                 cluster_save_path = os.path.join(save_path, cluster_name)
@@ -862,15 +876,19 @@ if __name__ == "__main__":
                     if raw_label is not None:
                         cluster_label = raw_label[window_size:]
 
-                train_reference = bms_train_tensors if bms_train_tensors is not None else x_train
-                predictor.predict_anomalies(train_reference, cluster_tensor, cluster_label)
+                predictor.predict_anomalies(
+                    train_reference,
+                    cluster_tensor,
+                    cluster_label,
+                    cached_train_pred_df=cached_train_df,
+                )
 
                 del predictor
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 gc.collect()
 
-            print("BMS按簇输出已生成（联合训练、分簇测试）")
+            print("BMS按簇输出已生成（联合训练、分簇测试，训练基线缓存复用）")
         else:
             predictor = Predictor(
                 best_model,

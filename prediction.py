@@ -547,7 +547,7 @@ class Predictor:
         )
 
     def predict_anomalies(self, train, test, true_anomalies=None, load_scores=False, save_output=True,
-                          scale_scores=False):
+                          scale_scores=False, cached_train_pred_df=None):
         """ Predicts anomalies
 
         :param train: 2D array of train multivariate time series data (normal data used to establish baseline)
@@ -557,6 +557,7 @@ class Predictor:
         :param load_scores: Whether to load anomaly scores instead of calculating them
         :param save_output: Whether to save output dataframe
         :param scale_scores: Whether to feature-wise scale anomaly scores
+        :param cached_train_pred_df: Pre-computed train_pred_df to skip redundant model inference
         """
 
         if load_scores:
@@ -569,7 +570,11 @@ class Predictor:
             test_anomaly_scores = test_pred_df['A_Score_Global'].values
 
         else:
-            train_pred_df = self.get_score_for_sequences(train)
+            if cached_train_pred_df is not None:
+                train_pred_df = cached_train_pred_df.copy()
+                print("Using cached training data scores, skipping redundant model inference")
+            else:
+                train_pred_df = self.get_score_for_sequences(train)
             test_pred_df = self.get_score_for_sequences(test)
 
             train_anomaly_scores = train_pred_df['A_Score_Global'].values
