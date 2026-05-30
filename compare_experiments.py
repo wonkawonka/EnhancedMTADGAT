@@ -139,6 +139,12 @@ def parse_args():
         action="store_true",
         help="Resume unfinished experiments from last_checkpoint.pt when available.",
     )
+    parser.add_argument(
+        "--batch-tag",
+        type=str,
+        default="",
+        help="Optional suffix for experiment_runs/<plan_name>__<batch_tag>. Leave empty to reuse a stable plan root.",
+    )
     return parser.parse_args()
 
 
@@ -159,7 +165,8 @@ def main():
 
     plan_name = sanitize_name(plan.get("plan_name", plan_path.stem))
     batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    batch_root = project_root / "experiment_runs" / f"{plan_name}_{batch_timestamp}"
+    batch_root_name = plan_name if not args.batch_tag.strip() else f"{plan_name}__{sanitize_name(args.batch_tag)}"
+    batch_root = project_root / "experiment_runs" / batch_root_name
     logs_dir = batch_root / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -167,6 +174,7 @@ def main():
         "plan_path": str(plan_path),
         "plan_name": plan_name,
         "batch_root": str(batch_root),
+        "batch_root_name": batch_root_name,
         "generated_at": batch_timestamp,
         "common_args": common_args,
         "experiments": [],

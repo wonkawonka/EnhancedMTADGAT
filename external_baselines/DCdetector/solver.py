@@ -1,3 +1,5 @@
+"""DCdetector 训练/测试求解器，并在测试阶段导出统一格式结果。"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -304,7 +306,11 @@ class Solver(object):
         gt = test_labels.astype(int)
         
         matrix = [self.index]
-        scores_simple = combine_all_evaluation_scores(pred, gt, test_energy)
+        try:
+            scores_simple = combine_all_evaluation_scores(pred, gt, test_energy)
+        except Exception as exc:
+            scores_simple = {}
+            print(f"[WARN] combine_all_evaluation_scores failed: {exc}")
         for key, value in scores_simple.items():
             matrix.append(value)
             print('{0:21} : {1:0.4f}'.format(key, value))

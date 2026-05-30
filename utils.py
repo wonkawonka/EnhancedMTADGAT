@@ -142,6 +142,9 @@ def get_data_dim(dataset):
     elif dataset == "BMS":
         # BMS当前特征维度与 BMS_FEATURE_NAMES 保持同步
         return len(BMS_FEATURE_NAMES)
+    elif dataset == "CH_BATTERY_LFP_DISCHARGE":
+        # LFP discharge samples use 7 system-level signals plus 124 cell voltages.
+        return 131
     else:
         raise ValueError("unknown dataset " + str(dataset))
 
@@ -169,6 +172,8 @@ def get_target_dims(dataset):
         return [0]
     elif dataset == "BMS":
         # 对于BMS数据集，我们关注所有特征
+        return None
+    elif dataset == "CH_BATTERY_LFP_DISCHARGE":
         return None
     else:
         raise ValueError("unknown dataset " + str(dataset))

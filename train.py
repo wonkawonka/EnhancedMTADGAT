@@ -1,3 +1,5 @@
+"""Train anomaly detection models and run dataset-specific post-evaluation reporting."""
+
 import gc
 import json
 import os
@@ -9,6 +11,12 @@ import numpy as np
 import torch
 
 from args import apply_dataset_defaults, get_parser
+from ch_battery_utils import (
+    CH_BATTERY_DATASET_NAME,
+    aggregate_ch_battery_sample_scores,
+    get_ch_battery_lfp_discharge_data,
+    save_ch_battery_sample_level_reports,
+)
 from model_factory import build_model, resolve_model_args, resolve_physical_state_config
 from prediction import Predictor
 from training import Trainer
@@ -464,6 +472,16 @@ if __name__ == "__main__":
         elif dataset == 'BMS':
             output_path = f'output/{dataset}'
             (x_train, _), (x_test, y_test) = get_bms_cluster_data(normalize=normalize)
+        elif dataset == CH_BATTERY_DATASET_NAME:
+            output_path = f'output/{dataset}'
+            (x_train, _), (x_test, _), ch_battery_split_meta = get_ch_battery_lfp_discharge_data(
+                root=args.ch_battery_root,
+                normalize=normalize,
+                train_ratio=args.ch_battery_train_ratio,
+                seed=args.seed,
+                preprocessed_dir=args.ch_battery_preprocessed_dir,
+            )
+            y_test = ch_battery_split_meta["test_metadata"]
         else:
             raise Exception(f'Dataset "{dataset}" not available.')
 
@@ -479,6 +497,7 @@ if __name__ == "__main__":
 
         nasa_train_tensors = None
         bms_train_tensors = None
+        ch_battery_train_tensors = None
         if dataset in NASA_ENTITY_DATASETS and isinstance(x_train, dict):
             nasa_train_tensors = {battery_name: _to_tensor_sequence_container(battery_data)
                                   for battery_name, battery_data in x_train.items()}
@@ -489,10 +508,18 @@ if __name__ == "__main__":
                                  for cluster_name, cluster_data in x_train.items()}
             first_train_cluster = next(iter(bms_train_tensors))
             x_train = bms_train_tensors[first_train_cluster]
+        elif dataset == CH_BATTERY_DATASET_NAME and isinstance(x_train, dict):
+            ch_battery_train_tensors = {
+                sample_id: torch.from_numpy(sample_data).float()
+                for sample_id, sample_data in x_train.items()
+            }
+            first_train_sample = next(iter(ch_battery_train_tensors))
+            x_train = ch_battery_train_tensors[first_train_sample]
         else:
             x_train = torch.from_numpy(x_train).float()
         nasa_test_tensors = None
         bms_test_tensors = None
+        ch_battery_test_tensors = None
         if dataset in NASA_ENTITY_DATASETS and isinstance(x_test, dict):
             nasa_test_tensors = {battery_name: _to_tensor_sequence_container(battery_data)
                                  for battery_name, battery_data in x_test.items()}
@@ -503,6 +530,13 @@ if __name__ == "__main__":
                                 for cluster_name, cluster_data in x_test.items()}
             first_test_cluster = next(iter(bms_test_tensors))
             x_test = bms_test_tensors[first_test_cluster]
+        elif dataset == CH_BATTERY_DATASET_NAME and isinstance(x_test, dict):
+            ch_battery_test_tensors = {
+                sample_id: torch.from_numpy(sample_data).float()
+                for sample_id, sample_data in x_test.items()
+            }
+            first_test_sample = next(iter(ch_battery_test_tensors))
+            x_test = ch_battery_test_tensors[first_test_sample]
         else:
             x_test = torch.from_numpy(x_test).float()
         n_features = x_train.shape[1]
@@ -539,6 +573,13 @@ if __name__ == "__main__":
                 for cluster_tensor in bms_train_tensors.values()
             ]
             train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
+        elif dataset == CH_BATTERY_DATASET_NAME and ch_battery_train_tensors is not None:
+            train_sub_datasets = [
+                SlidingWindowDataset(sample_tensor, window_size, target_dims, stride=args.window_stride)
+                for sample_tensor in ch_battery_train_tensors.values()
+                if len(sample_tensor) > window_size
+            ]
+            train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
         else:
             train_dataset = SlidingWindowDataset(
                 x_train,
@@ -562,6 +603,13 @@ if __name__ == "__main__":
                 window_stride=args.window_stride,
             )
             test_dataset = None
+        elif dataset == CH_BATTERY_DATASET_NAME and ch_battery_test_tensors is not None:
+            test_sub_datasets = [
+                SlidingWindowDataset(sample_tensor, window_size, target_dims, stride=args.window_stride)
+                for sample_tensor in ch_battery_test_tensors.values()
+                if len(sample_tensor) > window_size
+            ]
+            test_dataset = torch.utils.data.ConcatDataset(test_sub_datasets)
         else:
             if is_sequence_container(x_test):
                 test_dataset = _build_concat_window_dataset(
@@ -677,6 +725,33 @@ if __name__ == "__main__":
             print(f"Mean test forecast loss: {mean_test_loss[0]:.5f}")
             print(f"Mean test reconstruction loss: {mean_test_loss[1]:.5f}")
             print(f"Mean test total loss: {mean_test_loss[2]:.5f}")
+        elif dataset == CH_BATTERY_DATASET_NAME and ch_battery_test_tensors is not None:
+            loader_options = resolve_dataloader_options(
+                num_workers=args.num_workers,
+                pin_memory=torch.cuda.is_available(),
+                persistent_workers=args.persistent_workers,
+                prefetch_factor=args.prefetch_factor,
+            )
+            sample_test_losses = {}
+            for sample_id, sample_tensor in ch_battery_test_tensors.items():
+                sample_test_dataset = SlidingWindowDataset(
+                    sample_tensor,
+                    window_size,
+                    target_dims,
+                    stride=args.window_stride,
+                )
+                sample_test_loader = torch.utils.data.DataLoader(
+                    sample_test_dataset,
+                    batch_size=batch_size,
+                    shuffle=False,
+                    **loader_options,
+                )
+                sample_test_losses[sample_id] = trainer.evaluate(sample_test_loader)
+
+            mean_test_loss = np.mean(np.array(list(sample_test_losses.values()), dtype=np.float32), axis=0)
+            print(f"Mean test forecast loss: {mean_test_loss[0]:.5f}")
+            print(f"Mean test reconstruction loss: {mean_test_loss[1]:.5f}")
+            print(f"Mean test total loss: {mean_test_loss[2]:.5f}")
         else:
             test_loss = trainer.evaluate(test_loader)
             print(f"Test forecast loss: {test_loss[0]:.5f}")
@@ -695,7 +770,8 @@ if __name__ == "__main__":
             "NASA_RANDOM_DISCHARGE": (0.99, 0.001),
             "CALCE": (0.95, 0.01),   # 为CALCE调整参数以适应无监督设置
             "CALCE2": (0.90, 0.01),   # 为CALCE2调整参数以适应无监督设置
-            "BMS": (0.99, 0.001)      # BMS数据集参数
+            "BMS": (0.99, 0.001),      # BMS数据集参数
+            CH_BATTERY_DATASET_NAME: (0.99, 0.001),
         }
         key = "SMD-" + args.group[0] if args.dataset == "SMD" else args.dataset
         level, q = level_q_dict[key]
@@ -716,6 +792,7 @@ if __name__ == "__main__":
             "NASA_RANDOM_DISCHARGE": 0,
             "CALCE": 0,
             "BMS": 0,
+            CH_BATTERY_DATASET_NAME: 0,
         }
         key = "SMD-" + args.group[0] if dataset == "SMD" else dataset
         reg_level = reg_level_dict[key]
@@ -889,6 +966,64 @@ if __name__ == "__main__":
                 gc.collect()
 
             print("BMS按簇输出已生成（联合训练、分簇测试，训练基线缓存复用）")
+        elif dataset == CH_BATTERY_DATASET_NAME and ch_battery_test_tensors is not None:
+            total_samples = len(ch_battery_test_tensors)
+            train_reference = ch_battery_train_tensors if ch_battery_train_tensors is not None else x_train
+
+            cache_predictor = Predictor(
+                best_model,
+                window_size,
+                n_features,
+                dict(prediction_args, save_path=save_path),
+            )
+            cached_train_df = cache_predictor.get_score_for_sequences(train_reference)
+            del cache_predictor
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            sample_rows = []
+            for idx, (sample_id, sample_tensor) in enumerate(ch_battery_test_tensors.items(), 1):
+                print(f"[{dataset}] Predicting sample {idx}/{total_samples}: {sample_id}")
+                sample_save_path = os.path.join(save_path, sample_id)
+                os.makedirs(sample_save_path, exist_ok=True)
+
+                sample_prediction_args = dict(prediction_args)
+                sample_prediction_args["save_path"] = sample_save_path
+                predictor = Predictor(
+                    best_model,
+                    window_size,
+                    n_features,
+                    sample_prediction_args,
+                )
+                predictor.predict_anomalies(
+                    train_reference,
+                    sample_tensor,
+                    None,
+                    cached_train_pred_df=cached_train_df,
+                )
+
+                test_pred_df = pd.read_pickle(f"{sample_save_path}/test_output.pkl")
+                sample_meta = y_test.get(sample_id, {}) if isinstance(y_test, dict) else {}
+                score_row = dict(sample_meta)
+                score_row.update(
+                    aggregate_ch_battery_sample_scores(
+                        test_pred_df,
+                        topk_ratio=args.ch_battery_topk_ratio,
+                    )
+                )
+                sample_rows.append(score_row)
+
+                del predictor
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+
+            _, sample_summary = save_ch_battery_sample_level_reports(
+                save_path,
+                sample_rows,
+                score_field=args.ch_battery_sample_score,
+            )
+            print(f"[{dataset}] sample-level summary: {sample_summary}")
         else:
             predictor = Predictor(
                 best_model,

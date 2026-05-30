@@ -1,3 +1,5 @@
+"""Define shared CLI arguments and dataset-specific defaults for training and prediction."""
+
 import argparse
 
 
@@ -17,6 +19,7 @@ def apply_dataset_defaults(args):
     default_window_stride = {
         "BMS": 4,
         "NASA_RANDOM_DISCHARGE": 2,
+        "CH_BATTERY_LFP_DISCHARGE": 4,
     }
     if getattr(args, "window_stride", None) is None:
         args.window_stride = default_window_stride.get(dataset, 1)
@@ -126,8 +129,30 @@ def get_parser():
             'CALCE',
             'CALCE2',
             'BMS',
+            'CH_BATTERY_LFP_DISCHARGE',
         ],
         help='dataset name'
+    )
+    parser.add_argument("--ch_battery_root", type=str, default="datasets/CH-BATTERY", help="CH-BATTERY root directory")
+    parser.add_argument(
+        "--ch_battery_preprocessed_dir",
+        type=str,
+        default="",
+        help="Optional CH-BATTERY preprocess directory; leave empty to auto-resolve from ch_battery_root/preprocessed/lfp_discharge",
+    )
+    parser.add_argument("--ch_battery_train_ratio", type=float, default=0.8, help="Normal VIN ratio used for training in CH-BATTERY")
+    parser.add_argument(
+        "--ch_battery_sample_score",
+        type=str,
+        default="score_topk_mean",
+        choices=["score_topk_mean", "score_p95", "score_max", "score_mean"],
+        help="Sample-level score aggregation used for CH-BATTERY reporting",
+    )
+    parser.add_argument(
+        "--ch_battery_topk_ratio",
+        type=float,
+        default=0.05,
+        help="Top-k ratio used when aggregating CH-BATTERY anomaly scores into sample-level scores",
     )
     parser.add_argument("--group", type=str, default="1-1", help="指定SMD数据集中具体机器编号. <group_index>-<index>")
     parser.add_argument("--nasa_battery_id", type=str, default="", help="指定单个NASA电池ID，如 B0018")

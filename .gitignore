@@ -24,3 +24,4 @@ external_baselines/GDN/data/
 external_baselines/TranAD/data/
 external_baselines/TranAD/results/
 external_baselines/OmniAnomaly/ServerMachineDataset/
+.whl

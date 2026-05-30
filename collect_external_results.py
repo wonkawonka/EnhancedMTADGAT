@@ -72,15 +72,15 @@ def find_last_int(pattern, text):
 
 def parse_tranad_metrics(log_text):
     return {
-        "metric_f1": find_last_float(r"'f1':\s*([-+0-9.eE]+)", log_text),
-        "metric_precision": find_last_float(r"'precision':\s*([-+0-9.eE]+)", log_text),
-        "metric_recall": find_last_float(r"'recall':\s*([-+0-9.eE]+)", log_text),
-        "metric_auc": find_last_float(r"'ROC/AUC':\s*([-+0-9.eE]+)", log_text),
-        "metric_threshold": find_last_float(r"'threshold':\s*([-+0-9.eE]+)", log_text),
-        "metric_tp": find_last_int(r"'TP':\s*([0-9]+)", log_text),
-        "metric_tn": find_last_int(r"'TN':\s*([0-9]+)", log_text),
-        "metric_fp": find_last_int(r"'FP':\s*([0-9]+)", log_text),
-        "metric_fn": find_last_int(r"'FN':\s*([0-9]+)", log_text),
+        "metric_f1": find_last_float(r"'f1':\s*(?:np\.float64\()?([-+0-9.eE]+)\)?", log_text),
+        "metric_precision": find_last_float(r"'precision':\s*(?:np\.float64\()?([-+0-9.eE]+)\)?", log_text),
+        "metric_recall": find_last_float(r"'recall':\s*(?:np\.float64\()?([-+0-9.eE]+)\)?", log_text),
+        "metric_auc": find_last_float(r"'ROC/AUC':\s*(?:np\.float64\()?([-+0-9.eE]+)\)?", log_text),
+        "metric_threshold": find_last_float(r"'threshold':\s*(?:np\.float64\()?([-+0-9.eE]+)\)?", log_text),
+        "metric_tp": find_last_int(r"'TP':\s*(?:np\.int64\()?([0-9]+)\)?", log_text),
+        "metric_tn": find_last_int(r"'TN':\s*(?:np\.int64\()?([0-9]+)\)?", log_text),
+        "metric_fp": find_last_int(r"'FP':\s*(?:np\.int64\()?([0-9]+)\)?", log_text),
+        "metric_fn": find_last_int(r"'FN':\s*(?:np\.int64\()?([0-9]+)\)?", log_text),
     }
 
 
