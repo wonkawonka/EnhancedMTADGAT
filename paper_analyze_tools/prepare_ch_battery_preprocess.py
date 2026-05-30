@@ -144,8 +144,8 @@ def main():
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="datasets/CH-BATTERY/preprocessed/lfp_discharge",
-        help="Directory used to save preprocess artifacts",
+        default="datasets/CH-BATTERY/processed/lfp_discharge",
+        help="Directory used to save processed artifacts",
     )
     parser.add_argument("--train-ratio", type=float, default=0.8, help="Normal VIN ratio used for training")
     parser.add_argument("--seed", type=int, default=3407, help="Random seed used for VIN split")

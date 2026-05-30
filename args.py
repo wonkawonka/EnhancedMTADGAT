@@ -138,7 +138,7 @@ def get_parser():
         "--ch_battery_preprocessed_dir",
         type=str,
         default="",
-        help="Optional CH-BATTERY preprocess directory; leave empty to auto-resolve from ch_battery_root/preprocessed/lfp_discharge",
+        help="Optional CH-BATTERY processed directory; leave empty to auto-resolve from ch_battery_root/processed/lfp_discharge",
     )
     parser.add_argument("--ch_battery_train_ratio", type=float, default=0.8, help="Normal VIN ratio used for training in CH-BATTERY")
     parser.add_argument(

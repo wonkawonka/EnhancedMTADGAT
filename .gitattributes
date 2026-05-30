@@ -1,1 +1,2 @@
 *.ipynb linguist-vendored
+datasets/CH-BATTERY/processed/lfp_discharge/*.pkl filter=lfs diff=lfs merge=lfs -text

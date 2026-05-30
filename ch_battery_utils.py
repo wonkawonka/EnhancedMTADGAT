@@ -18,7 +18,8 @@ from utils import flatten_sequence_collection, normalize_data
 CH_BATTERY_DATASET_NAME = "CH_BATTERY_LFP_DISCHARGE"
 CH_BATTERY_EXCLUDED_COLUMNS = {"TIME", "CHARGE_STATUS"}
 CH_BATTERY_DEFAULT_TOPK_RATIO = 0.05
-CH_BATTERY_DEFAULT_PREPROCESSED_DIR = "preprocessed/lfp_discharge"
+CH_BATTERY_DEFAULT_PREPROCESSED_DIR = "processed/lfp_discharge"
+CH_BATTERY_LEGACY_PREPROCESSED_DIR = "preprocessed/lfp_discharge"
 CH_BATTERY_PICKLE_PREFIX = CH_BATTERY_DATASET_NAME
 
 
@@ -174,7 +175,12 @@ def _load_preprocessed_pkl_bundle(preprocessed_dir, train_ratio, seed):
 def _resolve_preprocessed_dir(root, preprocessed_dir=None):
     if preprocessed_dir and str(preprocessed_dir).strip():
         return Path(preprocessed_dir).resolve()
-    return (Path(root).resolve() / CH_BATTERY_DEFAULT_PREPROCESSED_DIR).resolve()
+    root = Path(root).resolve()
+    default_dir = (root / CH_BATTERY_DEFAULT_PREPROCESSED_DIR).resolve()
+    if default_dir.exists():
+        return default_dir
+    legacy_dir = (root / CH_BATTERY_LEGACY_PREPROCESSED_DIR).resolve()
+    return legacy_dir if legacy_dir.exists() else default_dir
 
 
 def _load_preprocessed_split(root, preprocessed_dir, train_ratio, seed):

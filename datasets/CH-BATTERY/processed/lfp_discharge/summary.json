@@ -1,0 +1,27 @@
+{
+  "chemistry": "LFP",
+  "cycle_kind": "discharge",
+  "feature_count": 131,
+  "feature_columns_path": "D:\\作业\\论文复现\\基线模型\\mtad-gat-pytorch\\datasets\\CH-BATTERY\\preprocessed\\lfp_discharge\\feature_columns.json",
+  "train_pickle_path": "D:\\作业\\论文复现\\基线模型\\mtad-gat-pytorch\\datasets\\CH-BATTERY\\preprocessed\\lfp_discharge\\CH_BATTERY_LFP_DISCHARGE_train.pkl",
+  "test_pickle_path": "D:\\作业\\论文复现\\基线模型\\mtad-gat-pytorch\\datasets\\CH-BATTERY\\preprocessed\\lfp_discharge\\CH_BATTERY_LFP_DISCHARGE_test.pkl",
+  "test_label_pickle_path": "D:\\作业\\论文复现\\基线模型\\mtad-gat-pytorch\\datasets\\CH-BATTERY\\preprocessed\\lfp_discharge\\CH_BATTERY_LFP_DISCHARGE_test_label.pkl",
+  "total_samples": 5000,
+  "train_samples": 3200,
+  "test_samples": 1800,
+  "train_normal_vins": 320,
+  "test_normal_vins": 80,
+  "fault_test_samples": 1000,
+  "sequence_length_min": 150,
+  "sequence_length_median": 636.0,
+  "sequence_length_max": 2261,
+  "fault_counts": {
+    "high_resistance": 300,
+    "low_capacity": 300,
+    "normal": 4000,
+    "self_discharge": 400
+  },
+  "train_ratio": 0.8,
+  "seed": 3407,
+  "root": "D:\\作业\\论文复现\\基线模型\\mtad-gat-pytorch\\datasets\\CH-BATTERY"
+}
