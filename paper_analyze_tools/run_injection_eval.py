@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from sklearn.metrics import average_precision_score, roc_auc_score
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -69,12 +70,32 @@ LEVEL_Q_DEFAULTS = {
     "NASA_RANDOM_DISCHARGE": (0.99, 0.001),
     "BMS": (0.99, 0.001),
 }
+DEFAULT_SCALE_MULTIPLIER = 0.6
+DEFAULT_WINDOW_RATIO_MULTIPLIER = 0.65
+DEFAULT_MAX_COMPONENTS = 4
+
+# 数据集专属覆盖 —— 解决 NASA(4维) 和 BMS(32+维) 因特征数差距导致的难易失衡
+# NASA: 特征少、当前 quick 仍偏容易，因此继续下调幅度/时长/联动分量数。
+# BMS:  先保持当前设置，不再继续来回调参，避免影响后续对照。
+DATASET_SCALE_OVERRIDE = {
+    "NASA_RANDOM_DISCHARGE": 0.25,
+    "BMS": 0.90,
+}
+DATASET_WINDOW_RATIO_OVERRIDE = {
+    "NASA_RANDOM_DISCHARGE": 0.40,
+    "BMS": 0.80,
+}
+DATASET_MAX_COMPONENTS_OVERRIDE = {
+    "NASA_RANDOM_DISCHARGE": 2,
+    "BMS": 5,
+}
 FAULT_LIBRARY = {
     "NASA_RANDOM_DISCHARGE": [
         {
             "name": "soft_short_circuit",
             "zh_name": "软短路前兆",
             "description": "模拟局部微短路导致的电压突降、温升和电流脉动。",
+            "profile": "abrupt_tail",
             "window_ratio": 0.10,
             "anchor_ratio": 0.22,
             "preview_feature_index": 1,
@@ -89,6 +110,7 @@ FAULT_LIBRARY = {
             "name": "capacity_fade",
             "zh_name": "容量衰减响应",
             "description": "模拟容量衰减引起的放电平台缩短和电压平台整体下移。",
+            "profile": "progressive",
             "window_ratio": 0.18,
             "anchor_ratio": 0.46,
             "preview_feature_index": 1,
@@ -102,6 +124,7 @@ FAULT_LIBRARY = {
             "name": "resistance_rise",
             "zh_name": "内阻上升",
             "description": "模拟内阻增加导致负载阶段电压跌落加深并伴随温升。",
+            "profile": "progressive_mid",
             "window_ratio": 0.14,
             "anchor_ratio": 0.63,
             "preview_feature_index": 1,
@@ -115,6 +138,7 @@ FAULT_LIBRARY = {
             "name": "thermal_runaway_precursor",
             "zh_name": "热失控前兆",
             "description": "模拟热异常前兆导致温度持续上升、电压抖动加剧。",
+            "profile": "strong_progressive",
             "window_ratio": 0.12,
             "anchor_ratio": 0.78,
             "preview_feature_index": 2,
@@ -131,6 +155,7 @@ FAULT_LIBRARY = {
             "name": "soft_short_circuit",
             "zh_name": "软短路前兆",
             "description": "模拟软短路触发的电压下跌、局部发热、电流脉动以及单体离散度同步恶化。",
+            "profile": "abrupt_tail",
             "window_ratio": 0.035,
             "anchor_ratio": 0.12,
             "preview_feature_index": BMS_FEATURE_NAMES.index("SYS_Vol"),
@@ -154,6 +179,7 @@ FAULT_LIBRARY = {
             "name": "capacity_fade",
             "zh_name": "容量衰减响应",
             "description": "模拟容量衰减导致的 SOC/SOH 下降、电压平台下移以及可用容量相关响应变弱。",
+            "profile": "progressive",
             "window_ratio": 0.05,
             "anchor_ratio": 0.33,
             "preview_feature_index": BMS_FEATURE_NAMES.index("BMSnRSOC"),
@@ -177,6 +203,7 @@ FAULT_LIBRARY = {
             "name": "resistance_rise",
             "zh_name": "内阻上升",
             "description": "模拟内阻增大导致负载下压降更深、发热更强，并伴随最弱单体更早下探。",
+            "profile": "progressive_mid",
             "window_ratio": 0.04,
             "anchor_ratio": 0.56,
             "preview_feature_index": BMS_FEATURE_NAMES.index("SYS_Vol"),
@@ -200,6 +227,7 @@ FAULT_LIBRARY = {
             "name": "thermal_runaway_precursor",
             "zh_name": "热失控前兆",
             "description": "模拟热失控前兆的持续升温、温差扩大、电压不稳和放电末端失衡加剧。",
+            "profile": "strong_progressive",
             "window_ratio": 0.03,
             "anchor_ratio": 0.78,
             "preview_feature_index": BMS_FEATURE_NAMES.index("BMSnTmean"),
@@ -275,6 +303,10 @@ def make_predictor(exp_dir, output_dir, args, n_features, target_dims):
             "dynamic_pot": bool(getattr(args, "dynamic_pot", False)),
             "use_mov_av": bool(getattr(args, "use_mov_av", False)),
             "gamma": float(getattr(args, "gamma", 1.0)),
+            # 注入评估当前仍采用逐点打分口径。
+            # Predictor 现在每个窗口只输出末端一个点的分数，尚未实现 stride>1 场景下
+            # 的重叠/稀疏输出融合，因此这里固定为 1，避免与真实标签长度错位。
+            "window_stride": 1,
             "score_fusion_mode": getattr(args, "score_fusion_mode", "fixed"),
             "use_event_consistency": bool(getattr(args, "use_event_consistency", False)),
             "event_low_ratio": float(getattr(args, "event_low_ratio", 0.5)),
@@ -312,51 +344,78 @@ def to_tensor_data(values):
     return torch.from_numpy(np.asarray(values, dtype=np.float32)).float()
 
 
-def apply_step(seq, feature_idx, start, end, magnitude):
-    seq[start:end, feature_idx] += magnitude
+def build_fault_envelope(span, profile):
+    span = max(int(span), 1)
+    x = np.linspace(0.0, 1.0, span, dtype=np.float32)
+    if profile == "abrupt_tail":
+        # 短路前兆更像突发触发后维持偏移，前段迅速拉高、后段保留持续尾部。
+        rise = np.clip(x / 0.12, 0.0, 1.0)
+        tail = 0.55 + 0.45 * (1.0 - np.exp(-4.0 * x))
+        return np.maximum(rise, tail).astype(np.float32)
+    if profile == "progressive":
+        return (x ** 1.35).astype(np.float32)
+    if profile == "progressive_mid":
+        base = 0.25 + 0.75 * (x ** 1.2)
+        mid_boost = 0.15 * np.exp(-((x - 0.55) ** 2) / 0.03)
+        return np.clip(base + mid_boost, 0.0, 1.25).astype(np.float32)
+    if profile == "strong_progressive":
+        return (x ** 1.9).astype(np.float32)
+    return np.ones(span, dtype=np.float32)
 
 
-def apply_ramp(seq, feature_idx, start, end, magnitude):
+def apply_step(seq, feature_idx, start, end, magnitude, envelope):
+    seq[start:end, feature_idx] += envelope * magnitude
+
+
+def apply_ramp(seq, feature_idx, start, end, magnitude, envelope):
     span = max(end - start, 1)
-    seq[start:end, feature_idx] += np.linspace(0.0, magnitude, span, dtype=np.float32)
+    ramp = np.linspace(0.0, 1.0, span, dtype=np.float32)
+    seq[start:end, feature_idx] += ramp * envelope * magnitude
 
 
-def apply_pulse(seq, feature_idx, start, end, magnitude):
+def apply_pulse(seq, feature_idx, start, end, magnitude, envelope):
     span = max(end - start, 1)
     pulse = np.sin(np.linspace(0.0, 6.0 * np.pi, span, dtype=np.float32))
-    seq[start:end, feature_idx] += pulse * magnitude
+    seq[start:end, feature_idx] += pulse * envelope * magnitude
 
 
-def apply_sag(seq, feature_idx, start, end, magnitude):
+def apply_sag(seq, feature_idx, start, end, magnitude, envelope):
     span = max(end - start, 1)
     phase = np.linspace(-1.0, 1.0, span, dtype=np.float32)
     valley = 1.0 - np.abs(phase)
-    seq[start:end, feature_idx] += valley * magnitude
+    seq[start:end, feature_idx] += valley * envelope * magnitude
 
 
-def component_magnitude(seq, feature_idx, scale):
+def component_magnitude(seq, feature_idx, scale, scale_multiplier=1.0):
     std = float(np.std(seq[:, feature_idx]) + 1e-6)
-    return np.float32(std * scale)
+    return np.float32(std * scale * scale_multiplier)
 
 
-def apply_component(seq, component, start, end):
+def apply_component(seq, component, start, end, scale_multiplier=1.0, profile="flat"):
     feature_idx = int(component["feature_idx"])
-    magnitude = component_magnitude(seq, feature_idx, float(component["scale"]))
+    magnitude = component_magnitude(
+        seq,
+        feature_idx,
+        float(component["scale"]),
+        scale_multiplier=scale_multiplier,
+    )
     op = component["op"]
+    envelope = build_fault_envelope(end - start, component.get("profile", profile))
     if op == "step":
-        apply_step(seq, feature_idx, start, end, magnitude)
+        apply_step(seq, feature_idx, start, end, magnitude, envelope)
     elif op == "ramp":
-        apply_ramp(seq, feature_idx, start, end, magnitude)
+        apply_ramp(seq, feature_idx, start, end, magnitude, envelope)
     elif op == "pulse":
-        apply_pulse(seq, feature_idx, start, end, abs(magnitude))
+        apply_pulse(seq, feature_idx, start, end, abs(magnitude), envelope)
     elif op == "sag":
-        apply_sag(seq, feature_idx, start, end, magnitude)
+        apply_sag(seq, feature_idx, start, end, magnitude, envelope)
     else:
         raise ValueError(f"Unsupported injection op: {op}")
     return {
         "feature_idx": feature_idx,
         "feature_name": component["feature_name"],
         "op": op,
+        "profile": component.get("profile", profile),
         "magnitude": float(magnitude),
     }
 
@@ -367,6 +426,21 @@ def make_interval(length, anchor_ratio, window_ratio):
     start = min(max(start, 0), max(length - window - 1, 0))
     end = min(length, start + window)
     return start, end
+
+
+def build_effective_fault_spec(fault_spec, scale_multiplier, window_ratio_multiplier, max_components):
+    effective_components = fault_spec["components"]
+    if max_components is not None and int(max_components) > 0:
+        effective_components = effective_components[: int(max_components)]
+    return {
+        **fault_spec,
+        "window_ratio": max(0.01, float(fault_spec["window_ratio"]) * float(window_ratio_multiplier)),
+        "components": effective_components,
+        "profile": fault_spec.get("profile", "flat"),
+        "scale_multiplier": float(scale_multiplier),
+        "window_ratio_multiplier": float(window_ratio_multiplier),
+        "max_components": int(max_components) if max_components is not None else None,
+    }
 
 
 def build_nasa_experiments(entity):
@@ -426,7 +500,12 @@ def build_presets():
         for entity in BMS_ENTITIES
     ]
     presets["all"] = presets["nasa_all"] + presets["bms_all"]
-    presets["quick"] = [presets["nasa_rw1"][0], presets["bms_cluster1"][0]]
+    # 只保留最有代表性的故障以加快调试速度
+    _quick_nasa = presets["nasa_rw1"][0].copy()
+    _quick_nasa["faults"] = [f for f in FAULT_LIBRARY["NASA_RANDOM_DISCHARGE"] if f["name"] in ("resistance_rise", "thermal_runaway_precursor")]
+    _quick_bms = presets["bms_cluster1"][0].copy()
+    _quick_bms["faults"] = [f for f in FAULT_LIBRARY["BMS"] if f["name"] in ("resistance_rise", "thermal_runaway_precursor")]
+    presets["quick"] = [_quick_nasa, _quick_bms]
     return presets
 
 
@@ -438,8 +517,22 @@ def inject_nasa_sequences(sequence_list, fault_spec):
     for seq_id, raw_seq in enumerate(sequence_list):
         seq = np.asarray(raw_seq, dtype=np.float32).copy()
         labels = np.zeros(len(seq), dtype=np.int32)
-        start, end = make_interval(len(seq), fault_spec["anchor_ratio"] + 0.02 * (seq_id % 3), fault_spec["window_ratio"])
-        component_records = [apply_component(seq, component, start, end) for component in fault_spec["components"]]
+        start, end = make_interval(
+            len(seq),
+            fault_spec["anchor_ratio"] + 0.02 * (seq_id % 3),
+            fault_spec["window_ratio"],
+        )
+        component_records = [
+            apply_component(
+                seq,
+                component,
+                start,
+                end,
+                scale_multiplier=fault_spec.get("scale_multiplier", 1.0),
+                profile=fault_spec.get("profile", "flat"),
+            )
+            for component in fault_spec["components"]
+        ]
         labels[start:end] = 1
         injected_sequences.append(seq)
         injected_labels.append(labels)
@@ -451,6 +544,10 @@ def inject_nasa_sequences(sequence_list, fault_spec):
                 "start": start,
                 "end": end,
                 "length": end - start,
+                "profile": fault_spec.get("profile", "flat"),
+                "scale_multiplier": float(fault_spec.get("scale_multiplier", 1.0)),
+                "window_ratio_multiplier": float(fault_spec.get("window_ratio_multiplier", 1.0)),
+                "max_components": fault_spec.get("max_components"),
                 "components": component_records,
             }
         )
@@ -462,7 +559,17 @@ def inject_bms_array(raw_array, fault_spec):
     seq = np.asarray(raw_array, dtype=np.float32).copy()
     labels = np.zeros(len(seq), dtype=np.int32)
     start, end = make_interval(len(seq), fault_spec["anchor_ratio"], fault_spec["window_ratio"])
-    component_records = [apply_component(seq, component, start, end) for component in fault_spec["components"]]
+    component_records = [
+        apply_component(
+            seq,
+            component,
+            start,
+            end,
+            scale_multiplier=fault_spec.get("scale_multiplier", 1.0),
+            profile=fault_spec.get("profile", "flat"),
+        )
+        for component in fault_spec["components"]
+    ]
     labels[start:end] = 1
     records = [
         {
@@ -471,6 +578,10 @@ def inject_bms_array(raw_array, fault_spec):
             "start": start,
             "end": end,
             "length": end - start,
+            "profile": fault_spec.get("profile", "flat"),
+            "scale_multiplier": float(fault_spec.get("scale_multiplier", 1.0)),
+            "window_ratio_multiplier": float(fault_spec.get("window_ratio_multiplier", 1.0)),
+            "max_components": fault_spec.get("max_components"),
             "components": component_records,
         }
     ]
@@ -499,6 +610,46 @@ def flatten_values(values):
     return np.asarray(values)
 
 
+def align_true_anomalies(labels, expected_length, window_size):
+    if is_sequence_container(labels):
+        aligned_parts = []
+        for seq_labels in labels:
+            seq_labels = np.asarray(seq_labels)
+            if len(seq_labels) > window_size:
+                aligned_parts.append(seq_labels[window_size:])
+        label_arr = np.concatenate(aligned_parts, axis=0) if aligned_parts else None
+    else:
+        label_arr = np.asarray(labels)
+
+    if label_arr is None:
+        return None
+    if len(label_arr) == expected_length:
+        return label_arr
+    if len(label_arr) == expected_length + window_size:
+        return label_arr[window_size:]
+    return label_arr[:expected_length]
+
+
+def compute_threshold_free_metrics(output_dir, injected_labels, window_size):
+    test_output_path = output_dir / "test_output.pkl"
+    if not test_output_path.exists():
+        return {"AUROC": None, "AUPRC": None}
+    test_pred_df = pd.read_pickle(test_output_path)
+    scores = pd.to_numeric(test_pred_df.get("A_Score_Global"), errors="coerce").to_numpy()
+    mask = np.isfinite(scores)
+    scores = scores[mask]
+    labels = align_true_anomalies(injected_labels, len(test_pred_df), window_size)
+    if labels is None:
+        return {"AUROC": None, "AUPRC": None}
+    labels = np.asarray(labels, dtype=np.int32)[mask]
+    if labels.size == 0 or len(np.unique(labels)) < 2:
+        return {"AUROC": None, "AUPRC": None}
+    return {
+        "AUROC": float(roc_auc_score(labels, scores)),
+        "AUPRC": float(average_precision_score(labels, scores)),
+    }
+
+
 def save_injection_preview(output_dir, values, labels, feature_idx, feature_name, title):
     x = np.arange(len(flatten_values(values)))
     y = flatten_values(values)[:, feature_idx]
@@ -522,7 +673,40 @@ def variant_output_name(variant_name):
     return variant_name.replace("+", "_plus_")
 
 
-def run_single_experiment(scenario, fault_spec, variant_name, exp_dir):
+def build_result_row(scenario, fault_spec, variant_name, exp_dir, summary, output_dir, status="ok", threshold_free_metrics=None):
+    threshold_free_metrics = threshold_free_metrics or {}
+    return {
+        "Scenario": scenario["scenario"],
+        "Dataset": scenario["dataset"],
+        "Entity": scenario["entity"],
+        "Fault": fault_spec["name"],
+        "Fault_ZH": fault_spec["zh_name"],
+        "Fault_Desc": fault_spec["description"],
+        "Variant": variant_name,
+        "Experiment": exp_dir.name,
+        "Status": status,
+        "Epsilon_F1": summary.get("epsilon_result", {}).get("f1"),
+        "POT_F1": summary.get("pot_result", {}).get("f1"),
+        "BF_F1": summary.get("bf_result", {}).get("f1"),
+        "Event_F1": summary.get("event_consistency_result", {}).get("event_result", {}).get("f1"),
+        "AUROC": threshold_free_metrics.get("AUROC"),
+        "AUPRC": threshold_free_metrics.get("AUPRC"),
+        "Epsilon_Threshold": summary.get("epsilon_result", {}).get("threshold"),
+        "Final_Positive": summary.get("event_consistency_result", {}).get("event_result", {}).get("positive_count"),
+        "Output_Dir": str(output_dir),
+    }
+
+
+def run_single_experiment(
+    scenario,
+    fault_spec,
+    variant_name,
+    exp_dir,
+    rerun_existing=False,
+    scale_multiplier=DEFAULT_SCALE_MULTIPLIER,
+    window_ratio_multiplier=DEFAULT_WINDOW_RATIO_MULTIPLIER,
+    max_components=DEFAULT_MAX_COMPONENTS,
+):
     if not exp_dir.exists():
         return {
             "Scenario": scenario["scenario"],
@@ -536,13 +720,43 @@ def run_single_experiment(scenario, fault_spec, variant_name, exp_dir):
             "Output_Dir": "",
         }
 
+    output_dir = OUTPUT_ROOT / scenario["scenario"] / fault_spec["name"] / variant_output_name(variant_name)
+    summary_path = output_dir / "summary_metrics.json"
     args = load_experiment_args(exp_dir)
+    # 按数据集名解析专属乘子，覆盖全局默认值
+    _ds = scenario["dataset"]
+    _s = DATASET_SCALE_OVERRIDE.get(_ds, scale_multiplier)
+    _w = DATASET_WINDOW_RATIO_OVERRIDE.get(_ds, window_ratio_multiplier)
+    _c = DATASET_MAX_COMPONENTS_OVERRIDE.get(_ds, max_components)
+    effective_fault_spec = build_effective_fault_spec(
+        fault_spec,
+        scale_multiplier=_s,
+        window_ratio_multiplier=_w,
+        max_components=_c,
+    )
     train_raw, test_raw = load_raw_scenario_data(scenario["dataset"], scenario["entity"])
+    if scenario["dataset"] == "NASA_RANDOM_DISCHARGE":
+        _, injected_labels, _ = inject_nasa_sequences(test_raw, effective_fault_spec)
+    else:
+        _, injected_labels, _ = inject_bms_array(test_raw, effective_fault_spec)
+
+    if summary_path.exists() and not rerun_existing:
+        print(f"[SKIP] reuse existing result: {scenario['scenario']} / {fault_spec['name']} / {variant_name}")
+        return build_result_row(
+            scenario,
+            fault_spec,
+            variant_name,
+            exp_dir,
+            load_json(summary_path),
+            output_dir,
+            status="skipped_existing",
+            threshold_free_metrics=compute_threshold_free_metrics(output_dir, injected_labels, int(args.lookback)),
+        )
 
     if scenario["dataset"] == "NASA_RANDOM_DISCHARGE":
-        injected_test_raw, injected_labels, injection_records = inject_nasa_sequences(test_raw, fault_spec)
+        injected_test_raw, injected_labels, injection_records = inject_nasa_sequences(test_raw, effective_fault_spec)
     else:
-        injected_test_raw, injected_labels, injection_records = inject_bms_array(test_raw, fault_spec)
+        injected_test_raw, injected_labels, injection_records = inject_bms_array(test_raw, effective_fault_spec)
 
     train_norm, test_norm = normalize_with_train_reference(
         train_raw,
@@ -552,7 +766,6 @@ def run_single_experiment(scenario, fault_spec, variant_name, exp_dir):
     train_tensor = to_tensor_data(train_norm)
     test_tensor = to_tensor_data(test_norm)
 
-    output_dir = OUTPUT_ROOT / scenario["scenario"] / fault_spec["name"] / variant_output_name(variant_name)
     ensure_dir(output_dir)
     predictor = make_predictor(exp_dir, output_dir, args, n_features=flatten_values(train_norm).shape[1], target_dims=get_target_dims(args.dataset))
     predictor.predict_anomalies(train_tensor, test_tensor, true_anomalies=injected_labels, load_scores=False, save_output=True)
@@ -570,25 +783,16 @@ def run_single_experiment(scenario, fault_spec, variant_name, exp_dir):
     with records_path.open("w", encoding="utf-8") as f:
         json.dump(injection_records, f, ensure_ascii=False, indent=2)
 
-    summary = load_json(output_dir / "summary_metrics.json")
-    return {
-        "Scenario": scenario["scenario"],
-        "Dataset": scenario["dataset"],
-        "Entity": scenario["entity"],
-        "Fault": fault_spec["name"],
-        "Fault_ZH": fault_spec["zh_name"],
-        "Fault_Desc": fault_spec["description"],
-        "Variant": variant_name,
-        "Experiment": exp_dir.name,
-        "Status": "ok",
-        "Epsilon_F1": summary.get("epsilon_result", {}).get("f1"),
-        "POT_F1": summary.get("pot_result", {}).get("f1"),
-        "BF_F1": summary.get("bf_result", {}).get("f1"),
-        "Event_F1": summary.get("event_consistency_result", {}).get("event_result", {}).get("f1"),
-        "Epsilon_Threshold": summary.get("epsilon_result", {}).get("threshold"),
-        "Final_Positive": summary.get("event_consistency_result", {}).get("event_result", {}).get("positive_count"),
-        "Output_Dir": str(output_dir),
-    }
+    return build_result_row(
+        scenario,
+        fault_spec,
+        variant_name,
+        exp_dir,
+        load_json(summary_path),
+        output_dir,
+        status="ok",
+        threshold_free_metrics=compute_threshold_free_metrics(output_dir, injected_labels, int(args.lookback)),
+    )
 
 
 def fmt(value):
@@ -619,8 +823,9 @@ def write_report(rows):
     lines = [
         "# 注入异常评估",
         "",
-        "说明：本报告基于现有 checkpoint 对无标签场景构造电池经典异常注入，并使用统一 Predictor 重新计算分数与 F1。",
+        "说明：本报告基于现有 checkpoint 对无标签场景构造电池经典异常注入，并使用统一 Predictor 重新计算分数。",
         "当前异常库包括：软短路前兆、容量衰减响应、内阻上升、热失控前兆。",
+        "建议优先关注阈值无关的 `AUROC/AUPRC` 与较不易饱和的 `Event_F1`，弱化 `BF_F1` 作为主结论。",
         "",
     ]
     if "Fault" in df.columns:
@@ -640,23 +845,29 @@ def write_report(rows):
         fault_desc = group["Fault_Desc"].iloc[0]
         lines.extend([f"## {dataset} - {entity} - {fault_zh}", "", f"- 注入场景：`{fault_name}`", f"- 场景含义：{fault_desc}", ""])
         table = group.copy()
-        for col in ["Epsilon_F1", "POT_F1", "BF_F1", "Event_F1", "Epsilon_Threshold"]:
+        for col in ["AUROC", "AUPRC", "Epsilon_F1", "POT_F1", "BF_F1", "Event_F1", "Epsilon_Threshold"]:
             table[col] = table[col].map(fmt)
-        lines.append(dataframe_to_markdown(table[["Variant", "Experiment", "Epsilon_F1", "POT_F1", "BF_F1", "Event_F1", "Epsilon_Threshold"]]))
+        lines.append(dataframe_to_markdown(table[["Variant", "Experiment", "AUROC", "AUPRC", "Epsilon_F1", "POT_F1", "BF_F1", "Event_F1", "Epsilon_Threshold"]]))
         lines.extend(["", "### 分析"])
-        valid = group.copy()
-        valid["BF_F1_num"] = pd.to_numeric(valid["BF_F1"], errors="coerce")
-        valid = valid[valid["BF_F1_num"].notna()]
-        if not valid.empty:
-            best = valid.sort_values("BF_F1_num", ascending=False).iloc[0]
-            lines.append(f"- 当前注入场景下，`{best['Variant']}` 的 `BF_F1` 最高，说明它对 `{fault_zh}` 的区分能力最强。")
+        valid_auc = group.copy()
+        valid_auc["AUROC_num"] = pd.to_numeric(valid_auc["AUROC"], errors="coerce")
+        valid_auc = valid_auc[valid_auc["AUROC_num"].notna()]
+        if not valid_auc.empty:
+            best_auc = valid_auc.sort_values("AUROC_num", ascending=False).iloc[0]
+            lines.append(f"- 当前注入场景下，`{best_auc['Variant']}` 的 `AUROC` 最高，更能说明其对 `{fault_zh}` 的整体排序能力最强。")
+        valid_ap = group.copy()
+        valid_ap["AUPRC_num"] = pd.to_numeric(valid_ap["AUPRC"], errors="coerce")
+        valid_ap = valid_ap[valid_ap["AUPRC_num"].notna()]
+        if not valid_ap.empty:
+            best_ap = valid_ap.sort_values("AUPRC_num", ascending=False).iloc[0]
+            lines.append(f"- `AUPRC` 最高的是 `{best_ap['Variant']}`，说明它在异常片段相对稀疏时更容易把注入区间排到前面。")
         valid_event = group.copy()
         valid_event["Event_F1_num"] = pd.to_numeric(valid_event["Event_F1"], errors="coerce")
         valid_event = valid_event[valid_event["Event_F1_num"].notna()]
         if len(valid_event) >= 2:
             best_event = valid_event.sort_values("Event_F1_num", ascending=False).iloc[0]
             lines.append(f"- 事件级上，`{best_event['Variant']}` 最优，说明它更容易把离散高分整合为连续告警片段。")
-        lines.append("- 这一结果可在论文中写作“经典电池异常场景下的补充定量验证”，与真实无标签案例分析形成互补。")
+        lines.append("- 这一结果更适合作为“经典电池异常场景下的补充定量验证”，并与真实无标签案例分析形成互补。")
         lines.append("")
 
     report_path.write_text("\n".join(lines), encoding="utf-8")
@@ -678,6 +889,29 @@ def parse_args():
         default="all",
         help="Optional fault filter, e.g. soft_short_circuit/capacity_fade/resistance_rise/thermal_runaway_precursor.",
     )
+    parser.add_argument(
+        "--rerun-existing",
+        action="store_true",
+        help="Re-run scenarios even if summary_metrics.json already exists. Default is to reuse existing outputs.",
+    )
+    parser.add_argument(
+        "--scale-multiplier",
+        type=float,
+        default=DEFAULT_SCALE_MULTIPLIER,
+        help="Global multiplier applied to all component scales. Lower means subtler injections.",
+    )
+    parser.add_argument(
+        "--window-ratio-multiplier",
+        type=float,
+        default=DEFAULT_WINDOW_RATIO_MULTIPLIER,
+        help="Global multiplier applied to all fault window ratios. Lower means shorter injections.",
+    )
+    parser.add_argument(
+        "--max-components",
+        type=int,
+        default=DEFAULT_MAX_COMPONENTS,
+        help="Keep only the first N linked components per fault to avoid overly easy injections.",
+    )
     return parser.parse_args(), presets
 
 
@@ -693,7 +927,18 @@ def main():
             selected_faults = [fault for fault in selected_faults if fault["name"] == args.fault]
         for fault_spec in selected_faults:
             for variant_name, exp_dir in scenario["experiments"]:
-                rows.append(run_single_experiment(scenario, fault_spec, variant_name, exp_dir))
+                rows.append(
+                    run_single_experiment(
+                        scenario,
+                        fault_spec,
+                        variant_name,
+                        exp_dir,
+                        rerun_existing=args.rerun_existing,
+                        scale_multiplier=args.scale_multiplier,
+                        window_ratio_multiplier=args.window_ratio_multiplier,
+                        max_components=args.max_components,
+                    )
+                )
 
     summary_path = OUTPUT_ROOT / "injection_eval_summary.csv"
     new_df = pd.DataFrame(rows)

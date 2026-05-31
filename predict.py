@@ -405,40 +405,23 @@ if __name__ == "__main__":
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+        predictor = Predictor(
+            model,
+            window_size,
+            n_features,
+            dict(prediction_args, save_path=save_path),
+        )
+
         sample_rows = []
         for sample_id, sample_tensor in ch_battery_test_tensors.items():
-            sample_save_path = os.path.join(save_path, sample_id)
-            os.makedirs(sample_save_path, exist_ok=True)
-
-            sample_prediction_args = dict(prediction_args)
-            sample_prediction_args["save_path"] = sample_save_path
-
-            sample_summary_count = 0
-            for filename in os.listdir(sample_save_path):
-                if filename.startswith("summary"):
-                    sample_summary_count += 1
-            if sample_summary_count == 0:
-                sample_summary_name = "summary.txt"
-            else:
-                sample_summary_name = f"summary_{sample_summary_count}.txt"
-
-            predictor = Predictor(
-                model,
-                window_size,
-                n_features,
-                sample_prediction_args,
-                summary_file_name=sample_summary_name,
-            )
-            predictor.predict_anomalies(
+            test_pred_df = predictor.predict_anomalies(
                 train_reference,
                 sample_tensor,
                 None,
                 load_scores=args.load_scores,
-                save_output=True,
+                save_output=False,
                 cached_train_pred_df=cached_train_df,
             )
-
-            test_pred_df = pd.read_pickle(f"{sample_save_path}/test_output.pkl")
             sample_meta = y_test.get(sample_id, {}) if isinstance(y_test, dict) else {}
             score_row = dict(sample_meta)
             score_row.update(

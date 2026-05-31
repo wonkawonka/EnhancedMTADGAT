@@ -174,7 +174,9 @@ def get_target_dims(dataset):
         # 对于BMS数据集，我们关注所有特征
         return None
     elif dataset == "CH_BATTERY_LFP_DISCHARGE":
-        return None
+        # 只保留 7 个汇总量：SUM_VOLTAGE, SUM_CURRENT, SOC, MAX_CELL_VOLT, MIN_CELL_VOLT, MAX_TEMP, MIN_TEMP
+        # 丢弃 124 个单体电压，显著降低模型复杂度
+        return [0, 1, 2, 3, 4, 5, 6]
     else:
         raise ValueError("unknown dataset " + str(dataset))
 

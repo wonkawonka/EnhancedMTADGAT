@@ -702,4 +702,4 @@ class Predictor:
             test_pred_df.to_pickle(f"{self.save_path}/test_output.pkl")
             self._save_segment_visualizations(train_pred_df, test_pred_df, global_epsilon)
 
-        print("-- Done.")
+        return test_pred_df

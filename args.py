@@ -198,7 +198,7 @@ def get_parser():
     parser.add_argument("--shuffle_dataset", type=str2bool, default=True,help="是否对数据集进行打乱")
     parser.add_argument("--dropout", type=float, default=0.3)
     parser.add_argument("--use_cuda", type=str2bool, default=True)
-    parser.add_argument("--num_workers", type=int, default=4, help="DataLoader 的 worker 数")
+    parser.add_argument("--num_workers", type=int, default=8, help="DataLoader 的 worker 数")
     parser.add_argument("--persistent_workers", type=str2bool, default=True, help="是否保持 DataLoader worker 常驻")
     parser.add_argument("--prefetch_factor", type=int, default=2, help="每个 worker 预取 batch 数")
     parser.add_argument("--print_every", type=int, default=1,help="每多少个 epoch 打印一次训练信息")
