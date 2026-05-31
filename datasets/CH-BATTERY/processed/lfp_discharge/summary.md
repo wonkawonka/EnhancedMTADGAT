@@ -2,7 +2,7 @@
 
 - chemistry: LFP
 - cycle_kind: discharge
-- feature_count: 131
+- feature_count: 7
 - total_samples: 5000
 - train_samples: 3200
 - test_samples: 1800

@@ -143,8 +143,8 @@ def get_data_dim(dataset):
         # BMS当前特征维度与 BMS_FEATURE_NAMES 保持同步
         return len(BMS_FEATURE_NAMES)
     elif dataset == "CH_BATTERY_LFP_DISCHARGE":
-        # LFP discharge samples use 7 system-level signals plus 124 cell voltages.
-        return 131
+        # CH-BATTERY 训练/预测当前只保留 7 个系统级核心特征。
+        return 7
     else:
         raise ValueError("unknown dataset " + str(dataset))
 

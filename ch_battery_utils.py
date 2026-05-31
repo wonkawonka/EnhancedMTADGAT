@@ -21,6 +21,15 @@ CH_BATTERY_DEFAULT_TOPK_RATIO = 0.05
 CH_BATTERY_DEFAULT_PREPROCESSED_DIR = "processed/lfp_discharge"
 CH_BATTERY_LEGACY_PREPROCESSED_DIR = "preprocessed/lfp_discharge"
 CH_BATTERY_PICKLE_PREFIX = CH_BATTERY_DATASET_NAME
+CH_BATTERY_CORE_FEATURE_COLUMNS = [
+    "SUM_VOLTAGE",
+    "SUM_CURRENT",
+    "SOC",
+    "MAX_CELL_VOLT",
+    "MIN_CELL_VOLT",
+    "MAX_TEMP",
+    "MIN_TEMP",
+]
 
 
 def _sanitize_token(text):
@@ -115,6 +124,33 @@ def _coerce_sample_map(sample_map):
         str(sample_id): np.asarray(sequence, dtype=np.float32)
         for sample_id, sequence in sample_map.items()
     }
+
+
+def _resolve_ch_battery_core_feature_indices(feature_columns):
+    feature_columns = [str(col) for col in feature_columns]
+    missing_columns = [col for col in CH_BATTERY_CORE_FEATURE_COLUMNS if col not in feature_columns]
+    if missing_columns:
+        raise ValueError(f"Missing CH-BATTERY core feature columns: {missing_columns}")
+    return [feature_columns.index(col) for col in CH_BATTERY_CORE_FEATURE_COLUMNS]
+
+
+def _slice_sample_map_features(sample_map, feature_indices):
+    return {
+        sample_id: np.asarray(sequence[:, feature_indices], dtype=np.float32)
+        for sample_id, sequence in sample_map.items()
+    }
+
+
+def _project_ch_battery_to_core_features(feature_columns, train_data_map, test_data_map, scaler=None):
+    feature_indices = _resolve_ch_battery_core_feature_indices(feature_columns)
+    projected_feature_columns = [feature_columns[idx] for idx in feature_indices]
+    projected_train_data_map = _slice_sample_map_features(train_data_map, feature_indices)
+    projected_test_data_map = _slice_sample_map_features(test_data_map, feature_indices)
+
+    if scaler is not None and int(getattr(scaler, "n_features_in_", -1)) != len(projected_feature_columns):
+        scaler = None
+
+    return projected_feature_columns, projected_train_data_map, projected_test_data_map, scaler
 
 
 def _load_preprocessed_pkl_bundle(preprocessed_dir, train_ratio, seed):
@@ -432,6 +468,13 @@ def get_ch_battery_lfp_discharge_data(
             [int(meta["sample_label"]) for meta in test_meta_map.values()],
             dtype=np.int32,
         )
+
+    feature_columns, train_data_map, test_data_map, scaler = _project_ch_battery_to_core_features(
+        feature_columns,
+        train_data_map,
+        test_data_map,
+        scaler=scaler,
+    )
 
     if normalize:
         if scaler is None:

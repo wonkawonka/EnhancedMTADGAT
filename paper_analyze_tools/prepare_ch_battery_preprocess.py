@@ -1,4 +1,4 @@
-"""预处理 CH-BATTERY 的 LFP/discharge 数据，生成可直接训练的 pkl 产物与辅助清单。"""
+"""预处理 CH-BATTERY 的 LFP/discharge 数据，生成直接面向 7 维核心特征训练的 pkl 产物与辅助清单。"""
 
 from __future__ import annotations
 
@@ -16,7 +16,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from ch_battery_utils import (
+    CH_BATTERY_CORE_FEATURE_COLUMNS,
     _load_ch_battery_sequence,
+    _resolve_ch_battery_core_feature_indices,
     _resolve_feature_columns,
     _split_normal_vins,
     build_ch_battery_manifest,
@@ -160,6 +162,10 @@ def main():
         manifest_df, train_ratio=args.train_ratio, seed=args.seed
     )
     feature_columns = _resolve_feature_columns(train_manifest.iloc[0]["file_path"])
+    feature_columns = [
+        feature_columns[idx]
+        for idx in _resolve_ch_battery_core_feature_indices(feature_columns)
+    ]
     sequence_length_df = build_sequence_length_table(train_manifest, test_manifest)
     scaler = fit_train_scaler(train_manifest, feature_columns)
     train_data_map, train_meta_map, train_label, train_sample_ids = build_split_payload(train_manifest, feature_columns)
@@ -187,6 +193,7 @@ def main():
         "chemistry": "LFP",
         "cycle_kind": "discharge",
         "feature_count": int(len(feature_columns)),
+        "feature_columns": list(CH_BATTERY_CORE_FEATURE_COLUMNS),
         "feature_columns_path": str((output_dir / "feature_columns.json").resolve()),
         "train_pickle_path": str((output_dir / f"{PICKLE_PREFIX}_train.pkl").resolve()),
         "test_pickle_path": str((output_dir / f"{PICKLE_PREFIX}_test.pkl").resolve()),
