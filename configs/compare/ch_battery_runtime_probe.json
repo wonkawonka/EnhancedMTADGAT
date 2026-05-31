@@ -8,7 +8,7 @@
     "epochs": 1,
     "bs": 256,
     "lookback": 100,
-    "window_stride": 4,
+    "window_stride": 8,
     "feature_att_trans": false,
     "multi_scale_mode": "none",
     "ch_battery_preprocessed_dir": "datasets/CH-BATTERY/processed/lfp_discharge",

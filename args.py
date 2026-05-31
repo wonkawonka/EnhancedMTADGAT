@@ -19,7 +19,7 @@ def apply_dataset_defaults(args):
     default_window_stride = {
         "BMS": 4,
         "NASA_RANDOM_DISCHARGE": 2,
-        "CH_BATTERY_LFP_DISCHARGE": 4,
+        "CH_BATTERY_LFP_DISCHARGE": 8,
     }
     if getattr(args, "window_stride", None) is None:
         args.window_stride = default_window_stride.get(dataset, 1)

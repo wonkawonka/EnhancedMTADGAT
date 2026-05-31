@@ -14,7 +14,7 @@
     "epochs": 30,
     "bs": 256,
     "lookback": 100,
-    "window_stride": 4,
+    "window_stride": 8,
     "use_transformer": true,
     "use_revin": true,
     "use_regime_condition": true,

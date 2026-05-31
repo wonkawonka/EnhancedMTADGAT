@@ -12,7 +12,7 @@
     "epochs": 30,
     "bs": 256,
     "lookback": 100,
-    "window_stride": 4,
+    "window_stride": 8,
     "feature_att_trans": false,
     "multi_scale_mode": "none",
     "model_name": "mtad_gat_c3",
