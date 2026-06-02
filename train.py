@@ -18,6 +18,7 @@ from ch_battery_utils import (
     save_ch_battery_sample_level_reports,
 )
 from model_factory import build_model, resolve_model_args, resolve_physical_state_config
+from predict_ch_battery_light import run_light_predict
 from prediction import Predictor
 from training import Trainer
 from utils import *
@@ -797,6 +798,10 @@ if __name__ == "__main__":
         key = "SMD-" + args.group[0] if dataset == "SMD" else dataset
         reg_level = reg_level_dict[key]
 
+        args_path = f"{save_path}/config.txt"
+        with open(args_path, "w") as f:
+            json.dump(args.__dict__, f, indent=2)
+
         trainer.load(f"{save_path}/model.pt")
         prediction_args = {
             'dataset': dataset,
@@ -817,6 +822,16 @@ if __name__ == "__main__":
             "save_path": save_path,
         }
         best_model = trainer.model
+
+        if dataset == CH_BATTERY_DATASET_NAME:
+            run_light_predict(
+                model_dir=save_path,
+                batch_size=getattr(args, "predict_batch_size", 128),
+                num_workers=getattr(args, "predict_num_workers", 2),
+                pin_memory=getattr(args, "predict_pin_memory", True),
+                no_cuda=not bool(getattr(args, "use_cuda", True)),
+            )
+            raise SystemExit(0)
 
         if dataset == "NASA" and nasa_test_tensors is not None:
             try:

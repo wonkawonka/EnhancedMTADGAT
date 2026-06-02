@@ -201,6 +201,9 @@ def get_parser():
     parser.add_argument("--num_workers", type=int, default=8, help="DataLoader 的 worker 数")
     parser.add_argument("--persistent_workers", type=str2bool, default=True, help="是否保持 DataLoader worker 常驻")
     parser.add_argument("--prefetch_factor", type=int, default=2, help="每个 worker 预取 batch 数")
+    parser.add_argument("--predict_batch_size", type=int, default=128, help="计划内预测阶段的批大小；CH-BATTERY 轻量预测会使用该值")
+    parser.add_argument("--predict_num_workers", type=int, default=2, help="计划内预测阶段的 worker 数；CH-BATTERY 轻量预测会使用该值")
+    parser.add_argument("--predict_pin_memory", type=str2bool, default=True, help="计划内预测阶段是否启用 pin_memory")
     parser.add_argument("--print_every", type=int, default=1,help="每多少个 epoch 打印一次训练信息")
     parser.add_argument("--log_tensorboard", type=str2bool, default=True,help="是否将训练日志写入 TensorBoard")
 

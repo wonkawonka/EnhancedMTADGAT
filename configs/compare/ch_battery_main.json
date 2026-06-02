@@ -21,6 +21,12 @@
     "init_lr": 0.001,
     "dropout": 0.3,
     "use_cuda": true,
+    "num_workers": 4,
+    "persistent_workers": true,
+    "prefetch_factor": 4,
+    "predict_batch_size": 256,
+    "predict_num_workers": 2,
+    "predict_pin_memory": true,
     "log_tensorboard": false,
     "print_every": 1,
     "seed": 3407
