@@ -1,10 +1,41 @@
-numpy
-pandas
-matplotlib
-scikit-learn
-black
-pre-commit
-tqdm
-tensorboard
-more_itertools
-plotly>=6.1.1
+# Core numerical stack
+numpy>=1.23,<3
+pandas>=1.5,<3
+scipy>=1.8,<2
+scikit-learn>=1.2,<2
+
+# PyTorch
+# Kaggle normally already has torch installed. On local GPU machines, install the
+# CUDA-matched PyTorch wheel first if pip chooses a CPU build.
+torch>=2.0
+tensorboard>=2.13
+
+# Data files used by preprocessing
+h5py>=3.8
+openpyxl>=3.1
+xlrd>=2.0.1
+
+# Training, evaluation and plotting
+tqdm>=4.65
+more-itertools>=9.0
+matplotlib>=3.7,<4
+seaborn>=0.12
+plotly>=5.18
+cufflinks>=0.17.3
+
+# Optional: external baselines under external_baselines/.
+# Uncomment only when running those baselines, because some of them were written
+# for older PyTorch/Python stacks and may need a separate environment.
+# torch-geometric>=2.3
+# dgl>=1.1
+# einops>=0.6
+# Pillow>=9.4
+# statsmodels>=0.14
+# tsfresh>=0.20
+# arch>=6.1
+# hurst>=0.0.5
+# SciencePlots>=2.1
+
+# Optional developer tools
+# black
+# pre-commit

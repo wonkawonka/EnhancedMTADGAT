@@ -35,6 +35,12 @@ mtad-gat-pytorch/
 .\.python312\python.exe -m pip install -r requirements.txt
 ```
 
+Kaggle CUDA 11.8 环境需要同时跑 DGL/PyG/外部基线时，使用专用依赖文件：
+
+```bash
+pip install -r requirements-kaggle-cu118.txt
+```
+
 后续命令默认都可以写成：
 
 ```powershell
