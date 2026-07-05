@@ -21,7 +21,7 @@ from src.data.utils import *
 from src.engine.prediction import Predictor
 from src.engine.training import Trainer
 from src.models.model_factory import build_model, resolve_model_args, resolve_physical_state_config
-from src.project_paths import MANUAL_RUNS_ROOT
+from src.project_paths import MANUAL_RUNS_ROOT, processed_dataset_path
 from src.runners.predict_ch_battery_light import run_light_predict
 
 NASA_ENTITY_DATASETS = {"NASA", "NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"}
@@ -841,7 +841,7 @@ if __name__ == "__main__":
 
         if dataset == "NASA" and nasa_test_tensors is not None:
             try:
-                processed_prefix = "datasets/NASA/processed"
+                processed_prefix = str(processed_dataset_path("NASA"))
                 train_batteries, report_test_batteries = resolve_nasa_batteries(
                     processed_prefix,
                     nasa_battery_id=args.nasa_battery_id,

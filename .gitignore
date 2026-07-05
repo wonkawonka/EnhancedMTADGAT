@@ -5,10 +5,10 @@ __pycache__/
 .conda/
 /.python312/
 .python312/
-datasets/**
-!datasets/**/
-!datasets/**/processed/
-!datasets/**/processed/**
+datasets/**/processed/
+datasets/**/processed/**
+datasets/CH-BATTERY/
+datasets/BMS/
 .ipynb_checkpoints/
 */logs
 output/

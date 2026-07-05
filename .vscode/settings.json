@@ -7,5 +7,6 @@
     "chat.useAgentSkills": true,
     "chat.agentSkillsLocations": {
         ".vscode/skills": true
-    }
+    },
+    "git.ignoreLimitWarning": true
 }

@@ -13,6 +13,7 @@ from sklearn.metrics import average_precision_score, precision_recall_curve, roc
 from sklearn.preprocessing import MinMaxScaler
 
 from src.data.utils import flatten_sequence_collection, normalize_data
+from src.project_paths import resolve_dataset_root
 
 
 CH_BATTERY_DATASET_NAME = "CH_BATTERY_LFP_DISCHARGE"
@@ -382,12 +383,14 @@ def _build_sample_map(manifest_df, feature_columns):
 
 
 def get_ch_battery_lfp_discharge_data(
-    root="datasets/CH-BATTERY",
+    root=None,
     normalize=False,
     train_ratio=0.8,
     seed=3407,
     preprocessed_dir=None,
 ):
+    if root is None:
+        root = resolve_dataset_root("CH-BATTERY", "CH-BATTERY")
     root = Path(root).resolve()
     resolved_preprocessed_dir = _resolve_preprocessed_dir(root, preprocessed_dir=preprocessed_dir)
     scaler = None

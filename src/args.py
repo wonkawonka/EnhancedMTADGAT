@@ -2,6 +2,8 @@
 
 import argparse
 
+from src.project_paths import resolve_dataset_root
+
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -131,7 +133,12 @@ def get_parser():
         ],
         help='dataset name'
     )
-    parser.add_argument("--ch_battery_root", type=str, default="datasets/CH-BATTERY", help="CH-BATTERY root directory")
+    parser.add_argument(
+        "--ch_battery_root",
+        type=str,
+        default=str(resolve_dataset_root("CH-BATTERY", "CH-BATTERY")),
+        help="CH-BATTERY root directory",
+    )
     parser.add_argument(
         "--ch_battery_preprocessed_dir",
         type=str,

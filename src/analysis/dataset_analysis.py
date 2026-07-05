@@ -56,6 +56,8 @@ from src.data.utils import (
 
 )
 
+from src.project_paths import resolve_dataset_root
+
 
 NASA_FEATURE_NAMES = [
 
@@ -1227,7 +1229,7 @@ def load_dataset_bundle(dataset: str, **kwargs) -> DatasetBundle:
 
         (train_map, _), (test_map, _), split_meta = get_ch_battery_lfp_discharge_data(
 
-            root=kwargs.get("ch_battery_root", "datasets/CH-BATTERY"),
+            root=kwargs.get("ch_battery_root", str(resolve_dataset_root("CH-BATTERY", "CH-BATTERY"))),
 
             normalize=False,
 

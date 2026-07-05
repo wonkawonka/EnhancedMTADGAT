@@ -7,7 +7,7 @@ from pathlib import Path
 
 from src.analysis.dataset_analysis import DEFAULT_RANDOM_STATE, run_dataset_analysis
 from src.data.ch_battery_utils import CH_BATTERY_DATASET_NAME
-from src.project_paths import REPORT_ROOT
+from src.project_paths import REPORT_ROOT, resolve_dataset_root
 
 
 def parse_args():
@@ -33,7 +33,12 @@ def parse_args():
     parser.add_argument("--nasa_battery_id", type=str, default="", help="Single NASA/NASA_RANDOM entity.")
     parser.add_argument("--nasa_train_batteries", type=str, default="", help="Comma separated NASA train entities.")
     parser.add_argument("--nasa_test_batteries", type=str, default="", help="Comma separated NASA test entities.")
-    parser.add_argument("--ch_battery_root", type=str, default="datasets/CH-BATTERY", help="CH-BATTERY root directory.")
+    parser.add_argument(
+        "--ch_battery_root",
+        type=str,
+        default=str(resolve_dataset_root("CH-BATTERY", "CH-BATTERY")),
+        help="CH-BATTERY root directory.",
+    )
     parser.add_argument("--ch_battery_preprocessed_dir", type=str, default="", help="Optional CH-BATTERY processed directory.")
     parser.add_argument("--ch_battery_train_ratio", type=float, default=0.8, help="CH-BATTERY normal VIN train ratio.")
     parser.add_argument("--seed", type=int, default=DEFAULT_RANDOM_STATE, help="Random seed used in analysis sampling.")

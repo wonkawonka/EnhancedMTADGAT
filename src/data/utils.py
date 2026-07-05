@@ -12,6 +12,8 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler
 from sklearn.metrics import roc_curve, auc
 from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler
 
+from src.project_paths import processed_dataset_path
+
 
 BMS_FEATURE_NAMES = [
     "BMSnVol_T",
@@ -357,7 +359,7 @@ def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteri
 
     file_prefix = NASA_ENTITY_DATASET_PREFIX[dataset]
     if prefix is None:
-        prefix = f"datasets/{dataset}/processed" if dataset != "NASA" else "datasets/NASA/processed"
+        prefix = str(processed_dataset_path("NASA" if dataset == "NASA" else dataset))
 
     train_batteries, test_batteries = resolve_prefixed_entities(
         prefix,
@@ -433,7 +435,7 @@ def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteri
 
 
 def get_nasa_battery_data(nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None,
-                          normalize=False, prefix="datasets/NASA/processed"):
+                          normalize=False, prefix=None):
     return get_nasa_like_battery_data(
         "NASA",
         nasa_battery_id=nasa_battery_id,
@@ -490,7 +492,9 @@ def load_bms_cluster_processed_data(prefix, cluster_name):
     return train_data, test_data, test_label
 
 
-def get_bms_cluster_data(normalize=False, prefix="datasets/BMS/processed"):
+def get_bms_cluster_data(normalize=False, prefix=None):
+    if prefix is None:
+        prefix = str(processed_dataset_path("BMS"))
     cluster_names = get_available_bms_clusters(prefix)
     if not cluster_names:
         raise FileNotFoundError(f"No processed BMS cluster data found in {prefix}")
@@ -534,21 +538,22 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
     来自 OmniAnomaly 的方法（https://github.com/NetManAIOps/OmniAnomaly）。
     Used in the traditional training pipeline (one model per entity)
     """
-    prefix = "datasets"
     if str(dataset).startswith("machine"):
-        prefix += "/ServerMachineDataset/processed"
+        prefix = str(processed_dataset_path("ServerMachineDataset"))
     elif dataset in ["MSL", "SMAP"]:
-        prefix += "/data/processed"
+        prefix = str(processed_dataset_path("data"))
     elif dataset == "NASA":
-        prefix += "/NASA/processed"
+        prefix = str(processed_dataset_path("NASA"))
     elif dataset == "NASA_RANDOM_CHARGE":
-        prefix += "/NASA_RANDOM_CHARGE/processed"
+        prefix = str(processed_dataset_path("NASA_RANDOM_CHARGE"))
     elif dataset == "NASA_RANDOM_DISCHARGE":
-        prefix += "/NASA_RANDOM_DISCHARGE/processed"
+        prefix = str(processed_dataset_path("NASA_RANDOM_DISCHARGE"))
     elif dataset in ["CALCE", "CALCE2"]:
-        prefix += "/CALCE/processed"
+        prefix = str(processed_dataset_path("CALCE"))
     elif dataset == "BMS":
-        prefix += "/BMS/processed"
+        prefix = str(processed_dataset_path("BMS"))
+    else:
+        prefix = str(processed_dataset_path(str(dataset)))
     if max_train_size is None:
         train_end = None
     else:
@@ -917,7 +922,7 @@ def get_all_calce_entities():
     获取所有CALCE实体的名称
     """
     import glob
-    prefix = "datasets/CALCE/processed"
+    prefix = str(processed_dataset_path("CALCE"))
     train_pkl_files = glob.glob(os.path.join(prefix, "CALCE_*_train.pkl"))
     entity_names = []
     for file in train_pkl_files:
@@ -933,7 +938,7 @@ def load_calce_entity_data(entity_name):
     加载特定CALCE实体的数据
     用于通用模型训练（一个模型对应多个实体）
     """
-    prefix = "datasets/CALCE/processed"
+    prefix = str(processed_dataset_path("CALCE"))
     # 加载训练数据
     try:
         with open(os.path.join(prefix, f"CALCE_{entity_name}_train.pkl"), "rb") as f:
@@ -967,7 +972,7 @@ def get_all_calce2_entities():
     获取所有CALCE2实体的名称
     """
     import glob
-    prefix = "datasets/CALCE/processed"
+    prefix = str(processed_dataset_path("CALCE"))
     train_pkl_files = glob.glob(os.path.join(prefix, "CALCE2_*_train.pkl"))
     entity_names = []
     for file in train_pkl_files:
@@ -982,7 +987,7 @@ def load_calce2_entity_data(entity_name):
     """
     加载特定CALCE2实体的数据
     """
-    prefix = "datasets/CALCE/processed"
+    prefix = str(processed_dataset_path("CALCE"))
     # 加载训练数据
     try:
         with open(os.path.join(prefix, f"CALCE2_{entity_name}_train.pkl"), "rb") as f:

@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from src.project_paths import PROJECT_ROOT
+from src.project_paths import PROJECT_ROOT, resolve_dataset_root
 
 
 def add_common_execution_args(parser):
@@ -47,7 +47,11 @@ def build_parser():
     analyze_parser.add_argument("--nasa-battery-id", default="", help="Single NASA entity.")
     analyze_parser.add_argument("--nasa-train-batteries", default="", help="Comma separated NASA train entities.")
     analyze_parser.add_argument("--nasa-test-batteries", default="", help="Comma separated NASA test entities.")
-    analyze_parser.add_argument("--ch-battery-root", default="datasets/CH-BATTERY", help="CH-BATTERY root directory.")
+    analyze_parser.add_argument(
+        "--ch-battery-root",
+        default=str(resolve_dataset_root("CH-BATTERY", "CH-BATTERY")),
+        help="CH-BATTERY root directory.",
+    )
     analyze_parser.add_argument("--ch-battery-preprocessed-dir", default="", help="Optional CH-BATTERY processed directory.")
     analyze_parser.add_argument("--ch-battery-train-ratio", type=float, default=0.8, help="CH-BATTERY train VIN ratio.")
     analyze_parser.add_argument("--seed", type=int, default=3407, help="Random seed.")
@@ -68,7 +72,11 @@ def build_parser():
     full_parser.add_argument("--nasa-battery-id", default="", help="Single NASA entity used in analyze/full.")
     full_parser.add_argument("--nasa-train-batteries", default="", help="Comma separated NASA train entities used in analyze/full.")
     full_parser.add_argument("--nasa-test-batteries", default="", help="Comma separated NASA test entities used in analyze/full.")
-    full_parser.add_argument("--ch-battery-root", default="datasets/CH-BATTERY", help="CH-BATTERY root used in analyze/full.")
+    full_parser.add_argument(
+        "--ch-battery-root",
+        default=str(resolve_dataset_root("CH-BATTERY", "CH-BATTERY")),
+        help="CH-BATTERY root used in analyze/full.",
+    )
     full_parser.add_argument("--ch-battery-preprocessed-dir", default="", help="Optional CH-BATTERY processed directory used in analyze/full.")
     full_parser.add_argument("--ch-battery-train-ratio", type=float, default=0.8, help="CH-BATTERY train VIN ratio used in analyze/full.")
     full_parser.add_argument("--seed", type=int, default=3407, help="Random seed used in analyze/full.")

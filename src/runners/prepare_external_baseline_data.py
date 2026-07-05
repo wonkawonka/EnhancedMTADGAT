@@ -17,28 +17,28 @@ import numpy as np
 import pandas as pd
 
 
-from src.project_paths import PROJECT_ROOT
+from src.project_paths import processed_dataset_path
 
 
 DATASET_ROOTS = {
 
-    "SMAP": PROJECT_ROOT / "datasets" / "data" / "processed",
+    "SMAP": processed_dataset_path("data"),
 
-    "MSL": PROJECT_ROOT / "datasets" / "data" / "processed",
+    "MSL": processed_dataset_path("data"),
 
-    "SMD": PROJECT_ROOT / "datasets" / "ServerMachineDataset" / "processed",
+    "SMD": processed_dataset_path("ServerMachineDataset"),
 
-    "BMS": PROJECT_ROOT / "datasets" / "BMS" / "processed",
+    "BMS": processed_dataset_path("BMS"),
 
-    "NASA": PROJECT_ROOT / "datasets" / "NASA" / "processed",
+    "NASA": processed_dataset_path("NASA"),
 
-    "NASA_RANDOM_CHARGE": PROJECT_ROOT / "datasets" / "NASA_RANDOM_CHARGE" / "processed",
+    "NASA_RANDOM_CHARGE": processed_dataset_path("NASA_RANDOM_CHARGE"),
 
-    "NASA_RANDOM_DISCHARGE": PROJECT_ROOT / "datasets" / "NASA_RANDOM_DISCHARGE" / "processed",
+    "NASA_RANDOM_DISCHARGE": processed_dataset_path("NASA_RANDOM_DISCHARGE"),
 
-    "CALCE": PROJECT_ROOT / "datasets" / "CALCE" / "processed",
+    "CALCE": processed_dataset_path("CALCE"),
 
-    "CALCE2": PROJECT_ROOT / "datasets" / "CALCE" / "processed",
+    "CALCE2": processed_dataset_path("CALCE"),
 
 }
 
