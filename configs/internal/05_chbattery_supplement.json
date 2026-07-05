@@ -1,0 +1,72 @@
+{
+  "plan_name": "05_chbattery_supplement",
+  "_comment": "补充验证计划：CH-BATTERY 用于证明窗口级模型向样本级电池故障判别迁移时的有效性。该计划不再单独拆分多个文件，而是集中保留最需要写进论文的三组结果。",
+  "_usage": "建议在第四章主结果完成后再运行；主要用于补充表和补充分析。",
+  "_thesis_role": "电池补充验证",
+  "_experiment_mapping": [
+    "chbatt_mtadgat_baseline：CH-BATTERY baseline。",
+    "chbatt_c3_reference：CH-BATTERY 上的 c3 结果。",
+    "chbatt_c3_physics：CH-BATTERY 上的 c3+physics 结果。"
+  ],
+  "common_args": {
+    "dataset": "CH_BATTERY_LFP_DISCHARGE",
+    "epochs": 30,
+    "bs": 256,
+    "lookback": 100,
+    "window_stride": 8,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "regime_emb_dim": 32,
+    "regime_condition_mode": "transformer_residual",
+    "regime_stat_features": "mean,std,last,delta",
+    "event_low_ratio": 0.5,
+    "event_min_length": 3,
+    "use_physical_state_encoding": false,
+    "use_physical_regularization": false,
+    "physical_alg_lambda": 0.1,
+    "physical_smooth_lambda": 0.01,
+    "ch_battery_preprocessed_dir": "datasets/CH-BATTERY/processed/lfp_discharge",
+    "ch_battery_train_ratio": 0.8,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_cuda": true,
+    "num_workers": 4,
+    "persistent_workers": true,
+    "prefetch_factor": 4,
+    "predict_batch_size": 256,
+    "predict_num_workers": 2,
+    "predict_pin_memory": true,
+    "log_tensorboard": false,
+    "print_every": 1,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "chbatt_mtadgat_baseline",
+      "comment": "CH-BATTERY baseline。",
+      "args": {
+        "model_name": "mtad_gat",
+        "run_id": "supp_chbatt_mtadgat"
+      }
+    },
+    {
+      "name": "chbatt_c3_reference",
+      "comment": "CH-BATTERY 上的 c3 参考结果。",
+      "args": {
+        "model_name": "mtad_gat_c3",
+        "run_id": "supp_chbatt_c3"
+      }
+    },
+    {
+      "name": "chbatt_c3_physics",
+      "comment": "CH-BATTERY 上的 c3+physics 结果。",
+      "args": {
+        "model_name": "mtad_gat_c3",
+        "use_physical_state_encoding": true,
+        "use_physical_regularization": true,
+        "run_id": "supp_chbatt_c3_phys"
+      }
+    }
+  ]
+}

@@ -1,192 +1,139 @@
-> :information_source: This repo is not under active maintenance. PRs are however very welcome!<br>
-> Thanks to our contributors: 
->  - [Spyros Rigas](https://github.com/srigas) 
------
+﻿﻿## 项目说明
 
-Our implementation of MTAD-GAT: Multivariate Time-series Anomaly Detection (MTAD) via Graph Attention Networks (GAT) by [Zhao et al. (2020)](https://arxiv.org/pdf/2009.02040.pdf).
+这是一个基于 `MTAD-GAT` 扩展的多变量时间序列异常检测项目，当前已经完成第一阶段目录整理，便于后续继续重构和重做实验。
 
-- This repo includes a complete framework for multivariate anomaly detection, using a model that is heavily inspired by MTAD-GAT.
-- Our work does not serve to reproduce the original results in the paper.
-- :email: For contact, feel free to use axel.harstad@gmail.com
+- 主仓实现集中在 `src/`
+- 内部实验计划放在 `configs/internal/`
+- 外部基线计划放在 `configs/external/`
+- 批量实验输出统一放在 `runs/`
+- 分析报告统一沉淀在 `report/`
+- 第三方基线代码保留在 `external_baselines/`
 
-### :exclamation: Key Notes
-- By default we use the recently proposed [*GATv2*](https://arxiv.org/abs/2105.14491), but include the option to use the standard GAT
-- Instead of using a Variational Auto-Encoder (VAE) as the Reconstruction Model, we use a GRU-based decoder. 
-- We provide implementations of the following thresholding methods, but their parameters should be customized to different datasets:
-  - peaks-over-threshold (POT) as in the MTAD-GAT paper
-  - thresholding method proposed by [Hundman et. al.](https://arxiv.org/abs/1802.04431)
-  - brute-force method that searches through "all" possible thresholds and picks the one that gives highest F1 score 
-  - All methods are applied, and their respective results are outputted together for comparison.
-- For CALCE and CALCE2 datasets, we apply Spectral Residual (SR) anomaly detection to identify and replace irregular instances in training data, using a threshold of 3.0 for anomaly detection.
-- Parts of our code should be credited to the following:
-  - [OmniAnomaly](https://github.com/NetManAIOps/OmniAnomaly) for preprocessing and evaluation methods and an implementation of POT
-  - [TelemAnom](https://github.com/khundman/telemanom) for plotting methods and thresholding method
-  - [pyGAT](https://github.com/Diego999/pyGAT) by Diego Antognini for inspiration on GAT-related methods 
-  - Their respective licences are included in ```licences```.
+## 当前目录
 
-
-## :zap: Getting Started 
-To clone the repo:
-```bash
-git clone https://github.com/ML4ITS/mtad-gat-pytorch.git && cd mtad-gat-pytorch
+```text
+mtad-gat-pytorch/
+ src/
+   models/      # 模型与网络模块
+   data/        # 数据工具与数据集辅助
+   engine/      # 训练、预测、评估核心逻辑
+   runners/     # 命令行入口实现
+ configs/
+   internal/    # 主仓实验计划
+   external/    # 外部基线实验计划
+ report/         # 分析报告、模板和汇总文档
+ datasets/       # 原始与预处理数据
+ runs/           # 批量实验输出
+└─ external_baselines/
 ```
 
-Get data:
-```bash
-cd datasets && wget https://s3-us-west-2.amazonaws.com/telemanom/data.zip && unzip data.zip && rm data.zip &&
-cd data && wget https://raw.githubusercontent.com/khundman/telemanom/master/labeled_anomalies.csv &&
-rm -rf 2018-05-19_15.00.10 && cd .. && cd ..
+## 环境使用
 
-```
-This downloads the MSL and SMAP datasets. The SMD dataset is already in repo. 
-We refer to [TelemAnom](https://github.com/khundman/telemanom) and [OmniAnomaly](https://github.com/NetManAIOps/OmniAnomaly) for detailed information regarding these three datasets. 
+如果你本地使用仓库内的解释器，直接调用：
 
-Install dependencies (virtualenv is recommended):
-```bash
-pip install -r requirements.txt 
+```powershell
+.\.python312\python.exe -m pip install -r requirements.txt
 ```
 
-Preprocess the data:
-```bash
-python preprocess.py --dataset <dataset>
-```
-where \<dataset> is one of MSL, SMAP or SMD.
+后续命令默认都可以写成：
 
-To train:
-```bash
- python train.py --dataset <dataset>
-```
-where \<dataset> is one of msl, smap or smd (upper-case also works). If training on SMD, one should specify which machine using the ``` --group``` argument.
-
-You can change the default configuration by adding more arguments. All arguments can be found in ```args.py```. Some examples:
-    
-- Training machine-1-1 of SMD for 10 epochs, using a lookback (window size) of 150:
-```bash 
-python train.py --dataset smd --group 1-1 --lookback 150 --epochs 10 
-```
-  
-- Training MSL for 10 epochs, using standard GAT instead of GATv2 (which is the default), and a validation split of 0.2:
-```bash 
-python train.py --dataset msl --epochs 10 --use_gatv2 False --val_split 0.2
+```powershell
+.\.python312\python.exe -m <module>
 ```
 
-### ⚙️ Default configuration:
-Default parameters can be found in ```args.py```.
+## 常用命令
 
-Data params: 
+### 数据预处理
 
-```--dataset='SMD'```
-```--group='1-1'```
-```--lookback=100```
-```--normalize=True```
-  
-Model params:
-
-```--kernel_size=7```
-```--use_gatv2=True```
-```--feat_gat_embed_dim=None```
-```--time_gat_embed_dim=None``` <br />
-```--gru_n_layers=1```
-```--gru_hid_dim=150```
-```--fc_n_layers=3```
-```--fc_hid_dim=150```
-```--recon_n_layers=1``` <br />
-```--recon_hid_dim=150```
-```--alpha=0.2```
-
-Train params:
-
-```--epochs=30```
-```--val_split=0.1```
-```--bs=256```
-```--init_lr=1e-3```
-```--shuffle_dataset=True```
-```--dropout=0.3```  <br />
-```--use_cuda=True```
-```--print_every=1```
-```--log_tensorboard=True```
-
-Anomaly Predictor params:
-
-```--save_scores=True```
-```--load_scores=False```
-```--gamma=1```
-```--level=None```
-```--q=1e-3```
-```--dynamic_pot=False```  <br />
-```--use_mov_av=False```
-
-  
-## :eyes: Output and visualization results
-Output are saved in ```output/<dataset>/<ID>``` (where the current datetime is used as ID) and include:
-  - ```summary.txt```: performance on test set (precision, recall, F1, etc.)
-  - ```config.txt```: the configuration used for model, training, etc. 
-  - ```train/test.pkl```: saved forecasts, reconstructions, actual, thresholds, etc.
-  - ```train/test_scores.npy```: anomaly scores
-  - ```train/validation_losses.png```: plots of train and validation loss during training
-  - ```model.pt``` model parameters of trained model 
-  
-This repo includes example outputs for MSL, SMAP and SMD machine 1-1.  
-
-```result_visualizer.ipynb``` provides a jupyter notebook for visualizing results. 
-To launch notebook:
-```bash 
-jupyter notebook result_visualizer.ipynb
+```powershell
+.\.python312\python.exe -m src.runners.preprocess --dataset MSL
+.\.python312\python.exe -m src.runners.preprocess --dataset SMAP
+.\.python312\python.exe -m src.runners.preprocess --dataset SMD --group 1-1
 ```
 
-Predicted anomalies are visualized using a blue rectangle. <br />
-Actual (true) anomalies are visualized using a red rectangle. <br />
-Thus, correctly predicted anomalies are visualized by a purple (blue + red) rectangle. <br />
-Some examples:
+### 单次训练
 
-SMD test set (feature 0) | SMD train set (feature 0)
---- | --- 
-<img src="https://i.imgur.com/AFCVhtF.png" alt="drawing" width="730"/> | <img src="https://i.imgur.com/CJ6t8ST.png" alt="drawing" width="730"/>
+```powershell
+.\.python312\python.exe -m src.runners.train --dataset MSL
+.\.python312\python.exe -m src.runners.train --dataset SMAP
+.\.python312\python.exe -m src.runners.train --dataset BMS
+```
 
+### 单次预测
 
-Example from SMAP test set:
-<img src="https://i.imgur.com/XEzUNv7.png" alt="drawing"/>
+```powershell
+.\.python312\python.exe -m src.runners.predict --dataset MSL --model_id -1
+```
 
+### 批量运行主仓计划
 
-Example from MSL test set (note that one anomaly segment is not detected):
-<img src="https://i.imgur.com/h4DU3kE.png" alt="drawing"/>
+```powershell
+.\.python312\python.exe -m src.runners.compare_experiments --plan configs/internal/01_ch3_msl_main.json --skip-existing
+.\.python312\python.exe -m src.runners.compare_experiments --plan configs/internal/03_ch4_nasa_random_main.json --skip-existing
+```
 
-## 🧬 Model Overview
+### 批量运行外部基线
 
-<img src="https://i.imgur.com/s9FuPT4.png" alt="drawing"/>
+```powershell
+.\.python312\python.exe -m src.runners.run_external_baselines --plan configs/external/01_ch3_msl_external.json --skip-existing
+.\.python312\python.exe -m src.runners.run_external_baselines --plan configs/external/02_ch4_nasa_random_external.json --skip-existing
+```
 
-Figure above adapted from [Zhao et al. (2020)](https://arxiv.org/pdf/2009.02040.pdf)
+### 数据分析与报告
 
-1. The raw input data is preprocessed, and then a 1-D convolution is applied in the temporal dimension in order to smooth the data and alleviate possible noise effects.
-2. The output of the 1-D convolution module is processed by two parallel graph attention layer, one feature-oriented and one time-oriented, in order to capture dependencies among features and timestamps, respectively.
-3. The output from the 1-D convolution module and the two GAT modules are concatenated and fed to a GRU layer, to capture longer sequential patterns.
-4. The output from the GRU layer are fed into a forecasting model and a reconstruction model, to get a prediction for the next timestamp, as well as a reconstruction of the input sequence.
-  
-## 📖 GAT layers
-Below we visualize how the two GAT layers view the input as a complete graph. 
+```powershell
+.\.python312\python.exe -m src.runners.analyze --dataset MSL
+.\.python312\python.exe -m src.runners.analyze --dataset NASA_RANDOM_DISCHARGE --nasa_train_batteries RW1,RW2,RW7,RW8 --nasa_test_batteries RW1,RW2,RW7,RW8
+.\.python312\python.exe -m src.runners.build_report
+```
 
-Feature-Oriented GAT layer | Time-Oriented GAT layer
---- | --- 
-<img src="https://i.imgur.com/wVD8oIx.png" alt="drawing" width="700"/> | <img src="https://i.imgur.com/a9PsNB0.png" alt="drawing" width="730"/>
+### 统一入口
 
-**Left**: The feature-oriented GAT layer views the input data as a complete graph where each node represents the values of one feature across all timestamps in the sliding window. 
+```powershell
+.\.python312\python.exe .\run.py internal --plan configs/internal/03_ch4_nasa_random_main.json --skip-existing
+.\.python312\python.exe .\run.py analyze --dataset CH_BATTERY_LFP_DISCHARGE
+.\.python312\python.exe .\run.py full --internal-plan configs/internal/03_ch4_nasa_random_main.json --external-plan configs/external/02_ch4_nasa_random_external.json --analysis-dataset NASA_RANDOM_DISCHARGE --nasa-train-batteries RW1,RW2,RW7,RW8 --nasa-test-batteries RW1,RW2,RW7,RW8
+```
 
-**Right**: The time-oriented GAT layer views the input data as a complete graph in which each node represents the values for all features at a specific timestamp.
+### 导出外部基线所需数据
 
-## 📖 GATv2
-Recently, Brody et al. (2021) proposed [*GATv2*](https://arxiv.org/abs/2105.14491), a modified version of the standard GAT.
+```powershell
+.\.python312\python.exe -m src.runners.prepare_external_baseline_data list --source-dataset MSL
+.\.python312\python.exe -m src.runners.prepare_external_baseline_data export --source-dataset MSL --target tranad --output-dir .\tmp\tranad_msl
+```
 
-They argue that the original GAT can only compute a restricted kind of attention (which they refer to as static) where the ranking of attended nodes is unconditioned on the query node. That is, the ranking of attention weights is global for all nodes in the graph, a property which the authors claim to severely hinders the expressiveness of the GAT. In order to address this, they introduce a simple fix by modifying the order of operations, and propose GATv2, a dynamic attention variant that is strictly more expressive that GAT. We refer to the paper for further reading. The difference between GAT and GATv2 is depicted below:
+## 输出位置
 
-<img src="https://i.imgur.com/agPNXBy.png" alt="drawing" width="700"/> 
+当前仓库统一使用 `runs/`：
 
+- 内部批量实验输出到 `runs/internal/`
+- 外部基线批量实验输出到 `runs/external/`
+- 直接训练和预测输出到 `runs/manual/`
 
+## 主要代码位置
 
+- 参数定义：`src/args.py`
+- 训练入口：`src/runners/train.py`
+- 预测入口：`src/runners/predict.py`
+- 预处理入口：`src/runners/preprocess.py`
+- 主模型：`src/models/mtad_gat.py`
+- 基础模块：`src/models/modules.py`
+- 模型构建：`src/models/model_factory.py`
+- 训练逻辑：`src/engine/training.py`
+- 预测与阈值：`src/engine/prediction.py`
+- 数据工具：`src/data/utils.py`
+- CH-BATTERY 工具：`src/data/ch_battery_utils.py`
 
+## 相关说明
 
+- 主仓实验计划说明见 `configs/README.md`
+- 报告目录说明见 `report/README.md`
+- 外部基线说明见 `external_baselines/BASELINES.md`
+- 第三方引用许可见 `licences/`
 
+## 当前状态
 
-
-
-
-
+- 已完成阶段一：整理结构，不改算法逻辑
+- 入口统一为 `python -m src.runners.*`
+- 已补充数据分析入口、项目报告汇总入口和根目录 `run.py`
+- 历史分析材料和大部分旧实验结果已清理，适合重新组织实验主线

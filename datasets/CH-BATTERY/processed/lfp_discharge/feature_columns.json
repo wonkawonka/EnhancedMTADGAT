@@ -1,9 +1,0 @@
-[
-  "SUM_VOLTAGE",
-  "SUM_CURRENT",
-  "SOC",
-  "MAX_CELL_VOLT",
-  "MIN_CELL_VOLT",
-  "MAX_TEMP",
-  "MIN_TEMP"
-]

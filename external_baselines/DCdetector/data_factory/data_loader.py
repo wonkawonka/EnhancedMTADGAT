@@ -559,7 +559,9 @@ class ProjectProcessedLoader(object):
         return (arr.shape[0] - self.win_size) // self.step + 1
 
     def __getitem__(self, index):
-        index = index * self.step
+        # Keep threshold/eval mode aligned with __len__ by using non-overlapping windows.
+        stride = self.win_size if self.mode == "thre" else self.step
+        index = index * stride
         data = {"train": self.train, "val": self.val, "test": self.test}
         arr = data.get(self.mode, self.test)
         labels = self.test_labels[index:index + self.win_size]

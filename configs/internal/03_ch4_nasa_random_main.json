@@ -1,0 +1,66 @@
+{
+  "plan_name": "03_ch4_nasa_random_main",
+  "_comment": "第四章主结果计划：NASA_RANDOM_DISCHARGE 作为核心电池主线，使用 RW1、RW2、RW7、RW8 四个随机工况序列比较 baseline、c3 与 c3+physics 三个层级。",
+  "_usage": "建议在第三章主结果完成后运行本文件；这是第四章最核心的主表计划。",
+  "_thesis_role": "第四章主结果",
+  "_experiment_mapping": [
+    "nasa_random_mtadgat_baseline：原始 MTAD-GAT baseline。",
+    "nasa_random_c3_reference：第三章 c3 主干迁移到随机工况电池数据后的结果。",
+    "nasa_random_c3_physics_full：在 c3 基础上增加物理状态编码与物理正则化。"
+  ],
+  "common_args": {
+    "dataset": "NASA_RANDOM_DISCHARGE",
+    "nasa_train_batteries": "RW1,RW2,RW7,RW8",
+    "nasa_test_batteries": "RW1,RW2,RW7,RW8",
+    "epochs": 30,
+    "bs": 256,
+    "lookback": 100,
+    "window_stride": 2,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "regime_emb_dim": 32,
+    "regime_condition_mode": "transformer_residual",
+    "regime_stat_features": "mean,std,last,delta",
+    "event_low_ratio": 0.5,
+    "event_min_length": 3,
+    "use_physical_state_encoding": false,
+    "use_physical_regularization": false,
+    "physical_alg_lambda": 0.1,
+    "physical_smooth_lambda": 0.005,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_cuda": true,
+    "log_tensorboard": false,
+    "print_every": 1,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "nasa_random_mtadgat_baseline",
+      "comment": "NASA_RANDOM_DISCHARGE baseline。",
+      "args": {
+        "model_name": "mtad_gat",
+        "run_id": "ch4_nasa_random_mtadgat"
+      }
+    },
+    {
+      "name": "nasa_random_c3_reference",
+      "comment": "NASA_RANDOM_DISCHARGE 上的 c3 参考结果。",
+      "args": {
+        "model_name": "mtad_gat_c3",
+        "run_id": "ch4_nasa_random_c3"
+      }
+    },
+    {
+      "name": "nasa_random_c3_physics_full",
+      "comment": "NASA_RANDOM_DISCHARGE 上的 c3+physics 完整结果。",
+      "args": {
+        "model_name": "mtad_gat_c3",
+        "use_physical_state_encoding": true,
+        "use_physical_regularization": true,
+        "run_id": "ch4_nasa_random_c3_phys"
+      }
+    }
+  ]
+}

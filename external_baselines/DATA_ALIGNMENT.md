@@ -6,12 +6,12 @@
 
 - 主项目自己的 `MTAD-GAT / c3 / c4` 直接读取 `processed`。
 - 外部 baseline 优先直接回退到主仓 `processed`。
-- 只有在某些旧仓强依赖固定文件格式时，才把 `prepare_external_baseline_data.py` 当作备用导出工具。
+- 只有在某些旧仓强依赖固定文件格式时，才把 `src.runners.prepare_external_baseline_data` 当作备用导出工具。
 
 备用导出脚本：
 
-```bash
-python prepare_external_baseline_data.py
+```powershell
+.\.python312\python.exe -m src.runners.prepare_external_baseline_data
 ```
 
 ## 主仓 processed 现状
@@ -150,8 +150,8 @@ python prepare_external_baseline_data.py
 
 当前仍建议用备用导出脚本先对齐：
 
-```bash
-python prepare_external_baseline_data.py export ^
+```powershell
+.\.python312\python.exe -m src.runners.prepare_external_baseline_data export ^
   --source-dataset SMAP ^
   --target lstm_ae ^
   --output-dir external_baselines/LSTM-AE/project_data/SMAP ^
@@ -177,14 +177,14 @@ python prepare_external_baseline_data.py export ^
 
 列出一个数据集下可导出的序列：
 
-```bash
-python prepare_external_baseline_data.py list --source-dataset BMS
+```powershell
+.\.python312\python.exe -m src.runners.prepare_external_baseline_data list --source-dataset BMS
 ```
 
 如果后续某个仓必须使用显式导出文件，可用：
 
-```bash
-python prepare_external_baseline_data.py export ^
+```powershell
+.\.python312\python.exe -m src.runners.prepare_external_baseline_data export ^
   --source-dataset SMAP ^
   --target tranad ^
   --output-dir external_baselines/TranAD/processed ^
@@ -195,8 +195,8 @@ python prepare_external_baseline_data.py export ^
 
 导出 `MSL` 给 `Anomaly-Transformer`：
 
-```bash
-python prepare_external_baseline_data.py export ^
+```powershell
+.\.python312\python.exe -m src.runners.prepare_external_baseline_data export ^
   --source-dataset MSL ^
   --target anomaly_transformer ^
   --output-dir external_baselines/Anomaly-Transformer/dataset/MSL ^
@@ -206,8 +206,8 @@ python prepare_external_baseline_data.py export ^
 
 导出 `BMS cluster1` 给 `GDN`：
 
-```bash
-python prepare_external_baseline_data.py export ^
+```powershell
+.\.python312\python.exe -m src.runners.prepare_external_baseline_data export ^
   --source-dataset BMS ^
   --series-name BMS_B14_3_2_cluster1 ^
   --target gdn ^

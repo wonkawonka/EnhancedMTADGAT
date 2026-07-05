@@ -1,0 +1,58 @@
+{
+  "plan_name": "04_ch4_nasa_random_physics_ablation",
+  "_comment": "第四章物理增强消融计划：只保留 NASA_RANDOM_DISCHARGE 上最关键的两个物理模块拆分，控制实验规模同时保证可解释性。",
+  "_usage": "建议在 03_ch4_nasa_random_main.json 完成后运行；如果预算有限，优先跑 phys_encoding_only。",
+  "_thesis_role": "第四章物理增强消融",
+  "_experiment_mapping": [
+    "nasa_random_phys_encoding_only：仅启用物理状态编码。",
+    "nasa_random_phys_reg_only：仅启用物理正则化。"
+  ],
+  "common_args": {
+    "dataset": "NASA_RANDOM_DISCHARGE",
+    "nasa_train_batteries": "RW1,RW2,RW7,RW8",
+    "nasa_test_batteries": "RW1,RW2,RW7,RW8",
+    "model_name": "mtad_gat_c3",
+    "epochs": 30,
+    "bs": 256,
+    "lookback": 100,
+    "window_stride": 2,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "regime_emb_dim": 32,
+    "regime_condition_mode": "transformer_residual",
+    "regime_stat_features": "mean,std,last,delta",
+    "event_low_ratio": 0.5,
+    "event_min_length": 3,
+    "use_physical_state_encoding": false,
+    "use_physical_regularization": false,
+    "physical_alg_lambda": 0.1,
+    "physical_smooth_lambda": 0.005,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_cuda": true,
+    "log_tensorboard": false,
+    "print_every": 1,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "nasa_random_phys_encoding_only",
+      "comment": "仅启用物理状态编码。",
+      "args": {
+        "use_physical_state_encoding": true,
+        "use_physical_regularization": false,
+        "run_id": "ch4abl_nasa_random_phys_enc"
+      }
+    },
+    {
+      "name": "nasa_random_phys_reg_only",
+      "comment": "仅启用物理正则化。",
+      "args": {
+        "use_physical_state_encoding": false,
+        "use_physical_regularization": true,
+        "run_id": "ch4abl_nasa_random_phys_reg"
+      }
+    }
+  ]
+}

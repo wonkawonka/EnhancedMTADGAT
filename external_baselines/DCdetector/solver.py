@@ -1,4 +1,4 @@
-"""DCdetector 训练/测试求解器，并在测试阶段导出统一格式结果。"""
+"""DCdetector training/testing solver that exports standardized results during the testing phase."""
 
 import torch
 import torch.nn as nn

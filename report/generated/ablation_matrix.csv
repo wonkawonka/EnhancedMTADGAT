@@ -1,0 +1,8 @@
+﻿plan_name,experiment_name,comment,dataset,model_name,use_transformer,use_regime_condition,use_revin,score_fusion_mode,use_event_consistency,use_physical_state_encoding,use_physical_regularization,nasa_train_batteries,nasa_test_batteries
+02_ch3_msl_ablation,msl_no_transformer,关闭 Transformer 残差分支，并将状态注入方式切回 fusion。,MSL,mtad_gat,False,True,True,quality_aware,True,False,False,,
+02_ch3_msl_ablation,msl_no_regime,关闭状态感知调制。,MSL,mtad_gat,True,False,True,quality_aware,True,False,False,,
+02_ch3_msl_ablation,msl_no_revin,关闭 RevIN。,MSL,mtad_gat_c3,True,True,False,quality_aware,True,False,False,,
+02_ch3_msl_ablation,msl_fixed_fusion,将 quality-aware 融合退回 fixed。,MSL,mtad_gat_c3,True,True,True,fixed,True,False,False,,
+02_ch3_msl_ablation,msl_no_event,关闭事件一致性。,MSL,mtad_gat_c3,True,True,True,quality_aware,False,False,False,,
+04_ch4_nasa_random_physics_ablation,nasa_random_phys_encoding_only,仅启用物理状态编码。,NASA_RANDOM_DISCHARGE,mtad_gat_c3,,,,,,True,False,"RW1,RW2,RW7,RW8","RW1,RW2,RW7,RW8"
+04_ch4_nasa_random_physics_ablation,nasa_random_phys_reg_only,仅启用物理正则化。,NASA_RANDOM_DISCHARGE,mtad_gat_c3,,,,,,False,True,"RW1,RW2,RW7,RW8","RW1,RW2,RW7,RW8"
