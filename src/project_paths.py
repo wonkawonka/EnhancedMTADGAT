@@ -74,6 +74,11 @@ def resolve_dataset_root(dataset_name: str | None = None, default_relative: str 
     env_root = os.getenv("MTAD_GAT_DATASETS_ROOT")
     if env_root:
         base = Path(env_root)
+    elif DATASETS_ROOT.exists():
+        # Kaggle always exposes /kaggle/input, but a repository can carry the
+        # required datasets itself. Prefer that reproducible project-local copy
+        # and use a Kaggle input only when the local dataset root is absent.
+        base = DATASETS_ROOT
     elif KAGGLE_INPUT_ROOT.exists():
         base = KAGGLE_INPUT_ROOT
     else:
