@@ -11,6 +11,7 @@ import numpy as np
 import torch
 
 from src.args import apply_dataset_defaults, get_parser
+from src.analysis.regime_evaluation import save_bms_operational_report, save_nasa_regime_probe
 from src.data.ch_battery_utils import (
     CH_BATTERY_DATASET_NAME,
     aggregate_ch_battery_sample_scores,
@@ -18,13 +19,18 @@ from src.data.ch_battery_utils import (
     save_ch_battery_sample_level_reports,
 )
 from src.data.utils import *
+from src.data.tsinghua_ev_utils import (
+    DATASET_NAME as TSINGHUA_EV_DATASET_NAME,
+    aggregate_sample_scores,
+    get_tsinghua_ev_data,
+)
 from src.engine.prediction import Predictor
 from src.engine.training import Trainer
 from src.models.model_factory import build_model, resolve_model_args, resolve_physical_state_config
-from src.project_paths import MANUAL_RUNS_ROOT, processed_dataset_path
+from src.project_paths import MANUAL_RUNS_ROOT
 from src.runners.predict_ch_battery_light import run_light_predict
 
-NASA_ENTITY_DATASETS = {"NASA", "NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"}
+NASA_SEQUENCE_DATASETS = {"NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"}
 
 
 def resolve_manual_output_root(dataset, group=None, universal_model=False):
@@ -134,6 +140,21 @@ def set_seed(seed=3407):
     torch.backends.cudnn.benchmark = False
 
 
+def validate_accelerator(args):
+    cuda_available = torch.cuda.is_available()
+    if getattr(args, "require_cuda", False) and (not args.use_cuda or not cuda_available):
+        raise RuntimeError(
+            "CUDA is required but unavailable. Enable the Kaggle GPU accelerator and "
+            "verify that PyTorch was installed with CUDA support."
+        )
+    if args.use_cuda and not cuda_available:
+        print("WARNING: CUDA requested but unavailable; falling back to CPU.")
+    elif args.use_cuda:
+        device_name = torch.cuda.get_device_name(0)
+        memory_gb = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+        print(f"CUDA ready: {device_name}, memory={memory_gb:.1f} GiB, torch={torch.__version__}")
+
+
 def get_run_id(args):
     """
     根据参数生成运行 ID。
@@ -203,6 +224,9 @@ def build_trainer(model, optimizer, args, window_size, n_features, target_dims, 
         persistent_workers=getattr(args, "persistent_workers", True),
         prefetch_factor=getattr(args, "prefetch_factor", 2),
         window_stride=getattr(args, "window_stride", 1),
+        regime_aux_lambda=getattr(args, "regime_aux_lambda", 0.0),
+        early_stopping_patience=getattr(args, "early_stopping_patience", 0),
+        early_stopping_min_delta=getattr(args, "early_stopping_min_delta", 1e-4),
     )
 
 
@@ -353,12 +377,10 @@ def train_universal_model(args):
 
             # 配置预测参数
             level_q_dict = {
-                "SMAP": (0.90, 0.005),
                 "MSL": (0.90, 0.001),
                 "SMD-1": (0.9950, 0.001),
                 "SMD-2": (0.9925, 0.001),
                 "SMD-3": (0.9999, 0.001),
-                "NASA": (0.99, 0.001),
                 "CALCE": (0.95, 0.01),  # 为CALCE调整参数以适应无监督设置
                 "CALCE2": (0.90, 0.01)  # 为CALCE2调整参数以适应无监督设置
             }
@@ -370,7 +392,7 @@ def train_universal_model(args):
                 q = args.q
 
             # Epsilon 参数建议
-            reg_level_dict = {"SMAP": 0, "MSL": 0, "SMD-1": 1, "SMD-2": 1, "SMD-3": 1, "NASA": 0, "CALCE": 0, "CALCE2": 0}
+            reg_level_dict = {"MSL": 0, "SMD-1": 1, "SMD-2": 1, "SMD-3": 1, "CALCE": 0, "CALCE2": 0}
             key = "SMD-" + args.group[0] if dataset == "SMD" else dataset
             reg_level = reg_level_dict[key]
 
@@ -389,6 +411,14 @@ def train_universal_model(args):
                 "use_mov_av": args.use_mov_av,
                 "gamma": args.gamma,
                 "score_fusion_mode": args.score_fusion_mode,
+                "use_physical_response_score": getattr(args, "use_physical_response_score", False),
+                "physical_response_config": resolve_physical_state_config(args),
+                "physical_response_max_weight": getattr(args, "physical_response_max_weight", 0.35),
+                "predict_batch_size": getattr(args, "predict_batch_size", 128),
+                "predict_num_workers": getattr(args, "predict_num_workers", 2),
+                "predict_pin_memory": getattr(args, "predict_pin_memory", True),
+                "use_cuda": getattr(args, "use_cuda", True),
+                "window_stride": getattr(args, "window_stride", 1),
                 "use_event_consistency": args.use_event_consistency,
                 "event_low_ratio": args.event_low_ratio,
                 "event_min_length": args.event_min_length,
@@ -424,6 +454,8 @@ if __name__ == "__main__":
     args = apply_dataset_defaults(parser.parse_args())
     resolve_model_args(args)
 
+    validate_accelerator(args)
+
     # 设置随机种子以确保实验可重现性
     set_seed(args.seed)
 
@@ -452,29 +484,26 @@ if __name__ == "__main__":
         args_summary = str(args.__dict__)
         print(args_summary)
 
+        explicit_validation_data = None
+
         if dataset == 'SMD':
             output_path = resolve_manual_output_root(dataset, group=args.group)
             (x_train, _), (x_test, y_test) = get_data(f"machine-{group_index}-{index}", normalize=normalize)
-        elif dataset in ['MSL', 'SMAP']:
+        elif dataset == 'MSL':
             output_path = resolve_manual_output_root(dataset)
-            (x_train, _), (x_test, y_test) = get_data(dataset, normalize=normalize)
-        elif dataset in NASA_ENTITY_DATASETS:
+            x_train, explicit_validation_data, x_test, y_test = get_msl_sequence_data(
+                val_ratio=val_split,
+                normalize=normalize,
+            )
+        elif dataset in NASA_SEQUENCE_DATASETS:
             output_path = resolve_manual_output_root(dataset)
-            if dataset == "NASA":
-                (x_train, _), (x_test, y_test) = get_nasa_battery_data(
-                    normalize=normalize,
-                    nasa_battery_id=args.nasa_battery_id,
-                    nasa_train_batteries=args.nasa_train_batteries,
-                    nasa_test_batteries=args.nasa_test_batteries,
-                )
-            else:
-                (x_train, _), (x_test, y_test) = get_nasa_random_battery_data(
-                    dataset,
-                    normalize=normalize,
-                    nasa_battery_id=args.nasa_battery_id,
-                    nasa_train_batteries=args.nasa_train_batteries,
-                    nasa_test_batteries=args.nasa_test_batteries,
-                )
+            (x_train, _), (x_test, y_test) = get_nasa_random_battery_data(
+                dataset,
+                normalize=normalize,
+                nasa_battery_id=args.nasa_battery_id,
+                nasa_train_batteries=args.nasa_train_batteries,
+                nasa_test_batteries=args.nasa_test_batteries,
+            )
         elif dataset in ['CALCE', 'CALCE2']:
             output_path = resolve_manual_output_root(dataset)
             (x_train, _), (x_test, y_test) = get_data(dataset, normalize=normalize)
@@ -491,6 +520,18 @@ if __name__ == "__main__":
                 preprocessed_dir=args.ch_battery_preprocessed_dir,
             )
             y_test = ch_battery_split_meta["test_metadata"]
+        elif dataset == TSINGHUA_EV_DATASET_NAME:
+            output_path = resolve_manual_output_root(dataset)
+            (x_train, _), (x_test, y_test), tsinghua_split_meta = get_tsinghua_ev_data(
+                root=args.tsinghua_ev_root,
+                normalize=normalize,
+                train_ratio=args.tsinghua_ev_train_ratio,
+                validation_ratio=args.tsinghua_ev_validation_ratio,
+                max_train_samples=args.tsinghua_ev_max_train_samples,
+                max_validation_samples=args.tsinghua_ev_max_validation_samples,
+                max_test_samples_per_class=args.tsinghua_ev_max_test_samples_per_class,
+                seed=args.seed,
+            )
         else:
             raise Exception(f'Dataset "{dataset}" not available.')
 
@@ -507,7 +548,11 @@ if __name__ == "__main__":
         nasa_train_tensors = None
         bms_train_tensors = None
         ch_battery_train_tensors = None
-        if dataset in NASA_ENTITY_DATASETS and isinstance(x_train, dict):
+        tsinghua_train_tensors = None
+        tsinghua_validation_tensors = None
+        explicit_validation_tensor = None
+        segmented_train_tensors = None
+        if dataset in NASA_SEQUENCE_DATASETS and isinstance(x_train, dict):
             nasa_train_tensors = {battery_name: _to_tensor_sequence_container(battery_data)
                                   for battery_name, battery_data in x_train.items()}
             first_train_battery = next(iter(nasa_train_tensors))
@@ -524,12 +569,30 @@ if __name__ == "__main__":
             }
             first_train_sample = next(iter(ch_battery_train_tensors))
             x_train = ch_battery_train_tensors[first_train_sample]
+        elif dataset == TSINGHUA_EV_DATASET_NAME and isinstance(x_train, dict):
+            tsinghua_train_tensors = {
+                sample_id: torch.from_numpy(sample_data).float()
+                for sample_id, sample_data in x_train.items()
+            }
+            tsinghua_validation_tensors = {
+                sample_id: torch.from_numpy(sample_data).float()
+                for sample_id, sample_data in tsinghua_split_meta["validation_data"].items()
+            }
+            x_train = next(iter(tsinghua_train_tensors.values()))
+        elif is_sequence_container(x_train):
+            segmented_train_tensors = _to_tensor_sequence_container(x_train)
+            x_train = _get_first_sequence_tensor(segmented_train_tensors)
+            explicit_validation_tensor = _to_tensor_sequence_container(explicit_validation_data)
         else:
             x_train = torch.from_numpy(x_train).float()
+            if explicit_validation_data is not None:
+                explicit_validation_tensor = torch.from_numpy(explicit_validation_data).float()
         nasa_test_tensors = None
         bms_test_tensors = None
         ch_battery_test_tensors = None
-        if dataset in NASA_ENTITY_DATASETS and isinstance(x_test, dict):
+        tsinghua_test_tensors = None
+        segmented_test_tensors = None
+        if dataset in NASA_SEQUENCE_DATASETS and isinstance(x_test, dict):
             nasa_test_tensors = {battery_name: _to_tensor_sequence_container(battery_data)
                                  for battery_name, battery_data in x_test.items()}
             first_test_battery = next(iter(nasa_test_tensors))
@@ -546,6 +609,15 @@ if __name__ == "__main__":
             }
             first_test_sample = next(iter(ch_battery_test_tensors))
             x_test = ch_battery_test_tensors[first_test_sample]
+        elif dataset == TSINGHUA_EV_DATASET_NAME and isinstance(x_test, dict):
+            tsinghua_test_tensors = {
+                sample_id: torch.from_numpy(sample_data).float()
+                for sample_id, sample_data in x_test.items()
+            }
+            x_test = next(iter(tsinghua_test_tensors.values()))
+        elif is_sequence_container(x_test):
+            segmented_test_tensors = _to_tensor_sequence_container(x_test)
+            x_test = _get_first_sequence_tensor(segmented_test_tensors)
         else:
             x_test = torch.from_numpy(x_test).float()
         n_features = x_train.shape[1]
@@ -561,7 +633,22 @@ if __name__ == "__main__":
             print(f"Will forecast and reconstruct input features: {target_dims}")
             out_dim = len(target_dims)
 
-        if dataset in NASA_ENTITY_DATASETS and nasa_train_tensors is not None:
+        validation_dataset = None
+
+        if segmented_train_tensors is not None:
+            train_dataset = _build_concat_window_dataset(
+                segmented_train_tensors,
+                window_size,
+                target_dims,
+                window_stride=args.window_stride,
+            )
+            validation_dataset = _build_concat_window_dataset(
+                explicit_validation_tensor,
+                window_size,
+                target_dims,
+                window_stride=args.window_stride,
+            )
+        elif dataset in NASA_SEQUENCE_DATASETS and nasa_train_tensors is not None:
             train_sub_datasets = []
             for battery_tensor in nasa_train_tensors.values():
                 train_sub_datasets.append(
@@ -589,6 +676,19 @@ if __name__ == "__main__":
                 if len(sample_tensor) > window_size
             ]
             train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
+        elif dataset == TSINGHUA_EV_DATASET_NAME and tsinghua_train_tensors is not None:
+            train_sub_datasets = [
+                SlidingWindowDataset(sample_tensor, window_size, target_dims, stride=args.window_stride)
+                for sample_tensor in tsinghua_train_tensors.values()
+                if len(sample_tensor) > window_size
+            ]
+            train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
+            validation_sub_datasets = [
+                SlidingWindowDataset(sample_tensor, window_size, target_dims, stride=args.window_stride)
+                for sample_tensor in tsinghua_validation_tensors.values()
+                if len(sample_tensor) > window_size
+            ]
+            validation_dataset = torch.utils.data.ConcatDataset(validation_sub_datasets)
         else:
             train_dataset = SlidingWindowDataset(
                 x_train,
@@ -596,6 +696,13 @@ if __name__ == "__main__":
                 target_dims,
                 stride=args.window_stride,
             )
+            if explicit_validation_tensor is not None:
+                validation_dataset = SlidingWindowDataset(
+                    explicit_validation_tensor,
+                    window_size,
+                    target_dims,
+                    stride=args.window_stride,
+                )
 
         if dataset in {"NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"} and nasa_train_tensors is not None:
             _print_nasa_random_window_summary(
@@ -619,8 +726,22 @@ if __name__ == "__main__":
                 if len(sample_tensor) > window_size
             ]
             test_dataset = torch.utils.data.ConcatDataset(test_sub_datasets)
+        elif dataset == TSINGHUA_EV_DATASET_NAME and tsinghua_test_tensors is not None:
+            test_sub_datasets = [
+                SlidingWindowDataset(sample_tensor, window_size, target_dims, stride=args.window_stride)
+                for sample_tensor in tsinghua_test_tensors.values()
+                if len(sample_tensor) > window_size
+            ]
+            test_dataset = torch.utils.data.ConcatDataset(test_sub_datasets)
         else:
-            if is_sequence_container(x_test):
+            if segmented_test_tensors is not None:
+                test_dataset = _build_concat_window_dataset(
+                    segmented_test_tensors,
+                    window_size,
+                    target_dims,
+                    window_stride=args.window_stride,
+                )
+            elif is_sequence_container(x_test):
                 test_dataset = _build_concat_window_dataset(
                     x_test,
                     window_size,
@@ -641,6 +762,7 @@ if __name__ == "__main__":
             val_split,
             shuffle_dataset,
             test_dataset=test_dataset,
+            val_dataset=validation_dataset,
             num_workers=args.num_workers,
             pin_memory=torch.cuda.is_available(),
             persistent_workers=args.persistent_workers,
@@ -674,7 +796,7 @@ if __name__ == "__main__":
             raise SystemExit(0)
 
         # NASA 实体数据集单独评估测试实体
-        if dataset in NASA_ENTITY_DATASETS and nasa_test_tensors is not None:
+        if dataset in NASA_SEQUENCE_DATASETS and nasa_test_tensors is not None:
             loader_options = resolve_dataloader_options(
                 num_workers=args.num_workers,
                 pin_memory=torch.cuda.is_available(),
@@ -761,6 +883,9 @@ if __name__ == "__main__":
             print(f"Mean test forecast loss: {mean_test_loss[0]:.5f}")
             print(f"Mean test reconstruction loss: {mean_test_loss[1]:.5f}")
             print(f"Mean test total loss: {mean_test_loss[2]:.5f}")
+        elif dataset == TSINGHUA_EV_DATASET_NAME and tsinghua_test_tensors is not None:
+            test_loss = trainer.evaluate(test_loader)
+            print(f"Tsinghua EV test total loss: {test_loss[2]:.5f}")
         else:
             test_loss = trainer.evaluate(test_loader)
             print(f"Test forecast loss: {test_loss[0]:.5f}")
@@ -769,18 +894,17 @@ if __name__ == "__main__":
 
         # POT 参数建议
         level_q_dict = {
-            "SMAP": (0.90, 0.005),
             "MSL": (0.90, 0.001),
             "SMD-1": (0.9950, 0.001),
             "SMD-2": (0.9925, 0.001),
             "SMD-3": (0.9999, 0.001),
-            "NASA": (0.99, 0.001),
             "NASA_RANDOM_CHARGE": (0.99, 0.001),
             "NASA_RANDOM_DISCHARGE": (0.99, 0.001),
             "CALCE": (0.95, 0.01),   # 为CALCE调整参数以适应无监督设置
             "CALCE2": (0.90, 0.01),   # 为CALCE2调整参数以适应无监督设置
             "BMS": (0.99, 0.001),      # BMS数据集参数
             CH_BATTERY_DATASET_NAME: (0.99, 0.001),
+            TSINGHUA_EV_DATASET_NAME: (0.99, 0.001),
         }
         key = "SMD-" + args.group[0] if args.dataset == "SMD" else args.dataset
         level, q = level_q_dict[key]
@@ -791,17 +915,16 @@ if __name__ == "__main__":
 
         # Epsilon 参数建议
         reg_level_dict = {
-            "SMAP": 0,
             "MSL": 0,
             "SMD-1": 1,
             "SMD-2": 1,
             "SMD-3": 1,
-            "NASA": 0,
             "NASA_RANDOM_CHARGE": 0,
             "NASA_RANDOM_DISCHARGE": 0,
             "CALCE": 0,
             "BMS": 0,
             CH_BATTERY_DATASET_NAME: 0,
+            TSINGHUA_EV_DATASET_NAME: 0,
         }
         key = "SMD-" + args.group[0] if dataset == "SMD" else dataset
         reg_level = reg_level_dict[key]
@@ -821,6 +944,14 @@ if __name__ == "__main__":
             "use_mov_av": args.use_mov_av,
             "gamma": args.gamma,
             "score_fusion_mode": args.score_fusion_mode,
+            "use_physical_response_score": getattr(args, "use_physical_response_score", False),
+            "physical_response_config": resolve_physical_state_config(args),
+            "physical_response_max_weight": getattr(args, "physical_response_max_weight", 0.35),
+            "predict_batch_size": getattr(args, "predict_batch_size", 128),
+            "predict_num_workers": getattr(args, "predict_num_workers", 2),
+            "predict_pin_memory": getattr(args, "predict_pin_memory", True),
+            "use_cuda": getattr(args, "use_cuda", True),
+            "window_stride": getattr(args, "window_stride", 1),
             "use_event_consistency": args.use_event_consistency,
             "event_low_ratio": args.event_low_ratio,
             "event_min_length": args.event_min_length,
@@ -839,74 +970,7 @@ if __name__ == "__main__":
             )
             raise SystemExit(0)
 
-        if dataset == "NASA" and nasa_test_tensors is not None:
-            try:
-                processed_prefix = str(processed_dataset_path("NASA"))
-                train_batteries, report_test_batteries = resolve_nasa_batteries(
-                    processed_prefix,
-                    nasa_battery_id=args.nasa_battery_id,
-                    nasa_train_batteries=args.nasa_train_batteries,
-                    nasa_test_batteries=args.nasa_test_batteries,
-                )
-
-                nasa_case_summaries = []
-                total_batteries = len(nasa_test_tensors)
-                for idx, (battery_name, battery_tensor) in enumerate(nasa_test_tensors.items(), 1):
-                    print(f"[NASA] Predicting battery {idx}/{total_batteries}: {battery_name}")
-                    battery_save_path = save_path if len(nasa_test_tensors) == 1 else os.path.join(save_path, f"battery_{battery_name}")
-                    if len(nasa_test_tensors) > 1:
-                        os.makedirs(battery_save_path, exist_ok=True)
-
-                    battery_prediction_args = dict(prediction_args)
-                    battery_prediction_args["save_path"] = battery_save_path
-                    predictor = Predictor(
-                        best_model,
-                        window_size,
-                        n_features,
-                        battery_prediction_args,
-                    )
-
-                    battery_label = None
-                    if isinstance(y_test, dict):
-                        raw_label = y_test.get(battery_name)
-                        if raw_label is not None:
-                            battery_label = raw_label[window_size:]
-
-                    train_reference = nasa_train_tensors if nasa_train_tensors is not None else x_train
-                    predictor.predict_anomalies(train_reference, battery_tensor, battery_label)
-
-                    del predictor
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    gc.collect()
-
-                    _, raw_test_data, _ = load_nasa_processed_data(processed_prefix, battery_name)
-                    raw_test_data = np.asarray(raw_test_data, dtype=np.float32)
-                    capacities = raw_test_data[window_size:, -1] if raw_test_data.ndim == 2 and raw_test_data.shape[1] >= 7 else None
-                    cycle_numbers = raw_test_data[window_size:, 0] if raw_test_data.ndim == 2 and raw_test_data.shape[1] >= 1 else None
-                    if capacities is None or cycle_numbers is None:
-                        continue
-
-                    test_pred_df = pd.read_pickle(f"{battery_save_path}/test_output.pkl")
-                    case_summary = save_nasa_case_outputs(
-                        battery_save_path,
-                        test_pred_df,
-                        capacities,
-                        cycle_numbers,
-                        battery_name,
-                        train_batteries,
-                        report_test_batteries,
-                    )
-                    nasa_case_summaries.append(case_summary)
-
-                save_nasa_battery_comparison(save_path, nasa_case_summaries)
-
-                print("NASA专用输出已生成（曲线图、案例分析、分数趋势、电池间对比）")
-            except Exception as e:
-                print(f"NASA专用报告生成出错: {e}")
-                import traceback
-                traceback.print_exc()
-        elif dataset in {"NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"} and nasa_test_tensors is not None:
+        if dataset in NASA_SEQUENCE_DATASETS and nasa_test_tensors is not None:
             total_batteries = len(nasa_test_tensors)
             for idx, (battery_name, battery_tensor) in enumerate(nasa_test_tensors.items(), 1):
                 print(f"[{dataset}] Predicting battery {idx}/{total_batteries}: {battery_name}")
@@ -938,6 +1002,14 @@ if __name__ == "__main__":
                 gc.collect()
 
             print(f"{dataset}按电池输出已生成（联合训练、分电池测试）")
+            regime_report = save_nasa_regime_probe(
+                save_path,
+                best_model,
+                nasa_train_tensors,
+                nasa_test_tensors,
+                window_size,
+            )
+            print(f"[{dataset}] regime probe: {regime_report}")
         elif dataset == "BMS" and bms_test_tensors is not None:
             total_clusters = len(bms_test_tensors)
             train_reference = bms_train_tensors if bms_train_tensors is not None else x_train
@@ -987,6 +1059,8 @@ if __name__ == "__main__":
                 gc.collect()
 
             print("BMS按簇输出已生成（联合训练、分簇测试，训练基线缓存复用）")
+            operational_report = save_bms_operational_report(save_path, bms_test_tensors, window_size)
+            print(f"[BMS] operational stability: {operational_report}")
         elif dataset == CH_BATTERY_DATASET_NAME and ch_battery_test_tensors is not None:
             total_samples = len(ch_battery_test_tensors)
             train_reference = ch_battery_train_tensors if ch_battery_train_tensors is not None else x_train
@@ -1045,6 +1119,73 @@ if __name__ == "__main__":
                 score_field=args.ch_battery_sample_score,
             )
             print(f"[{dataset}] sample-level summary: {sample_summary}")
+        elif dataset == TSINGHUA_EV_DATASET_NAME and tsinghua_test_tensors is not None:
+            from sklearn.metrics import (
+                average_precision_score,
+                balanced_accuracy_score,
+                f1_score,
+                precision_score,
+                recall_score,
+                roc_auc_score,
+            )
+
+            predictor = Predictor(best_model, window_size, n_features, prediction_args)
+            validation_window_scores = predictor.get_sample_map_scores(tsinghua_validation_tensors)
+            calibration_scores, _, _ = aggregate_sample_scores(
+                validation_window_scores,
+                tsinghua_split_meta["validation_metadata"],
+                top_ratio=args.sample_score_top_ratio,
+            )
+            test_window_scores = predictor.get_sample_map_scores(tsinghua_test_tensors)
+            sample_scores, sample_labels, sample_ids = aggregate_sample_scores(
+                test_window_scores,
+                y_test,
+                top_ratio=args.sample_score_top_ratio,
+            )
+            threshold = float(np.quantile(calibration_scores, 0.95))
+            sample_predictions = (sample_scores >= threshold).astype(np.int64)
+            report = {
+                "label_level": "charging_snippet",
+                "vehicle_identity_available": False,
+                "sample_count": int(len(sample_ids)),
+                "normal_sample_count": int(np.sum(sample_labels == 0)),
+                "abnormal_sample_count": int(np.sum(sample_labels == 1)),
+                "auroc": float(roc_auc_score(sample_labels, sample_scores)),
+                "auprc": float(average_precision_score(sample_labels, sample_scores)),
+                "f1_at_calibration_normal_p95": float(f1_score(sample_labels, sample_predictions)),
+                "precision_at_calibration_normal_p95": float(
+                    precision_score(sample_labels, sample_predictions, zero_division=0)
+                ),
+                "recall_at_calibration_normal_p95": float(recall_score(sample_labels, sample_predictions)),
+                "false_positive_rate_at_calibration_normal_p95": float(np.mean(sample_predictions[sample_labels == 0])),
+                "specificity_at_calibration_normal_p95": float(
+                    1.0 - np.mean(sample_predictions[sample_labels == 0])
+                ),
+                "balanced_accuracy_at_calibration_normal_p95": float(
+                    balanced_accuracy_score(sample_labels, sample_predictions)
+                ),
+                "threshold_validation_normal_p95": threshold,
+                "model_parameters": int(sum(parameter.numel() for parameter in best_model.parameters())),
+                "inference_efficiency": dict(predictor.last_scoring_stats),
+                "physical_response_mae_by_term": dict(predictor.last_physical_response_term_summary),
+                "score_calibration": predictor.get_calibration_summary(),
+            }
+            pd.DataFrame({
+                "sample_id": sample_ids,
+                "label": sample_labels,
+                "score": sample_scores,
+                "prediction": sample_predictions,
+            }).to_csv(os.path.join(save_path, "sample_scores.csv"), index=False)
+            with open(os.path.join(save_path, "sample_metrics.json"), "w") as handle:
+                json.dump(report, handle, indent=2)
+            split_report = {
+                key: value for key, value in tsinghua_split_meta.items()
+                if key.endswith("_count") or key.endswith("_ratio_normal")
+                or key in {"label_level", "vehicle_identity_available", "split_warning"}
+            }
+            with open(os.path.join(save_path, "dataset_split.json"), "w") as handle:
+                json.dump(split_report, handle, indent=2)
+            print(f"[{dataset}] snippet-level metrics: {report}")
         else:
             predictor = Predictor(
                 best_model,
@@ -1053,12 +1194,20 @@ if __name__ == "__main__":
                 prediction_args,
             )
 
-            label = y_test[window_size:] if y_test is not None else None
-            predictor.predict_anomalies(x_train, x_test, label)
+            if is_sequence_container(y_test):
+                label = y_test
+            else:
+                label = y_test[window_size:] if y_test is not None else None
+            calibration_reference = explicit_validation_tensor if explicit_validation_tensor is not None else x_train
+            test_reference = segmented_test_tensors if segmented_test_tensors is not None else x_test
+            if is_sequence_container(calibration_reference):
+                predictor.get_sample_map_scores({
+                    f"calibration_{index}": sequence
+                    for index, sequence in enumerate(calibration_reference)
+                })
+            predictor.predict_anomalies(calibration_reference, test_reference, label)
 
         # 保存训练配置
         args_path = f"{save_path}/config.txt"
         with open(args_path, "w") as f:
             json.dump(args.__dict__, f, indent=2)
-
-

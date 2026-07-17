@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="700" viewBox="0 0 1800 700">
+  <defs>
+    <style>
+      .label { font: 700 17px Arial, sans-serif; fill: #17242a; }
+      .small { font: 400 13px Arial, sans-serif; fill: #405159; }
+      .tiny { font: 400 11px Arial, sans-serif; fill: #526269; }
+      .math { font: italic 14px Georgia, serif; fill: #24343a; }
+      .group-title { font: 700 15px Arial, sans-serif; fill: #34464d; }
+      .inherited { fill: #eaf3f7; stroke: #657b84; stroke-width: 1.8; }
+      .added { fill: #fff3e6; stroke: #df6a25; stroke-width: 2; }
+      .output { fill: #edf7f1; stroke: #33835e; stroke-width: 1.8; }
+      .neutral { fill: #ffffff; stroke: #74878e; stroke-width: 1.7; }
+      .group { fill: #f8fbfc; stroke: #7b8d93; stroke-width: 1.6; stroke-dasharray: 7 5; }
+      .arrow { fill: none; stroke: #52686f; stroke-width: 2; marker-end: url(#arrow); }
+      .loss { fill: none; stroke: #df6a25; stroke-width: 1.8; stroke-dasharray: 7 5; marker-end: url(#arrowOrange); }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,7 L9,3.5 z" fill="#52686f"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,7 L9,3.5 z" fill="#df6a25"/>
+    </marker>
+  </defs>
+
+  <rect width="1800" height="700" fill="#ffffff"/>
+
+  <!-- Legend -->
+  <rect x="38" y="28" width="22" height="15" rx="2" class="inherited"/>
+  <text x="70" y="41" class="small">inherited Chapter 3 modules</text>
+  <rect x="270" y="28" width="22" height="15" rx="2" class="added"/>
+  <text x="302" y="41" class="small">Chapter 4 additions</text>
+  <line x1="476" y1="36" x2="522" y2="36" class="arrow"/>
+  <text x="534" y="41" class="small">forward flow</text>
+  <line x1="636" y1="36" x2="682" y2="36" class="loss"/>
+  <text x="694" y="41" class="small">training constraint</text>
+
+  <!-- Input -->
+  <rect x="35" y="220" width="150" height="135" rx="7" class="neutral"/>
+  <text x="110" y="247" text-anchor="middle" class="label">Battery Data</text>
+  <g transform="translate(58 263)">
+    <path d="M0 13 C14 0 26 27 40 12 S66 1 80 16 S104 22 118 8" fill="none" stroke="#3ca0c8" stroke-width="2"/>
+    <path d="M0 37 C15 24 28 49 43 35 S72 23 88 39 S105 43 118 30" fill="none" stroke="#e77b2d" stroke-width="2"/>
+    <path d="M0 61 C14 53 27 68 41 59 S70 48 86 62 S106 64 118 54" fill="none" stroke="#3f9b6b" stroke-width="2"/>
+  </g>
+  <text x="110" y="342" text-anchor="middle" class="math">X ∈ R^(L×7)</text>
+
+  <!-- Inherited relational backbone -->
+  <rect x="230" y="238" width="180" height="100" rx="7" class="inherited"/>
+  <text x="320" y="276" text-anchor="middle" class="label">Scaling + 1-D Conv</text>
+  <text x="320" y="302" text-anchor="middle" class="small">local representation</text>
+  <path d="M185 288 H230" class="arrow"/>
+
+  <rect x="485" y="145" width="200" height="90" rx="7" class="inherited"/>
+  <text x="585" y="179" text-anchor="middle" class="label">Feature GATv2</text>
+  <text x="585" y="205" text-anchor="middle" class="small">variable relations</text>
+  <rect x="485" y="340" width="200" height="90" rx="7" class="inherited"/>
+  <text x="585" y="374" text-anchor="middle" class="label">Temporal GATv2</text>
+  <text x="585" y="400" text-anchor="middle" class="small">timestamp relations</text>
+  <path d="M410 288 C445 288 447 190 485 190" class="arrow"/>
+  <path d="M410 288 C445 288 447 385 485 385" class="arrow"/>
+
+  <rect x="755" y="238" width="125" height="100" rx="7" class="inherited"/>
+  <text x="817" y="270" text-anchor="middle" class="label">Fusion + FiLM</text>
+  <text x="817" y="296" text-anchor="middle" class="math">H'_rel</text>
+  <text x="817" y="318" text-anchor="middle" class="tiny">conditioned by z_d</text>
+  <path d="M410 288 H755" class="arrow"/>
+  <path d="M685 190 C720 190 721 265 755 273" class="arrow"/>
+  <path d="M685 385 C720 385 721 315 755 307" class="arrow"/>
+
+  <!-- Inherited Chapter 3 sequence encoder -->
+  <rect x="940" y="105" width="340" height="355" rx="8" class="group"/>
+  <text x="1110" y="134" text-anchor="middle" class="group-title">Chapter 3 conditioned sequence encoder</text>
+  <rect x="970" y="165" width="130" height="80" rx="7" class="inherited"/>
+  <text x="1035" y="197" text-anchor="middle" class="label">GRU</text>
+  <text x="1035" y="222" text-anchor="middle" class="math">h_GRU</text>
+  <rect x="970" y="335" width="130" height="80" rx="7" class="inherited"/>
+  <text x="1035" y="367" text-anchor="middle" class="label">Transformer</text>
+  <text x="1035" y="392" text-anchor="middle" class="math">h_TR</text>
+  <circle cx="1215" cy="215" r="27" fill="#ffffff" stroke="#687c83" stroke-width="1.8"/>
+  <text x="1215" y="223" text-anchor="middle" style="font:700 26px Georgia;fill:#26373d">+</text>
+  <text x="1215" y="265" text-anchor="middle" class="math">h</text>
+  <path d="M880 270 C915 260 925 205 970 205" class="arrow"/>
+  <path d="M880 306 C915 315 925 375 970 375" class="arrow"/>
+  <path d="M1100 205 H1188" class="arrow"/>
+  <path d="M1100 375 C1160 375 1205 285 1212 242" class="arrow"/>
+
+  <!-- Dynamic and physical state branches -->
+  <rect x="390" y="515" width="330" height="100" rx="7" class="inherited"/>
+  <text x="555" y="547" text-anchor="middle" class="label">Dynamic-state encoder</text>
+  <text x="555" y="574" text-anchor="middle" class="small">selected context C → temporal Conv + pooling</text>
+  <text x="555" y="598" text-anchor="middle" class="math">z_d</text>
+  <rect x="775" y="515" width="345" height="100" rx="7" class="added"/>
+  <text x="948" y="547" text-anchor="middle" class="label">Physical-state encoder</text>
+  <text x="948" y="574" text-anchor="middle" class="small">phase, I, ∑I, V_rel, T_rel, SOC → MLP</text>
+  <text x="948" y="598" text-anchor="middle" class="math">H_phys</text>
+  <path d="M110 355 V565 H390" class="arrow"/>
+  <path d="M110 355 V660 H750 V565 H775" class="arrow"/>
+  <path d="M555 515 V475 H817 V338" class="arrow"/>
+  <path d="M948 515 V470 H1035 V415" class="arrow"/>
+
+  <!-- Forecast, reconstruction and base score -->
+  <rect x="1335" y="165" width="140" height="80" rx="7" class="inherited"/>
+  <text x="1405" y="197" text-anchor="middle" class="label">Forecast</text>
+  <text x="1405" y="222" text-anchor="middle" class="math">x̂_(t+1)</text>
+  <rect x="1335" y="335" width="140" height="80" rx="7" class="inherited"/>
+  <text x="1405" y="367" text-anchor="middle" class="label">Reconstruct</text>
+  <text x="1405" y="392" text-anchor="middle" class="math">X̂</text>
+  <rect x="1520" y="215" width="195" height="105" rx="7" class="inherited"/>
+  <text x="1617" y="250" text-anchor="middle" class="label">Base anomaly score</text>
+  <text x="1617" y="278" text-anchor="middle" class="small">forecast + reconstruction</text>
+  <text x="1617" y="303" text-anchor="middle" class="math">S_base</text>
+  <path d="M1242 215 H1335" class="arrow"/>
+  <path d="M1240 235 C1280 270 1295 375 1335 375" class="arrow"/>
+  <path d="M1475 205 C1500 205 1498 248 1520 252" class="arrow"/>
+  <path d="M1475 375 C1500 375 1498 296 1520 286" class="arrow"/>
+
+  <!-- Compact physical response branch -->
+  <rect x="1200" y="515" width="340" height="110" rx="7" class="added"/>
+  <text x="1370" y="545" text-anchor="middle" class="label">Response consistency</text>
+  <text x="1370" y="570" text-anchor="middle" class="tiny">r(·): ΔV, ΔT, N(∑I), ΔV_cell, ΔT_cell, ΔSOC−I</text>
+  <text x="1370" y="595" text-anchor="middle" class="math">S_resp = |r(X) − r(X̂)|</text>
+  <text x="1370" y="616" text-anchor="middle" class="tiny">training: L_resp + λ_s L_smooth</text>
+  <path d="M1405 415 V515" class="arrow"/>
+  <path d="M110 355 V660 H1170 V570 H1200" class="arrow"/>
+
+  <!-- Final score fusion -->
+  <rect x="1580" y="500" width="180" height="125" rx="7" class="output"/>
+  <text x="1670" y="535" text-anchor="middle" class="label">Calibrated fusion</text>
+  <text x="1670" y="565" text-anchor="middle" class="math">S_4=(1−α)S_base</text>
+  <text x="1670" y="587" text-anchor="middle" class="math">+ αS_resp</text>
+  <text x="1670" y="613" text-anchor="middle" class="small">0 ≤ α ≤ 0.35</text>
+  <path d="M1617 320 V470 H1670 V500" class="arrow"/>
+  <path d="M1540 570 H1580" class="arrow"/>
+  <path d="M1370 625 V653" class="loss"/>
+  <text x="1370" y="679" text-anchor="middle" class="small">training only</text>
+</svg>

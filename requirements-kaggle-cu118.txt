@@ -1,5 +1,6 @@
-# Kaggle/Linux CUDA 11.8 environment for the full project and external baselines.
-# Use this file on Kaggle instead of installing the generic requirements alone:
+# Legacy CUDA 11.8 environment for DGL/PyG external baselines only.
+# Do not install this file for the main model on a current Kaggle image; it pins
+# and replaces PyTorch. Use requirements-kaggle-main.txt for the main project.
 #   pip install -r requirements-kaggle-cu118.txt
 
 --extra-index-url https://download.pytorch.org/whl/cu118
@@ -9,6 +10,7 @@
 -r requirements.txt
 
 # Keep the CUDA graph stack on one compatible torch family.
+numpy==1.26.0
 torch==2.2.0+cu118
 torchvision==0.17.0+cu118
 torchaudio==2.2.0+cu118
@@ -25,10 +27,11 @@ torch-geometric>=2.5,<2.8
 
 # External baseline metrics and time-series feature extraction.
 pytz
+Pillow>=9.4,<12
 statsmodels>=0.14,<1
 tsfresh>=0.20,<1
 hurst>=0.0.5
 arch>=6.1,<9
 
-# Legacy OmniAnomaly/TFSnippet dependency used by some baseline workflows.
-TFSnippet @ git+https://github.com/haowen-xu/tfsnippet.git@v0.2.0-alpha1
+# The current external plan does not run OmniAnomaly, so TensorFlow/TFSnippet
+# are deliberately excluded from this Kaggle environment.

@@ -121,10 +121,17 @@ class RevIN(nn.Module):
 
 class WindowRegimeEncoder(nn.Module):
 
-    """将滑动窗口编码为紧凑的工况嵌入。"""
+    """统计量动态状态编码器，仅用于消融。"""
 
 
-    def __init__(self, n_features, emb_dim=32, hidden_dim=None, stat_features=None):
+    def __init__(
+        self,
+        n_features,
+        emb_dim=32,
+        hidden_dim=None,
+        stat_features=None,
+        control_indices=None,
+    ):
 
         super(WindowRegimeEncoder, self).__init__()
 
@@ -133,11 +140,18 @@ class WindowRegimeEncoder(nn.Module):
             stat_features = ["mean", "std", "last", "delta"]
 
 
-        self.n_features = n_features
+        valid_indices = [
+            int(index) for index in (control_indices or range(n_features))
+            if 0 <= int(index) < n_features
+        ]
+        if not valid_indices:
+            valid_indices = list(range(n_features))
+        self.register_buffer("control_indices", torch.tensor(valid_indices, dtype=torch.long))
+        self.n_features = len(valid_indices)
 
         self.stat_features = list(stat_features)
 
-        input_dim = len(self.stat_features) * n_features
+        input_dim = len(self.stat_features) * self.n_features
 
         hidden_dim = hidden_dim or max(emb_dim, min(128, input_dim))
 
@@ -155,6 +169,7 @@ class WindowRegimeEncoder(nn.Module):
 
     def forward(self, x):
 
+        x = torch.index_select(x, dim=2, index=self.control_indices)
         stats = []
 
         for stat_name in self.stat_features:
@@ -185,9 +200,93 @@ class WindowRegimeEncoder(nn.Module):
         return self.mlp(regime_input)
 
 
+class TemporalRegimeEncoder(nn.Module):
+
+    """Learn continuous dynamic-state embeddings from selected control/state channels."""
+
+    def __init__(
+
+        self,
+
+        n_features,
+
+        emb_dim=32,
+
+        hidden_dim=48,
+
+        control_indices=None,
+
+        auxiliary_dim=4,
+
+    ):
+
+        super(TemporalRegimeEncoder, self).__init__()
+
+        valid_indices = [
+
+            int(index) for index in (control_indices or range(n_features))
+
+            if 0 <= int(index) < n_features
+
+        ]
+
+        if not valid_indices:
+
+            valid_indices = list(range(n_features))
+
+        self.register_buffer("control_indices", torch.tensor(valid_indices, dtype=torch.long))
+
+        input_dim = len(valid_indices)
+
+        self.temporal_encoder = nn.Sequential(
+
+            nn.Conv1d(input_dim, hidden_dim, kernel_size=3, padding=1),
+
+            nn.GELU(),
+
+            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=2, dilation=2),
+
+            nn.GELU(),
+
+        )
+
+        self.attention = nn.Conv1d(hidden_dim, 1, kernel_size=1)
+
+        self.embedding_head = nn.Sequential(
+
+            nn.Linear(hidden_dim * 2, hidden_dim),
+
+            nn.GELU(),
+
+            nn.Linear(hidden_dim, emb_dim),
+
+        )
+
+        self.auxiliary_head = nn.Linear(emb_dim, auxiliary_dim)
+
+
+    def forward(self, x, return_auxiliary=False):
+
+        controls = torch.index_select(x, dim=2, index=self.control_indices)
+
+        hidden = self.temporal_encoder(controls.transpose(1, 2))
+
+        attention = torch.softmax(self.attention(hidden), dim=2)
+
+        pooled = torch.sum(hidden * attention, dim=2)
+
+        embedding = self.embedding_head(torch.cat([pooled, hidden[:, :, -1]], dim=1))
+
+        if return_auxiliary:
+
+            return embedding, self.auxiliary_head(embedding)
+
+        return embedding
+
+
 class FiLMConditioner(nn.Module):
 
-    """根据工况嵌入生成按特征调制的仿射参数。"""
+    """根据动态状态嵌入生成按特征调制的仿射参数。"""
 
 
     def __init__(self, emb_dim, target_dim):
@@ -212,7 +311,7 @@ class FiLMConditioner(nn.Module):
 
 class RegimeResidualGate(nn.Module):
 
-    """为 Transformer 残差增强生成工况感知门控。"""
+    """为 Transformer 残差增强生成动态状态条件门控。"""
 
 
     def __init__(self, emb_dim, target_dim):
@@ -1120,5 +1219,3 @@ class Forecasting_Model(nn.Module):
             x = self.dropout(x)
 
         return self.layers[-1](x)
-
-

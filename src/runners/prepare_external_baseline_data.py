@@ -22,15 +22,11 @@ from src.project_paths import processed_dataset_path
 
 DATASET_ROOTS = {
 
-    "SMAP": processed_dataset_path("data"),
-
     "MSL": processed_dataset_path("data"),
 
     "SMD": processed_dataset_path("ServerMachineDataset"),
 
     "BMS": processed_dataset_path("BMS"),
-
-    "NASA": processed_dataset_path("NASA"),
 
     "NASA_RANDOM_CHARGE": processed_dataset_path("NASA_RANDOM_CHARGE"),
 
@@ -45,16 +41,12 @@ DATASET_ROOTS = {
 
 DEFAULT_SERIES = {
 
-    "SMAP": "SMAP",
-
     "MSL": "MSL",
 
 }
 
 
 DEFAULT_TRANAD_PREFIX = {
-
-    "SMAP": "P-1",
 
     "MSL": "C-1",
 
@@ -79,7 +71,7 @@ def parse_args():
 
     export_parser.add_argument("--source-dataset", required=True, choices=sorted(DATASET_ROOTS.keys()))
 
-    export_parser.add_argument("--series-name", default="", help="Series stem without _train.pkl. Optional for SMAP/MSL.")
+    export_parser.add_argument("--series-name", default="", help="Series stem without _train.pkl. Optional for MSL.")
 
     export_parser.add_argument(
 
@@ -460,5 +452,4 @@ def main():
 if __name__ == "__main__":
 
     main()
-
 

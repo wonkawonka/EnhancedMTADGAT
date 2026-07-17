@@ -76,7 +76,7 @@ class Plotter:
 
             self.pred_cols = [f"feat_{i}" for i in range(get_data_dim("machine"))]
 
-        elif "SMAP" in self.result_path or "MSL" in self.result_path:
+        elif "MSL" in self.result_path:
 
             self.pred_cols = ["feat_1"]
 
@@ -327,9 +327,9 @@ class Plotter:
         test_output = pd.read_pickle(f"{result_dir}/test_output.pkl")
 
 
-        # SMAP 和 MSL 只预测一个特征
+        # MSL 只预测一个特征
 
-        if 'SMAP' in self.result_path or 'MSL' in self.result_path:
+        if 'MSL' in self.result_path:
 
             train_output[f'A_Pred_0'] = train_output['A_Pred_Global']
 
@@ -390,7 +390,7 @@ class Plotter:
 
     def result_summary(self):
 
-        if 'SMAP' in self.result_path or 'MSL' in self.result_path or 'SMD' in self.result_path:
+        if 'MSL' in self.result_path or 'SMD' in self.result_path:
 
             # 标准数据集的 summary 直接位于结果目录
 
@@ -1081,7 +1081,7 @@ class Plotter:
         output = output.iloc[start:end]
 
 
-        if 'SMAP' in self.result_path or 'MSL' in self.result_path:
+        if 'MSL' in self.result_path:
 
             p_col = "feat_1"
 
@@ -1549,5 +1549,4 @@ class Plotter:
         plt.title(title)
 
         plt.show()
-
 

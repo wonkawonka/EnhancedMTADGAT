@@ -71,6 +71,49 @@ def resolve_checkpoint_path(output_dir):
     return output_dir / "last_checkpoint.pt"
 
 
+def expand_experiment_seeds(experiments, seeds):
+
+    """Expand global seeds, while allowing costly main runs to opt in locally."""
+
+    expanded = []
+
+    for experiment in experiments:
+
+        experiment_seeds = experiment.get("seeds", seeds)
+
+        if not experiment_seeds:
+
+            item = dict(experiment)
+
+            item.pop("seeds", None)
+
+            expanded.append(item)
+
+            continue
+
+        for seed in experiment_seeds:
+
+            item = dict(experiment)
+
+            item.pop("seeds", None)
+
+            item["args"] = dict(experiment.get("args", {}))
+
+            item["args"]["seed"] = int(seed)
+
+            base_name = str(experiment.get("name", "experiment"))
+
+            item["name"] = f"{base_name}_seed{seed}"
+
+            if item["args"].get("run_id"):
+
+                item["args"]["run_id"] = f"{item['args']['run_id']}_seed{seed}"
+
+            expanded.append(item)
+
+    return expanded
+
+
 def build_train_command(project_root, python_executable, merged_args):
 
     cmd = [python_executable, "-m", "src.runners.train"]
@@ -262,7 +305,7 @@ def main():
 
     common_args = dict(plan.get("common_args", {}))
 
-    experiments = list(plan.get("experiments", []))
+    experiments = expand_experiment_seeds(plan.get("experiments", []), plan.get("seeds", []))
 
     if not experiments:
 
@@ -303,6 +346,8 @@ def main():
 
         "common_args": common_args,
 
+        "seeds": plan.get("seeds", []),
+
         "experiments": [],
 
     }
@@ -329,7 +374,7 @@ def main():
     print(f"Loaded {len(selected_experiments)} experiments from {plan_path.name}")
 
 
-    for idx, name, experiment in selected_experiments:
+    for run_position, (idx, name, experiment) in enumerate(selected_experiments, start=1):
 
         merged_args = dict(common_args)
 
@@ -405,7 +450,7 @@ def main():
             continue
 
 
-        print(f"\n[{idx}/{len(selected_experiments)}] {name}")
+        print(f"\n[{run_position}/{len(selected_experiments)}] {name}")
 
         if args.resume and checkpoint_path.exists():
 
@@ -483,5 +528,3 @@ def main():
 if __name__ == "__main__":
 
     main()
-
-

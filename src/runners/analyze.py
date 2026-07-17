@@ -18,8 +18,6 @@ def parse_args():
         required=True,
         choices=[
             "MSL",
-            "SMAP",
-            "NASA",
             "NASA_RANDOM_CHARGE",
             "NASA_RANDOM_DISCHARGE",
             "BMS",
@@ -75,4 +73,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -7,9 +7,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import torch
-from scipy.interpolate import interp1d
-from sklearn.preprocessing import MinMaxScaler, RobustScaler
-from sklearn.metrics import roc_curve, auc
+from sklearn.preprocessing import MaxAbsScaler, MinMaxScaler
 from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler
 
 from src.project_paths import processed_dataset_path
@@ -63,8 +61,7 @@ BMS_HIERARCHICAL_FEATURE_NAMES = [
     "hier_cell_t_range_ratio",
 ]
 
-NASA_ENTITY_DATASET_PREFIX = {
-    "NASA": "NASA",
+NASA_RANDOM_DATASET_PREFIX = {
     "NASA_RANDOM_CHARGE": "NASA_RANDOM_CHARGE",
     "NASA_RANDOM_DISCHARGE": "NASA_RANDOM_DISCHARGE",
 }
@@ -84,6 +81,33 @@ def normalize_data(data, scaler=None):
     print("Data normalized")
 
     return data, scaler
+
+
+class NasaRandomPhysicalScaler:
+    """Robust voltage/temperature scaling with a zero-preserving current scale."""
+
+    def __init__(self):
+        self.center_ = np.zeros(3, dtype=np.float32)
+        self.scale_ = np.ones(3, dtype=np.float32)
+
+    @staticmethod
+    def _iqr(values):
+        q25, q75 = np.quantile(values, [0.25, 0.75])
+        return max(float(q75 - q25), 1e-6)
+
+    def fit(self, data):
+        values = np.asarray(data, dtype=np.float32)
+        # Model-facing order after dropping step_type_code: voltage, current, temperature.
+        for index in (0, 2):
+            self.center_[index] = float(np.median(values[:, index]))
+            self.scale_[index] = self._iqr(values[:, index])
+        self.center_[1] = 0.0
+        self.scale_[1] = max(float(np.quantile(np.abs(values[:, 1]), 0.95)), 1e-6)
+        return self
+
+    def transform(self, data):
+        values = np.asarray(data, dtype=np.float32)
+        return ((values - self.center_) / self.scale_).astype(np.float32, copy=False)
 
 
 def get_bms_feature_names():
@@ -109,25 +133,21 @@ def get_data_dim(dataset):
     :param dataset: 数据集名称
     :return: Number of dimensions in data
     """
-    if dataset == "SMAP":
-        return 25
-    elif dataset == "MSL":
+    if dataset == "MSL":
         return 55
     elif str(dataset).startswith("machine"):
         return 38
-    elif dataset == "NASA":
-        # NASA电池数据集的特征维度 (不包括时间戳)
-        return 7  # cycle_number, voltage_measured, current_measured,
-                  # temperature_measured, current_charge, voltage_charge, capacity
     elif dataset in ["NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"]:
-        # step_type_code, voltage, current, temperature
-        return 4
+        # Raw processed files also store step_type_code, but it is removed before modeling.
+        return 3  # voltage, current, temperature
     elif dataset in ["CALCE", "CALCE2"]:
         # CALCE数据集是单特征时间序列
         return 1
     elif dataset == "BMS":
         # BMS 当前特征维度与 BMS_FEATURE_NAMES 保持同步
         return len(BMS_FEATURE_NAMES)
+    elif dataset == "TSINGHUA_EV":
+        return 7
     elif dataset == "CH_BATTERY_LFP_DISCHARGE":
         # CH-BATTERY 训练/预测当前只保留 7 个系统级核心特征。
         return 7
@@ -141,15 +161,10 @@ def get_target_dims(dataset):
     :return: index of data dimension that should be modeled (forecasted and reconstructed),
                      returns None if all input dimensions should be modeled
     """
-    if dataset == "SMAP":
-        return [0]
-    elif dataset == "MSL":
+    if dataset == "MSL":
         return [0]
     elif dataset == "SMD":
         return None
-    elif dataset == "NASA":
-        # 对于NASA电池数据集，我们主要关注容量预测（索引6，最后一列）
-        return [6]  # capacity 是预测电池退化趋势最重要的特征
     elif dataset in ["NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"]:
         # 对于随机工况NASA数据，预测和重构所有时序特征
         return None
@@ -159,12 +174,63 @@ def get_target_dims(dataset):
     elif dataset == "BMS":
         # 对于BMS数据集，我们关注所有特征
         return None
+    elif dataset == "TSINGHUA_EV":
+        return None
     elif dataset == "CH_BATTERY_LFP_DISCHARGE":
         # 只保留 7 个汇总量：SUM_VOLTAGE, SUM_CURRENT, SOC, MAX_CELL_VOLT, MIN_CELL_VOLT, MAX_TEMP, MIN_TEMP
         # 丢弃 124 个单体电压，显著降低模型复杂度
         return [0, 1, 2, 3, 4, 5, 6]
     else:
         raise ValueError("unknown dataset " + str(dataset))
+
+
+def get_score_dims(dataset, target_dims=None):
+    """Return output-relative dimensions used to form the global anomaly score.
+
+    ``target_dims`` controls what the model predicts, while ``score_dims`` controls
+    which predicted responses can raise the global alarm.  Keeping the two notions
+    separate prevents operating-condition channels from being treated as faults.
+    """
+    dataset = str(dataset).upper()
+
+    if dataset == "MSL":
+        response_dims = [0]
+    elif dataset in NASA_RANDOM_DATASETS:
+        # Current describes the imposed experiment; voltage/temperature respond.
+        response_dims = [0, 2]
+    elif dataset in {"TSINGHUA_EV", "CH_BATTERY_LFP_DISCHARGE"}:
+        # voltage, cell-voltage extrema and temperature extrema; current/SOC are context.
+        response_dims = [0, 3, 4, 5, 6]
+    elif dataset == "BMS":
+        # BMSnI remains a response so cluster-level over-current is not absorbed as
+        # a frequency-regulation condition.  System variables and SOC provide context.
+        response_names = [
+            "BMSnVol_T",
+            "BMSnVol_B",
+            "BMSnI",
+            "BMSnVmax",
+            "BMSnVmin",
+            "BMSnVmean",
+            "BMSnTmax",
+            "BMSnTmin",
+            "BMSnTmean",
+            "cell_v_std",
+            "cell_v_range",
+            "cell_v_max_dev_from_mean",
+            "cell_v_min_dev_from_mean",
+            "cell_t_std",
+            "cell_t_range",
+            *BMS_HIERARCHICAL_FEATURE_NAMES,
+        ]
+        response_dims = [BMS_FEATURE_NAMES.index(name) for name in response_names]
+    else:
+        return None
+
+    if target_dims is None:
+        return response_dims
+
+    modeled_dims = [target_dims] if isinstance(target_dims, int) else list(target_dims)
+    return [modeled_dims.index(dim) for dim in response_dims if dim in modeled_dims]
 
 
 def inject_point_anomalies(data, anomaly_ratio=0.05):
@@ -243,6 +309,63 @@ def normalize_sequence_container(sequence_data, scaler):
     return normalized_data.astype(np.float32, copy=False)
 
 
+def _split_array_by_lengths(values, lengths):
+    sequences = []
+    offset = 0
+    for length in lengths:
+        length = int(length)
+        sequences.append(np.asarray(values[offset:offset + length], dtype=np.float32))
+        offset += length
+    if offset != len(values):
+        raise ValueError(f"Sequence lengths sum to {offset}, expected {len(values)}")
+    return sequences
+
+
+def get_msl_sequence_data(val_ratio=0.1, normalize=True):
+    """Load MSL without creating windows across entity boundaries."""
+    dataset = "MSL"
+    prefix = str(processed_dataset_path("data"))
+    paths = {
+        "train": os.path.join(prefix, f"{dataset}_train.pkl"),
+        "test": os.path.join(prefix, f"{dataset}_test.pkl"),
+        "label": os.path.join(prefix, f"{dataset}_test_label.pkl"),
+        "train_lengths": os.path.join(prefix, f"{dataset}_train_lengths.pkl"),
+        "test_lengths": os.path.join(prefix, f"{dataset}_test_lengths.pkl"),
+    }
+    missing = [name for name, file_path in paths.items() if not os.path.exists(file_path)]
+    if missing:
+        raise FileNotFoundError(
+            f"Missing processed {dataset} files {missing}. Run preprocessing again to create boundary metadata."
+        )
+    with open(paths["train"], "rb") as handle:
+        train_values = pickle.load(handle)
+    with open(paths["test"], "rb") as handle:
+        test_values = pickle.load(handle)
+    with open(paths["label"], "rb") as handle:
+        test_labels = pickle.load(handle)
+    with open(paths["train_lengths"], "rb") as handle:
+        train_lengths = pickle.load(handle)
+    with open(paths["test_lengths"], "rb") as handle:
+        test_lengths = pickle.load(handle)
+
+    raw_train_sequences = _split_array_by_lengths(train_values, train_lengths)
+    test_sequences = _split_array_by_lengths(test_values, test_lengths)
+    test_label_sequences = _split_array_by_lengths(np.asarray(test_labels), test_lengths)
+    train_sequences = []
+    validation_sequences = []
+    for sequence in raw_train_sequences:
+        split_index = int(np.floor(len(sequence) * (1.0 - val_ratio)))
+        train_sequences.append(sequence[:split_index])
+        validation_sequences.append(sequence[split_index:])
+
+    if normalize:
+        _, scaler = normalize_data(np.concatenate(train_sequences, axis=0), scaler=None)
+        train_sequences = [scaler.transform(sequence).astype(np.float32, copy=False) for sequence in train_sequences]
+        validation_sequences = [scaler.transform(sequence).astype(np.float32, copy=False) for sequence in validation_sequences]
+        test_sequences = [scaler.transform(sequence).astype(np.float32, copy=False) for sequence in test_sequences]
+    return train_sequences, validation_sequences, test_sequences, test_label_sequences
+
+
 def flatten_label_container(label_data):
     if label_data is None:
         return None
@@ -304,14 +427,6 @@ def load_prefixed_processed_data(prefix, entity_name, file_prefix):
     return train_data, test_data, test_label
 
 
-def get_available_nasa_batteries(prefix):
-    return get_available_prefixed_entities(prefix, "NASA")
-
-
-def load_nasa_processed_data(prefix, battery_name):
-    return load_prefixed_processed_data(prefix, battery_name, "NASA")
-
-
 def resolve_prefixed_entities(prefix, file_prefix, single_entity=None, train_entities=None, test_entities=None):
     available_entities = get_available_prefixed_entities(prefix, file_prefix)
     if not available_entities:
@@ -342,24 +457,14 @@ def resolve_prefixed_entities(prefix, file_prefix, single_entity=None, train_ent
     return train_entities, test_entities
 
 
-def resolve_nasa_batteries(prefix, nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None):
-    return resolve_prefixed_entities(
-        prefix,
-        "NASA",
-        single_entity=nasa_battery_id,
-        train_entities=nasa_train_batteries,
-        test_entities=nasa_test_batteries,
-    )
+def _get_nasa_random_battery_data(dataset, nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None,
+                                  normalize=False, prefix=None):
+    if dataset not in NASA_RANDOM_DATASET_PREFIX:
+        raise ValueError(f"Unsupported NASA Random dataset: {dataset}")
 
-
-def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None,
-                               normalize=False, prefix=None):
-    if dataset not in NASA_ENTITY_DATASET_PREFIX:
-        raise ValueError(f"Unsupported NASA-like dataset: {dataset}")
-
-    file_prefix = NASA_ENTITY_DATASET_PREFIX[dataset]
+    file_prefix = NASA_RANDOM_DATASET_PREFIX[dataset]
     if prefix is None:
-        prefix = str(processed_dataset_path("NASA" if dataset == "NASA" else dataset))
+        prefix = str(processed_dataset_path(dataset))
 
     train_batteries, test_batteries = resolve_prefixed_entities(
         prefix,
@@ -384,10 +489,11 @@ def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteri
         battery_train_data, _, _ = load_prefixed_processed_data(prefix, battery_name, file_prefix)
         if is_sequence_container(battery_train_data):
             train_data_map[battery_name] = [
-                np.asarray(seq, dtype=np.float32) for seq in ensure_sequence_list(battery_train_data)
+                np.asarray(seq, dtype=np.float32)[:, 1:4]
+                for seq in ensure_sequence_list(battery_train_data)
             ]
         else:
-            train_data_map[battery_name] = np.asarray(battery_train_data, dtype=np.float32)
+            train_data_map[battery_name] = np.asarray(battery_train_data, dtype=np.float32)[:, 1:4]
 
     for battery_name in test_batteries:
         _, battery_test_data, battery_test_label = load_prefixed_processed_data(prefix, battery_name, file_prefix)
@@ -400,10 +506,11 @@ def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteri
 
         if is_sequence_container(battery_test_data):
             test_data_map[battery_name] = [
-                np.asarray(seq, dtype=np.float32) for seq in ensure_sequence_list(battery_test_data)
+                np.asarray(seq, dtype=np.float32)[:, 1:4]
+                for seq in ensure_sequence_list(battery_test_data)
             ]
         else:
-            test_data_map[battery_name] = np.asarray(battery_test_data, dtype=np.float32)
+            test_data_map[battery_name] = np.asarray(battery_test_data, dtype=np.float32)[:, 1:4]
 
         if battery_test_label is None or is_placeholder_zero_label(battery_test_label):
             test_label_map[battery_name] = None
@@ -419,7 +526,7 @@ def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteri
 
     if normalize:
         concatenated_train = flatten_sequence_collection(train_data_map.values(), dtype=np.float32)
-        _, scaler = normalize_data(concatenated_train, scaler=None)
+        scaler = NasaRandomPhysicalScaler().fit(concatenated_train)
 
         normalized_train_map = {}
         for battery_name, battery_train_data in train_data_map.items():
@@ -434,21 +541,9 @@ def get_nasa_like_battery_data(dataset, nasa_battery_id=None, nasa_train_batteri
     return (train_data_map, None), (test_data_map, test_label_map)
 
 
-def get_nasa_battery_data(nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None,
-                          normalize=False, prefix=None):
-    return get_nasa_like_battery_data(
-        "NASA",
-        nasa_battery_id=nasa_battery_id,
-        nasa_train_batteries=nasa_train_batteries,
-        nasa_test_batteries=nasa_test_batteries,
-        normalize=normalize,
-        prefix=prefix,
-    )
-
-
 def get_nasa_random_battery_data(dataset, nasa_battery_id=None, nasa_train_batteries=None, nasa_test_batteries=None,
                                  normalize=False, prefix=None):
-    return get_nasa_like_battery_data(
+    return _get_nasa_random_battery_data(
         dataset,
         nasa_battery_id=nasa_battery_id,
         nasa_train_batteries=nasa_train_batteries,
@@ -513,16 +608,27 @@ def get_bms_cluster_data(normalize=False, prefix=None):
 
     if normalize:
         concatenated_train = np.concatenate(list(train_data_map.values()), axis=0)
-        _, scaler = normalize_data(concatenated_train, scaler=None)
+        scaler = MaxAbsScaler().fit(concatenated_train)
+
+        # Preserve zero current and use shared scales for physically related
+        # max/min/mean channels so their differences remain meaningful.
+        for feature_group in (
+            ["BMSnVmax", "BMSnVmin", "BMSnVmean"],
+            ["BMSnTmax", "BMSnTmin", "BMSnTmean"],
+        ):
+            indices = [BMS_FEATURE_NAMES.index(name) for name in feature_group]
+            shared_scale = max(float(np.max(np.abs(concatenated_train[:, indices]))), 1e-6)
+            scaler.scale_[indices] = shared_scale
+            scaler.max_abs_[indices] = shared_scale
 
         normalized_train_map = {}
         for cluster_name, cluster_train_data in train_data_map.items():
-            normalized_train_map[cluster_name], _ = normalize_data(cluster_train_data, scaler=scaler)
+            normalized_train_map[cluster_name] = scaler.transform(cluster_train_data).astype(np.float32, copy=False)
         train_data_map = normalized_train_map
 
         normalized_test_map = {}
         for cluster_name, cluster_test_data in test_data_map.items():
-            normalized_test_map[cluster_name], _ = normalize_data(cluster_test_data, scaler=scaler)
+            normalized_test_map[cluster_name] = scaler.transform(cluster_test_data).astype(np.float32, copy=False)
         test_data_map = normalized_test_map
 
     return (train_data_map, None), (test_data_map, test_label_map)
@@ -540,10 +646,8 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
     """
     if str(dataset).startswith("machine"):
         prefix = str(processed_dataset_path("ServerMachineDataset"))
-    elif dataset in ["MSL", "SMAP"]:
+    elif dataset == "MSL":
         prefix = str(processed_dataset_path("data"))
-    elif dataset == "NASA":
-        prefix = str(processed_dataset_path("NASA"))
     elif dataset == "NASA_RANDOM_CHARGE":
         prefix = str(processed_dataset_path("NASA_RANDOM_CHARGE"))
     elif dataset == "NASA_RANDOM_DISCHARGE":
@@ -567,24 +671,15 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
     print("test: ", test_start, test_end)
     x_dim = get_data_dim(dataset)
 
-    if dataset in ["NASA", "NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"]:
-        if dataset == "NASA":
-            (train_data_map, _), (test_data_map, test_label_map) = get_nasa_battery_data(
-                nasa_battery_id=nasa_battery_id,
-                nasa_train_batteries=nasa_train_batteries,
-                nasa_test_batteries=nasa_test_batteries,
-                normalize=False,
-                prefix=prefix,
-            )
-        else:
-            (train_data_map, _), (test_data_map, test_label_map) = get_nasa_random_battery_data(
-                dataset,
-                nasa_battery_id=nasa_battery_id,
-                nasa_train_batteries=nasa_train_batteries,
-                nasa_test_batteries=nasa_test_batteries,
-                normalize=False,
-                prefix=prefix,
-            )
+    if dataset in NASA_RANDOM_DATASETS:
+        (train_data_map, _), (test_data_map, test_label_map) = get_nasa_random_battery_data(
+            dataset,
+            nasa_battery_id=nasa_battery_id,
+            nasa_train_batteries=nasa_train_batteries,
+            nasa_test_batteries=nasa_test_batteries,
+            normalize=False,
+            prefix=prefix,
+        )
         train_data = flatten_sequence_collection(train_data_map.values(), dtype=np.float32)
         test_data = flatten_sequence_collection(test_data_map.values(), dtype=np.float32)
 
@@ -718,7 +813,10 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
     # 4. 基于训练集统计量进行归一化，并同步应用到测试集
     scaler = None
     if normalize:
-        if isinstance(train_data, dict):
+        if dataset in NASA_RANDOM_DATASETS:
+            scaler = NasaRandomPhysicalScaler().fit(train_data)
+            train_data = scaler.transform(train_data)
+        elif isinstance(train_data, dict):
             concatenated_train = flatten_sequence_collection(train_data.values(), dtype=np.float32)
             _, scaler = normalize_data(concatenated_train, scaler=None)
             normalized_train_map = {}
@@ -734,6 +832,8 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
                 for battery_name, battery_test_data in test_data.items():
                     normalized_test_map[battery_name] = normalize_sequence_container(battery_test_data, scaler=scaler)
                 test_data = normalized_test_map
+            elif dataset in NASA_RANDOM_DATASETS:
+                test_data = scaler.transform(test_data)
             else:
                 test_data, _ = normalize_data(test_data, scaler=scaler)
 
@@ -802,6 +902,7 @@ def create_data_loaders(
     val_split=0.1,
     shuffle=True,
     test_dataset=None,
+    val_dataset=None,
     num_workers=4,
     pin_memory=None,
     persistent_workers=True,
@@ -815,7 +916,22 @@ def create_data_loaders(
         prefetch_factor=prefetch_factor,
     )
 
-    if val_split == 0.0:
+    if val_dataset is not None:
+        print(f"train_size: {len(train_dataset)}")
+        print(f"validation_size: {len(val_dataset)} (explicit split)")
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            **loader_options,
+        )
+        val_loader = torch.utils.data.DataLoader(
+            val_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            **loader_options,
+        )
+    elif val_split == 0.0:
         print(f"train_size: {len(train_dataset)}")
         train_loader = torch.utils.data.DataLoader(
             train_dataset,
@@ -1052,814 +1168,3 @@ def evaluate_without_labels(anomaly_scores, threshold_percentile=95):
     anomalies = np.where(anomaly_scores >= threshold)[0]
 
     return anomalies, threshold
-
-
-def evaluate_with_capacities(anomaly_scores, capacities, threshold=0.2):
-    """
-    使用容量信息评估异常检测结果
-    :param anomaly_scores: 异常分数
-    :param capacities: 容量值数组
-    :param threshold: 容量下降阈值（默认0.2，即20%）
-    :return: ROC曲线数据和AUC值
-    """
-    if len(anomaly_scores) != len(capacities):
-        raise ValueError("异常分数和容量数组长度必须相同")
-
-    # 基于容量衰减创建标签
-    # 获取第一个非NaN容量值作为初始容量
-    valid_capacity_indices = ~np.isnan(capacities)
-    if not np.any(valid_capacity_indices):
-        raise ValueError("容量数据中没有有效的数值")
-
-    initial_capacity = capacities[valid_capacity_indices][0]
-    capacity_decay_rate = (initial_capacity - capacities) / initial_capacity
-    labels = (capacity_decay_rate > threshold).astype(int)
-
-    # 计算ROC曲线
-    fpr, tpr, thresholds = roc_curve(labels, anomaly_scores)
-    roc_auc = auc(fpr, tpr)
-
-    return fpr, tpr, thresholds, roc_auc, labels
-
-
-def plot_roc_curve(fpr, tpr, roc_auc, save_path=""):
-    """
-    绘制ROC曲线
-    :param fpr: 假正率
-    :param tpr: 真正率
-    :param roc_auc: AUC值
-    :param save_path: 保存路径
-    """
-    plt.figure(figsize=(8, 6))
-    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
-    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic')
-    plt.legend(loc="lower right")
-    if save_path:
-        plt.savefig(f"{save_path}/roc_curve.png", bbox_inches="tight", dpi=300)
-    plt.show()
-    plt.close()
-
-
-def plot_anomaly_score_vs_capacity(anomaly_scores, capacities, save_path="", file_name="anomaly_score_vs_capacity.png",
-                                   title="Anomaly Score vs Capacity"):
-    """
-    绘制异常分数与容量的关系图
-    :param anomaly_scores: 异常分数
-    :param capacities: 容量值
-    :param save_path: 保存路径
-    """
-    capacities = np.asarray(capacities, dtype=np.float32)
-    anomaly_scores = np.asarray(anomaly_scores, dtype=np.float32)
-    min_len = min(len(capacities), len(anomaly_scores))
-    capacities = capacities[:min_len]
-    anomaly_scores = anomaly_scores[:min_len]
-
-    fig, ax1 = plt.subplots(figsize=(12, 6))
-    line1 = ax1.plot(capacities, label='Capacity', color='blue')
-    ax1.set_ylabel('Capacity')
-    ax1.set_xlabel('Time')
-
-    ax2 = ax1.twinx()
-    line2 = ax2.plot(anomaly_scores, label='Anomaly Score', color='red')
-    ax2.set_ylabel('Anomaly Score')
-    ax1.set_title(title)
-    lines = line1 + line2
-    ax1.legend(lines, [line.get_label() for line in lines], loc="upper right")
-    fig.tight_layout()
-    if save_path:
-        plt.savefig(f"{save_path}/{file_name}", bbox_inches="tight", dpi=300)
-    plt.close(fig)
-
-
-def plot_nasa_trend(series, save_path, file_name, ylabel, title, threshold=None, color="tab:red"):
-    series = np.asarray(series, dtype=np.float32)
-    fig, ax = plt.subplots(figsize=(12, 4))
-    ax.plot(series, color=color, linewidth=1.2)
-    if threshold is not None:
-        ax.axhline(float(threshold), color="black", linestyle="--", linewidth=1, label="Threshold")
-        ax.legend(loc="upper right")
-    ax.set_xlabel("Time")
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.grid(True, alpha=0.3)
-    fig.tight_layout()
-    if save_path:
-        plt.savefig(f"{save_path}/{file_name}", bbox_inches="tight", dpi=300)
-    plt.close(fig)
-
-
-def plot_nasa_case_overview(capacities, pred_error, recon_error, anomaly_scores, save_path,
-                            file_name="nasa_case_overview.png"):
-    capacities = np.asarray(capacities, dtype=np.float32)
-    pred_error = np.asarray(pred_error, dtype=np.float32)
-    recon_error = np.asarray(recon_error, dtype=np.float32)
-    anomaly_scores = np.asarray(anomaly_scores, dtype=np.float32)
-    min_len = min(len(capacities), len(pred_error), len(recon_error), len(anomaly_scores))
-    capacities = capacities[:min_len]
-    pred_error = pred_error[:min_len]
-    recon_error = recon_error[:min_len]
-    anomaly_scores = anomaly_scores[:min_len]
-
-    fig, axes = plt.subplots(4, 1, figsize=(12, 12), sharex=True)
-    axes[0].plot(capacities, color="tab:blue", linewidth=1.2)
-    axes[0].set_ylabel("Capacity")
-    axes[0].set_title("NASA Degradation Case Overview")
-    axes[0].grid(True, alpha=0.3)
-
-    axes[1].plot(pred_error, color="tab:orange", linewidth=1.2)
-    axes[1].set_ylabel("Pred Error")
-    axes[1].grid(True, alpha=0.3)
-
-    axes[2].plot(recon_error, color="tab:green", linewidth=1.2)
-    axes[2].set_ylabel("Recon Error")
-    axes[2].grid(True, alpha=0.3)
-
-    axes[3].plot(anomaly_scores, color="tab:red", linewidth=1.2)
-    axes[3].set_ylabel("Score")
-    axes[3].set_xlabel("Time")
-    axes[3].grid(True, alpha=0.3)
-
-    fig.tight_layout()
-    if save_path:
-        plt.savefig(f"{save_path}/{file_name}", bbox_inches="tight", dpi=300)
-    plt.close(fig)
-
-
-def plot_nasa_cycle_trend(cycle_numbers, series, save_path, file_name, ylabel, title, threshold=None, color="tab:red"):
-    cycle_numbers = np.asarray(cycle_numbers, dtype=np.float32)
-    series = np.asarray(series, dtype=np.float32)
-    min_len = min(len(cycle_numbers), len(series))
-    cycle_numbers = cycle_numbers[:min_len]
-    series = series[:min_len]
-
-    fig, ax = plt.subplots(figsize=(12, 4))
-    ax.plot(cycle_numbers, series, color=color, linewidth=1.2, marker="o", markersize=2)
-    if threshold is not None:
-        ax.axhline(float(threshold), color="black", linestyle="--", linewidth=1, label="阈值")
-        ax.legend(loc="upper right")
-    ax.set_xlabel("循环编号")
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.grid(True, alpha=0.3)
-    fig.tight_layout()
-    if save_path:
-        plt.savefig(f"{save_path}/{file_name}", bbox_inches="tight", dpi=300)
-    plt.close(fig)
-
-
-def _find_knee_cycle_candidates(cycle_numbers, capacities, top_k=3):
-    cycle_numbers = np.asarray(cycle_numbers, dtype=np.float32)
-    capacities = np.asarray(capacities, dtype=np.float32)
-    min_len = min(len(cycle_numbers), len(capacities))
-    if min_len < 5:
-        return []
-
-    cycle_numbers = cycle_numbers[:min_len]
-    capacities = capacities[:min_len]
-
-    finite_mask = np.isfinite(cycle_numbers) & np.isfinite(capacities)
-    if np.count_nonzero(finite_mask) < 5:
-        return []
-
-    cycle_numbers = cycle_numbers[finite_mask]
-    capacities = capacities[finite_mask]
-
-    if len(cycle_numbers) < 5:
-        return []
-
-    smooth_series = pd.Series(capacities).interpolate(limit_direction="both").rolling(
-        window=5, center=True, min_periods=1
-    ).mean().values
-    first_grad = np.gradient(smooth_series, cycle_numbers)
-    second_grad = np.gradient(first_grad, cycle_numbers)
-
-    candidate_scores = -second_grad
-    valid_mask = np.ones_like(candidate_scores, dtype=bool)
-    valid_mask[:2] = False
-    valid_mask[-2:] = False
-    candidate_scores = np.where(valid_mask & np.isfinite(candidate_scores), candidate_scores, -np.inf)
-
-    top_indices = np.argsort(candidate_scores)[-top_k:][::-1]
-    top_indices = [int(idx) for idx in top_indices if np.isfinite(candidate_scores[idx])]
-
-    seen_cycles = set()
-    candidates = []
-    for idx in top_indices:
-        cycle_num = int(cycle_numbers[idx])
-        capacity_val = capacities[idx]
-        if cycle_num in seen_cycles:
-            continue
-        if not np.isfinite(capacity_val):
-            continue
-        seen_cycles.add(cycle_num)
-        candidates.append({
-            "cycle_number": cycle_num,
-            "capacity": float(capacity_val),
-            "score": float(candidate_scores[idx]),
-        })
-    return candidates
-
-
-def _find_score_knee_cycle_candidates(cycle_numbers, scores, top_k=3):
-    cycle_numbers = np.asarray(cycle_numbers, dtype=np.float32)
-    scores = np.asarray(scores, dtype=np.float32)
-    min_len = min(len(cycle_numbers), len(scores))
-    if min_len < 5:
-        return []
-
-    cycle_numbers = cycle_numbers[:min_len]
-    scores = scores[:min_len]
-
-    finite_mask = np.isfinite(cycle_numbers) & np.isfinite(scores)
-    if np.count_nonzero(finite_mask) < 5:
-        return []
-
-    cycle_numbers = cycle_numbers[finite_mask]
-    scores = scores[finite_mask]
-
-    if len(cycle_numbers) < 5:
-        return []
-
-    smooth_series = pd.Series(scores).interpolate(limit_direction="both").rolling(
-        window=5, center=True, min_periods=1
-    ).mean().values
-    first_grad = np.gradient(smooth_series, cycle_numbers)
-    second_grad = np.gradient(first_grad, cycle_numbers)
-
-    candidate_scores = second_grad
-    valid_mask = np.ones_like(candidate_scores, dtype=bool)
-    valid_mask[:2] = False
-    valid_mask[-2:] = False
-    candidate_scores = np.where(valid_mask & np.isfinite(candidate_scores), candidate_scores, -np.inf)
-
-    top_indices = np.argsort(candidate_scores)[-top_k:][::-1]
-    top_indices = [int(idx) for idx in top_indices if np.isfinite(candidate_scores[idx])]
-
-    seen_cycles = set()
-    candidates = []
-    for idx in top_indices:
-        cycle_num = int(cycle_numbers[idx])
-        score_val = scores[idx]
-        if cycle_num in seen_cycles:
-            continue
-        if not np.isfinite(score_val):
-            continue
-        seen_cycles.add(cycle_num)
-        candidates.append({
-            "cycle_number": cycle_num,
-            "score_mean": float(score_val),
-            "knee_score": float(candidate_scores[idx]),
-        })
-    return candidates
-
-
-def _build_nasa_knee_metrics(cycle_level_df):
-    if cycle_level_df.empty:
-        return {}
-
-    cycle_numbers = cycle_level_df["cycle_number"].values
-    capacities = cycle_level_df["capacity_last"].values
-    score_mean = cycle_level_df["score_mean"].values
-
-    true_knee_candidates = _find_knee_cycle_candidates(cycle_numbers, capacities, top_k=3)
-    pred_knee_candidates = _find_score_knee_cycle_candidates(cycle_numbers, score_mean, top_k=3)
-
-    summary = {
-        "true_knee_candidates": true_knee_candidates,
-        "pred_knee_candidates": pred_knee_candidates,
-        "true_knee_cycle": None,
-        "pred_knee_cycle": None,
-        "knee_cycle_error": None,
-        "normalized_knee_error": None,
-        "early_warning_lead": None,
-    }
-
-    if not true_knee_candidates or not pred_knee_candidates:
-        return summary
-
-    true_knee_cycle = int(true_knee_candidates[0]["cycle_number"])
-    pred_knee_cycle = int(pred_knee_candidates[0]["cycle_number"])
-    knee_cycle_error = abs(pred_knee_cycle - true_knee_cycle)
-    num_cycles = max(int(len(cycle_level_df)), 1)
-
-    summary.update({
-        "true_knee_cycle": true_knee_cycle,
-        "pred_knee_cycle": pred_knee_cycle,
-        "knee_cycle_error": int(knee_cycle_error),
-        "normalized_knee_error": float(knee_cycle_error / num_cycles),
-        "early_warning_lead": int(true_knee_cycle - pred_knee_cycle),
-    })
-    return summary
-
-
-def plot_nasa_cycle_capacity_score(cycle_level_df, save_path, file_name, title, threshold=None, top_k=3):
-    if cycle_level_df.empty:
-        return
-
-    plot_df = cycle_level_df.sort_values("cycle_number").reset_index(drop=True)
-    cycle_numbers = plot_df["cycle_number"].values
-    capacities = plot_df["capacity_last"].values
-    score_mean = plot_df["score_mean"].values
-
-    fig, ax1 = plt.subplots(figsize=(12, 6))
-    line1 = ax1.plot(cycle_numbers, capacities, color="tab:blue", linewidth=2.0, marker="o", markersize=3,
-                     label="Capacity")
-    ax1.set_xlabel("Cycle Number")
-    ax1.set_ylabel("Capacity", color="tab:blue")
-    ax1.tick_params(axis="y", labelcolor="tab:blue")
-    ax1.grid(True, alpha=0.3)
-
-    ax2 = ax1.twinx()
-    line2 = ax2.plot(cycle_numbers, score_mean, color="tab:red", linewidth=1.8, marker="s", markersize=3,
-                     label="Mean Anomaly Score")
-    ax2.set_ylabel("Anomaly Score", color="tab:red")
-    ax2.tick_params(axis="y", labelcolor="tab:red")
-    threshold_handle = None
-    true_knee_handle = None
-    pred_knee_handle = None
-    if threshold is not None:
-        threshold_handle = ax2.axhline(float(threshold), color="black", linestyle="--", linewidth=1.0, label="Threshold")
-
-    top_cycle_rows = plot_df.sort_values("score_max", ascending=False).head(top_k)
-    for _, row in top_cycle_rows.iterrows():
-        cycle_num = row["cycle_number"]
-        score_val = row["score_mean"]
-        ax2.scatter(cycle_num, score_val, color="gold", edgecolors="black", s=50, zorder=5)
-        ax2.annotate(
-            f"Anom:{int(cycle_num)}",
-            xy=(cycle_num, score_val),
-            xytext=(0, 8),
-            textcoords="offset points",
-            ha="center",
-            fontsize=8,
-            color="black",
-            arrowprops=dict(arrowstyle="-", color="gray", linewidth=0.8),
-        )
-
-    knee_candidates = _find_knee_cycle_candidates(cycle_numbers, capacities, top_k=3)
-    for idx, candidate in enumerate(knee_candidates, start=1):
-        cycle_num = candidate["cycle_number"]
-        capacity_val = candidate["capacity"]
-        scatter = ax1.scatter(
-            cycle_num,
-            capacity_val,
-            color="purple",
-            marker="^",
-            s=60,
-            zorder=6,
-            label="True Knee" if idx == 1 else None,
-        )
-        if idx == 1:
-            true_knee_handle = scatter
-        ax1.annotate(
-            f"TK{idx}:{cycle_num}",
-            xy=(cycle_num, capacity_val),
-            xytext=(8, -14),
-            textcoords="offset points",
-            ha="left",
-            fontsize=8,
-            color="purple",
-            arrowprops=dict(arrowstyle="->", color="purple", linewidth=0.8),
-        )
-
-    pred_knee_candidates = _find_score_knee_cycle_candidates(cycle_numbers, score_mean, top_k=1)
-    if pred_knee_candidates:
-        pred_candidate = pred_knee_candidates[0]
-        pred_cycle_num = pred_candidate["cycle_number"]
-        pred_score_val = pred_candidate["score_mean"]
-        pred_knee_handle = ax2.scatter(
-            pred_cycle_num,
-            pred_score_val,
-            color="limegreen",
-            marker="D",
-            s=58,
-            edgecolors="black",
-            zorder=6,
-            label="Predicted Knee",
-        )
-        ax2.annotate(
-            f"PK:{int(pred_cycle_num)}",
-            xy=(pred_cycle_num, pred_score_val),
-            xytext=(8, 10),
-            textcoords="offset points",
-            ha="left",
-            fontsize=8,
-            color="darkgreen",
-            arrowprops=dict(arrowstyle="->", color="darkgreen", linewidth=0.8),
-        )
-
-    ax1.set_title(title)
-    lines = line1 + line2
-    labels = [line.get_label() for line in lines]
-    if threshold_handle is not None:
-        lines = lines + [threshold_handle]
-        labels = labels + [threshold_handle.get_label()]
-    if true_knee_handle is not None:
-        lines = lines + [true_knee_handle]
-        labels = labels + [true_knee_handle.get_label()]
-    if pred_knee_handle is not None:
-        lines = lines + [pred_knee_handle]
-        labels = labels + [pred_knee_handle.get_label()]
-    ax1.legend(lines, labels, loc="upper right")
-    fig.tight_layout()
-    if save_path:
-        plt.savefig(f"{save_path}/{file_name}", bbox_inches="tight", dpi=300)
-    plt.close(fig)
-
-
-def build_nasa_cycle_level_df(cycle_numbers, capacities, pred_error, recon_error, anomaly_scores, threshold=None):
-    cycle_numbers = np.asarray(cycle_numbers, dtype=np.float32)
-    capacities = np.asarray(capacities, dtype=np.float32)
-    pred_error = np.asarray(pred_error, dtype=np.float32)
-    recon_error = np.asarray(recon_error, dtype=np.float32)
-    anomaly_scores = np.asarray(anomaly_scores, dtype=np.float32)
-
-    min_len = min(len(cycle_numbers), len(capacities), len(pred_error), len(recon_error), len(anomaly_scores))
-    if min_len == 0:
-        return pd.DataFrame()
-
-    cycle_df = pd.DataFrame({
-        "cycle_number": cycle_numbers[:min_len].astype(np.int32),
-        "capacity": capacities[:min_len],
-        "pred_error": pred_error[:min_len],
-        "recon_error": recon_error[:min_len],
-        "anomaly_score": anomaly_scores[:min_len],
-    })
-
-    grouped = cycle_df.groupby("cycle_number", as_index=False).agg(
-        capacity_mean=("capacity", "mean"),
-        capacity_last=("capacity", "last"),
-        pred_error_mean=("pred_error", "mean"),
-        pred_error_max=("pred_error", "max"),
-        recon_error_mean=("recon_error", "mean"),
-        recon_error_max=("recon_error", "max"),
-        score_mean=("anomaly_score", "mean"),
-        score_max=("anomaly_score", "max"),
-        score_std=("anomaly_score", "std"),
-        n_points=("anomaly_score", "size"),
-    )
-    grouped["score_std"] = grouped["score_std"].fillna(0.0)
-    if threshold is not None:
-        grouped["score_mean_over_threshold"] = (grouped["score_mean"] >= float(threshold)).astype(int)
-        grouped["score_max_over_threshold"] = (grouped["score_max"] >= float(threshold)).astype(int)
-    return grouped
-
-
-def save_nasa_cycle_level_outputs(save_path, battery_name, cycle_level_df, threshold=None):
-    if cycle_level_df.empty:
-        return {}
-
-    cycle_level_df.to_csv(f"{save_path}/cycle_level_scores.csv", index=False)
-
-    plot_nasa_cycle_capacity_score(
-        cycle_level_df,
-        save_path=save_path,
-        file_name="cycle_level_capacity_vs_score.png",
-        title=f"{battery_name} Cycle-level Capacity vs Anomaly Score",
-        threshold=threshold,
-        top_k=3,
-    )
-    plot_nasa_cycle_trend(
-        cycle_level_df["cycle_number"].values,
-        cycle_level_df["score_mean"].values,
-        save_path=save_path,
-        file_name="cycle_level_score_trend.png",
-        ylabel="Cycle-level Mean Anomaly Score",
-        title=f"{battery_name} Cycle-level Mean Anomaly Score Trend",
-        threshold=threshold,
-        color="tab:red",
-    )
-
-    top_cycle_rows = cycle_level_df.sort_values("score_max", ascending=False).head(5)
-    knee_metrics = _build_nasa_knee_metrics(cycle_level_df)
-    summary = {
-        "num_cycles": int(len(cycle_level_df)),
-        "global_threshold": threshold,
-        "max_cycle_score": float(cycle_level_df["score_max"].max()),
-        "mean_cycle_score": float(cycle_level_df["score_mean"].mean()),
-        "top_cycles_by_score_max": [int(v) for v in top_cycle_rows["cycle_number"].tolist()],
-        "top_cycles_by_score_mean": [
-            int(v) for v in cycle_level_df.sort_values("score_mean", ascending=False).head(5)["cycle_number"].tolist()
-        ],
-        "true_knee_cycle": knee_metrics.get("true_knee_cycle"),
-        "pred_knee_cycle": knee_metrics.get("pred_knee_cycle"),
-        "knee_cycle_error": knee_metrics.get("knee_cycle_error"),
-        "normalized_knee_error": knee_metrics.get("normalized_knee_error"),
-        "early_warning_lead": knee_metrics.get("early_warning_lead"),
-        "true_knee_candidates": knee_metrics.get("true_knee_candidates", []),
-        "pred_knee_candidates": knee_metrics.get("pred_knee_candidates", []),
-    }
-    with open(f"{save_path}/cycle_level_summary.json", "w") as f:
-        json.dump(summary, f, indent=2)
-
-    return summary
-
-
-def get_nasa_battery_profiles(prefix, battery_names, window_size):
-    profiles = []
-    offset = 0
-    for battery_name in battery_names:
-        _, battery_test_data, _ = load_nasa_processed_data(prefix, battery_name)
-        battery_test_data = np.asarray(battery_test_data, dtype=np.float32)
-        effective_len = max(len(battery_test_data) - window_size, 0)
-        capacities = None
-        if battery_test_data.ndim == 2 and battery_test_data.shape[1] >= 1 and effective_len > 0:
-            capacities = battery_test_data[window_size:, -1]
-        profiles.append({
-            "battery_id": battery_name,
-            "raw_test_len": int(len(battery_test_data)),
-            "effective_len": int(effective_len),
-            "start": int(offset),
-            "end": int(offset + effective_len),
-            "capacities": capacities,
-        })
-        offset += effective_len
-    return profiles
-
-
-def _get_score_rising_stage(scores):
-    if len(scores) == 0:
-        return "unknown"
-    boundaries = np.linspace(0, len(scores), 4, dtype=int)
-    stage_names = ["early", "middle", "late"]
-    stage_means = []
-    for idx in range(3):
-        start, end = boundaries[idx], boundaries[idx + 1]
-        if end <= start:
-            stage_means.append(float("-inf"))
-        else:
-            stage_means.append(float(np.mean(scores[start:end])))
-    return stage_names[int(np.argmax(stage_means))]
-
-
-def extract_top_score_segments(anomaly_scores, threshold=None, top_k=5):
-    scores = np.asarray(anomaly_scores, dtype=np.float32)
-    if len(scores) == 0:
-        return []
-
-    if threshold is None:
-        threshold = float(np.percentile(scores, 95))
-
-    segments = []
-    start = None
-    for idx, score in enumerate(scores):
-        if score >= threshold and start is None:
-            start = idx
-        elif score < threshold and start is not None:
-            end = idx - 1
-            segment_scores = scores[start:end + 1]
-            peak_offset = int(np.argmax(segment_scores))
-            peak_idx = start + peak_offset
-            segments.append({
-                "start_idx": int(start),
-                "end_idx": int(end),
-                "length": int(end - start + 1),
-                "peak_idx": int(peak_idx),
-                "peak_score": float(scores[peak_idx]),
-                "mean_score": float(np.mean(segment_scores)),
-            })
-            start = None
-
-    if start is not None:
-        end = len(scores) - 1
-        segment_scores = scores[start:end + 1]
-        peak_offset = int(np.argmax(segment_scores))
-        peak_idx = start + peak_offset
-        segments.append({
-            "start_idx": int(start),
-            "end_idx": int(end),
-            "length": int(end - start + 1),
-            "peak_idx": int(peak_idx),
-            "peak_score": float(scores[peak_idx]),
-            "mean_score": float(np.mean(segment_scores)),
-        })
-
-    if not segments:
-        top_indices = np.argsort(scores)[-top_k:][::-1]
-        for idx in top_indices:
-            segments.append({
-                "start_idx": int(idx),
-                "end_idx": int(idx),
-                "length": 1,
-                "peak_idx": int(idx),
-                "peak_score": float(scores[idx]),
-                "mean_score": float(scores[idx]),
-            })
-
-    segments.sort(key=lambda item: item["peak_score"], reverse=True)
-    return segments[:top_k]
-
-
-def save_nasa_case_outputs(save_path, test_pred_df, capacities, cycle_numbers=None, battery_name="", train_batteries=None, test_batteries=None):
-    anomaly_scores = np.asarray(test_pred_df["A_Score_Global"].values, dtype=np.float32)
-    pred_error = np.asarray(test_pred_df["Pred_Error_Global"].values, dtype=np.float32)
-    recon_error = np.asarray(test_pred_df["Recon_Error_Global"].values, dtype=np.float32)
-    capacities = np.asarray(capacities, dtype=np.float32)
-    if cycle_numbers is None:
-        cycle_numbers = np.arange(len(capacities), dtype=np.float32)
-    else:
-        cycle_numbers = np.asarray(cycle_numbers, dtype=np.float32)
-
-    if train_batteries is None:
-        train_batteries = []
-    if test_batteries is None:
-        test_batteries = []
-
-    min_len = min(len(anomaly_scores), len(pred_error), len(recon_error), len(capacities), len(cycle_numbers))
-    anomaly_scores = anomaly_scores[:min_len]
-    pred_error = pred_error[:min_len]
-    recon_error = recon_error[:min_len]
-    capacities = capacities[:min_len]
-    cycle_numbers = cycle_numbers[:min_len]
-
-    threshold = None
-    if "Thresh_Global" in test_pred_df.columns and len(test_pred_df) > 0:
-        threshold = float(test_pred_df["Thresh_Global"].iloc[0])
-
-    plot_anomaly_score_vs_capacity(
-        anomaly_scores,
-        capacities,
-        save_path=save_path,
-        file_name="capacity_vs_score.png",
-        title=f"{battery_name} Capacity vs Anomaly Score",
-    )
-    plot_nasa_trend(
-        anomaly_scores,
-        save_path=save_path,
-        file_name="score_trend.png",
-        ylabel="Anomaly Score",
-        title=f"{battery_name} Anomaly Score Trend",
-        threshold=threshold,
-        color="tab:red",
-    )
-    plot_nasa_trend(
-        pred_error,
-        save_path=save_path,
-        file_name="prediction_error_trend.png",
-        ylabel="Prediction Error",
-        title=f"{battery_name} Prediction Error Trend",
-        color="tab:orange",
-    )
-    plot_nasa_trend(
-        recon_error,
-        save_path=save_path,
-        file_name="reconstruction_error_trend.png",
-        ylabel="Reconstruction Error",
-        title=f"{battery_name} Reconstruction Error Trend",
-        color="tab:green",
-    )
-    plot_nasa_case_overview(capacities, pred_error, recon_error, anomaly_scores, save_path)
-
-    cycle_level_df = build_nasa_cycle_level_df(
-        cycle_numbers,
-        capacities,
-        pred_error,
-        recon_error,
-        anomaly_scores,
-        threshold=threshold,
-    )
-    cycle_level_summary = save_nasa_cycle_level_outputs(save_path, battery_name, cycle_level_df, threshold=threshold)
-
-    top_segments = extract_top_score_segments(anomaly_scores, threshold=threshold, top_k=5)
-    top_segments_df = pd.DataFrame(top_segments)
-    top_segments_df.to_csv(f"{save_path}/top_anomaly_segments.csv", index=False)
-
-    valid_capacities = capacities[~np.isnan(capacities)]
-    capacity_drop_rate = 0.0
-    if len(valid_capacities) > 1 and valid_capacities[0] != 0:
-        capacity_drop_rate = float((valid_capacities[0] - valid_capacities[-1]) / valid_capacities[0])
-
-    summary = {
-        "battery_id": battery_name,
-        "train_batteries": train_batteries,
-        "test_batteries": test_batteries,
-        "num_points": int(min_len),
-        "global_threshold": threshold,
-        "max_score": float(np.max(anomaly_scores)) if len(anomaly_scores) > 0 else None,
-        "mean_score": float(np.mean(anomaly_scores)) if len(anomaly_scores) > 0 else None,
-        "score_std": float(np.std(anomaly_scores)) if len(anomaly_scores) > 0 else None,
-        "score_rising_stage": _get_score_rising_stage(anomaly_scores),
-        "capacity_drop_rate": capacity_drop_rate,
-        "pred_error_mean": float(np.mean(pred_error)) if len(pred_error) > 0 else None,
-        "recon_error_mean": float(np.mean(recon_error)) if len(recon_error) > 0 else None,
-        "topk_score_indices": [int(idx) for idx in np.argsort(anomaly_scores)[-5:][::-1].tolist()] if len(anomaly_scores) > 0 else [],
-        "num_cycles": int(cycle_level_summary["num_cycles"]) if cycle_level_summary else 0,
-        "top_cycles_by_score_max": cycle_level_summary.get("top_cycles_by_score_max", []),
-        "top_cycles_by_score_mean": cycle_level_summary.get("top_cycles_by_score_mean", []),
-        "true_knee_cycle": cycle_level_summary.get("true_knee_cycle"),
-        "pred_knee_cycle": cycle_level_summary.get("pred_knee_cycle"),
-        "knee_cycle_error": cycle_level_summary.get("knee_cycle_error"),
-        "normalized_knee_error": cycle_level_summary.get("normalized_knee_error"),
-        "early_warning_lead": cycle_level_summary.get("early_warning_lead"),
-    }
-    with open(f"{save_path}/nasa_case_summary.json", "w") as f:
-        json.dump(summary, f, indent=2)
-
-    return summary
-
-
-def save_nasa_battery_comparison(save_path, case_summaries):
-    if not case_summaries:
-        return []
-
-    comparison_rows = []
-    for summary in case_summaries:
-        comparison_rows.append({
-            "battery_id": summary["battery_id"],
-            "num_points": summary["num_points"],
-            "mean_score": summary["mean_score"],
-            "max_score": summary["max_score"],
-            "score_std": summary["score_std"],
-            "pred_error_mean": summary["pred_error_mean"],
-            "recon_error_mean": summary["recon_error_mean"],
-            "capacity_drop_rate": summary["capacity_drop_rate"],
-        })
-
-    if not comparison_rows:
-        return []
-
-    comparison_df = pd.DataFrame(comparison_rows)
-    comparison_df.to_csv(f"{save_path}/battery_comparison.csv", index=False)
-
-    fig, ax1 = plt.subplots(figsize=(10, 5))
-    x = np.arange(len(comparison_df))
-    ax1.bar(x - 0.15, comparison_df["mean_score"], width=0.3, label="Mean Score", color="tab:red")
-    ax1.bar(x + 0.15, comparison_df["max_score"], width=0.3, label="Max Score", color="tab:orange")
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(comparison_df["battery_id"].tolist())
-    ax1.set_ylabel("Anomaly Score")
-
-    ax2 = ax1.twinx()
-    if comparison_df["capacity_drop_rate"].notna().any():
-        capacity_values = comparison_df["capacity_drop_rate"].fillna(0.0).values
-        ax2.plot(x, capacity_values, color="tab:blue", marker="o", linewidth=1.5, label="Capacity Drop Rate")
-        ax2.set_ylabel("Capacity Drop Rate")
-
-    lines_1, labels_1 = ax1.get_legend_handles_labels()
-    lines_2, labels_2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc="upper right")
-    ax1.set_title("NASA Battery Comparison")
-    fig.tight_layout()
-    plt.savefig(f"{save_path}/battery_comparison.png", bbox_inches="tight", dpi=300)
-    plt.close(fig)
-
-    return comparison_rows
-
-
-def interpolate_capacity_to_timesteps(cycle_capacities, cycle_lengths, cycle_types):
-    """
-    将周期级的容量值插值到每个时间步（仅对充电周期进行插值）
-    :param cycle_capacities: 每个周期的容量值数组
-    :param cycle_lengths: 每个周期的时间步数
-    :param cycle_types: 每个周期的类型（charge/discharge）
-    :return: 插值后的每个时间步的容量值
-    """
-    total_steps = sum(cycle_lengths)
-    interpolated_capacities = np.zeros(total_steps, dtype=np.float32)
-
-    step_idx = 0
-    charge_cycle_points = []  # 充电周期的中心点和容量值
-    charge_cycle_indices = []  # 充电周期在数组中的索引
-
-    # 遍历所有周期，记录充电周期信息
-    for i, (capacity, length, cycle_type) in enumerate(zip(cycle_capacities, cycle_lengths, cycle_types)):
-        if cycle_type == 'charge':
-            # 记录充电周期的中心点和容量值
-            center_point = step_idx + length // 2
-            # 只有当容量值有效时才添加到插值点中
-            if not np.isnan(capacity) and capacity > 0:
-                charge_cycle_points.append((center_point, capacity))
-                charge_cycle_indices.append(i)
-
-        # 对于所有周期，先填入周期平均容量值
-        interpolated_capacities[step_idx:step_idx+length] = capacity if not np.isnan(capacity) else 0
-        step_idx += length
-
-    # 对充电周期进行插值处理
-    if len(charge_cycle_points) > 1:
-        # 提取充电周期的中心点和容量值
-        centers = [point[0] for point in charge_cycle_points]
-        capacities = [point[1] for point in charge_cycle_points]
-
-        # 创建插值函数
-        f = interp1d(centers, capacities, kind='linear', fill_value='extrapolate')
-
-        # 对充电周期覆盖的区域进行插值
-        for i in range(len(charge_cycle_indices)):
-            cycle_idx = charge_cycle_indices[i]
-            start_step = sum(cycle_lengths[:cycle_idx])
-            end_step = start_step + cycle_lengths[cycle_idx]
-
-            # 在充电周期范围内进行插值
-            cycle_steps = np.arange(start_step, end_step)
-            interpolated_values = f(cycle_steps)
-            interpolated_capacities[start_step:end_step] = interpolated_values
-
-    return interpolated_capacities
-
-

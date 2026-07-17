@@ -29,6 +29,8 @@ from src.models.modules import (
 
     WindowRegimeEncoder,
 
+    TemporalRegimeEncoder,
+
     FiLMConditioner,
 
     RegimeResidualGate,
@@ -141,9 +143,17 @@ class Enhanced_MTADGAT(nn.Module):
 
             regime_emb_dim=32,
 
-            regime_condition_mode="transformer_residual",
+            regime_condition_mode="fusion",
 
             regime_stat_features=None,
+
+            regime_encoder_type="temporal",
+
+            regime_control_indices=None,
+
+            regime_current_index=None,
+
+            regime_soc_index=None,
 
             use_physical_state_encoding=False,
 
@@ -168,6 +178,14 @@ class Enhanced_MTADGAT(nn.Module):
 
         self.regime_condition_mode = regime_condition_mode
 
+        self.regime_encoder_type = regime_encoder_type
+
+        self.regime_current_index = regime_current_index
+
+        self.regime_soc_index = regime_soc_index
+
+        self._regime_aux_prediction = None
+
         self.physical_state_config = dict(physical_state_config or {}) if physical_state_config is not None else None
 
         self.use_physical_state_encoding = use_physical_state_encoding and (feature_att_trans or use_transformer)
@@ -191,19 +209,39 @@ class Enhanced_MTADGAT(nn.Module):
 
         if self.use_regime_condition:
 
-            if regime_stat_features is None:
+            if regime_encoder_type == "statistics":
 
-                regime_stat_features = ["mean", "std", "last", "delta"]
+                if regime_stat_features is None:
 
-            self.regime_encoder = WindowRegimeEncoder(
+                    regime_stat_features = ["mean", "std", "last", "delta"]
 
-                n_features,
+                self.regime_encoder = WindowRegimeEncoder(
 
-                emb_dim=regime_emb_dim,
+                    n_features,
 
-                stat_features=regime_stat_features,
+                    emb_dim=regime_emb_dim,
 
-            )
+                    stat_features=regime_stat_features,
+
+                    control_indices=regime_control_indices,
+
+                )
+
+            elif regime_encoder_type == "temporal":
+
+                self.regime_encoder = TemporalRegimeEncoder(
+
+                    n_features,
+
+                    emb_dim=regime_emb_dim,
+
+                    control_indices=regime_control_indices,
+
+                )
+
+            else:
+
+                raise ValueError(f"Unsupported regime_encoder_type: {regime_encoder_type}")
 
             if self.use_regime_transformer_residual:
 
@@ -375,7 +413,21 @@ class Enhanced_MTADGAT(nn.Module):
 
         if self.use_regime_condition:
 
-            regime_embedding = self.regime_encoder(x)
+            if self.regime_encoder_type == "temporal":
+
+                regime_embedding, self._regime_aux_prediction = self.regime_encoder(
+
+                    state_input,
+
+                    return_auxiliary=True,
+
+                )
+
+            else:
+
+                regime_embedding = self.regime_encoder(x)
+
+                self._regime_aux_prediction = None
 
 
         x = self.conv(x)
@@ -460,6 +512,90 @@ class Enhanced_MTADGAT(nn.Module):
         return predictions, recons
 
 
+    def regime_auxiliary_loss(self, x):
+
+        """Self-supervise the learned dynamic-state embedding with window descriptors."""
+
+        if self._regime_aux_prediction is None or self.regime_encoder_type != "temporal":
+
+            return x.new_tensor(0.0)
+
+        current_index = self.regime_current_index
+
+        if current_index is None or current_index < 0 or current_index >= x.size(2):
+
+            control_indices = getattr(self.regime_encoder, "control_indices", None)
+
+            if control_indices is None:
+
+                current = x.mean(dim=2)
+
+            else:
+
+                current = torch.index_select(x, dim=2, index=control_indices).mean(dim=2)
+
+        else:
+
+            current = x[:, :, current_index]
+
+        current_scale = current.abs().amax(dim=1, keepdim=True).clamp_min(1e-6)
+
+        normalized_current = current / current_scale
+
+        mean_activity = normalized_current.abs().mean(dim=1)
+
+        current_variability = normalized_current.std(dim=1, unbiased=False)
+
+        sign_switch_rate = (
+
+            (normalized_current[:, 1:] * normalized_current[:, :-1]) < 0
+
+        ).float().mean(dim=1)
+
+        soc_index = self.regime_soc_index
+
+        if soc_index is None or soc_index < 0 or soc_index >= x.size(2):
+
+            state_delta = normalized_current[:, -1] - normalized_current[:, 0]
+
+        else:
+
+            soc = x[:, :, soc_index]
+
+            soc_scale = (soc.amax(dim=1) - soc.amin(dim=1)).clamp_min(1e-6)
+
+            state_delta = (soc[:, -1] - soc[:, 0]) / soc_scale
+
+        targets = torch.stack(
+
+            [mean_activity, current_variability, sign_switch_rate, state_delta],
+
+            dim=1,
+
+        ).detach()
+
+        return torch.nn.functional.smooth_l1_loss(self._regime_aux_prediction, targets)
+
+
+    def encode_regime(self, x):
+
+        """Expose dynamic-state embeddings for external probing and visualization."""
+
+        if not self.use_regime_condition:
+
+            raise RuntimeError("Regime conditioning is disabled for this model")
+
+        if self.regime_encoder_type == "temporal":
+
+            return self.regime_encoder(x)
+
+        if self.use_revin:
+
+            x, _ = self.revin(x, mode="norm")
+
+        return self.regime_encoder(x)
+
+
     @staticmethod
 
     def _apply_condition(hidden_state, regime_embedding, conditioner):
@@ -482,5 +618,3 @@ def find_largest_valid_nhead(d_model, max_nhead=8):
             return nhead
 
     return 1
-
-

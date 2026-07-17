@@ -139,11 +139,11 @@ def _score_sample_collection(predictor, sample_tensors, window_size, batch_size,
         df_dict[f"Recon_Weight_{i}"] = np.full_like(a_score, recon_weights[i], dtype=np.float32)
 
     score_df = pd.DataFrame(df_dict)
-    score_df["Pred_Error_Global"] = np.mean(pred_errors, axis=1)
-    score_df["Recon_Error_Global"] = np.mean(recon_errors, axis=1)
-    score_df["A_Score_Global"] = np.mean(anomaly_scores, axis=1)
-    score_df["Pred_Weight_Global"] = float(np.mean(pred_weights))
-    score_df["Recon_Weight_Global"] = float(np.mean(recon_weights))
+    score_df["Pred_Error_Global"] = predictor._aggregate_output_scores(pred_errors)
+    score_df["Recon_Error_Global"] = predictor._aggregate_output_scores(recon_errors)
+    score_df["A_Score_Global"] = predictor._aggregate_output_scores(anomaly_scores)
+    score_df["Pred_Weight_Global"] = float(np.mean(predictor._score_view(pred_weights[None, :])))
+    score_df["Recon_Weight_Global"] = float(np.mean(predictor._score_view(recon_weights[None, :])))
 
     return score_df, dataset.sample_ids, dataset.window_counts
 

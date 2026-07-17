@@ -1,0 +1,50 @@
+{
+  "python": "3.12.13",
+  "torch": "2.5.1+cu118",
+  "cuda_runtime": "11.8",
+  "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",
+  "gpu_memory_gib": 6.0,
+  "tsinghua_root": "datasets/TSINGHUA_EV",
+  "train_zip_entries": 28389,
+  "loaded_labeled_snippets": 28389,
+  "label_counts": {
+    "normal": 23735,
+    "abnormal": 4654
+  },
+  "sample_shapes": [
+    [
+      256,
+      7
+    ],
+    [
+      256,
+      7
+    ],
+    [
+      256,
+      7
+    ],
+    [
+      256,
+      7
+    ],
+    [
+      256,
+      7
+    ],
+    [
+      256,
+      7
+    ],
+    [
+      256,
+      7
+    ],
+    [
+      256,
+      7
+    ]
+  ],
+  "model_parameters": 335861,
+  "forward_backward": "passed"
+}

@@ -1,0 +1,37 @@
+{
+  "plan_name": "02_ch3_regime_ablation",
+  "_thesis_role": "第三章动态状态编码与条件化消融",
+  "_comment": "统计量编码器仅作为消融基线；完整方法使用控制/状态通道上的时序卷积与注意力池化。",
+  "common_args": {
+    "dataset": "TSINGHUA_EV",
+    "model_name": "mtad_gat_c3_regime",
+    "epochs": 50,
+    "bs": 256,
+    "lookback": 64,
+    "window_stride": 4,
+    "use_transformer": true,
+    "use_revin": false,
+    "use_regime_condition": true,
+    "regime_encoder_type": "temporal",
+    "regime_aux_lambda": 0.05,
+    "regime_condition_mode": "fusion",
+    "score_fusion_mode": "quality_aware",
+    "use_event_consistency": false,
+    "normalize": true,
+    "use_cuda": true,
+    "require_cuda": true,
+    "tsinghua_ev_validation_ratio": 0.15,
+    "sample_score_top_ratio": 0.05,
+    "early_stopping_patience": 8,
+    "log_tensorboard": false,
+    "seed": 3407
+  },
+  "experiments": [
+    {"name": "c3_full", "args": {"run_id": "ch3abl_full"}},
+    {"name": "c3_no_condition", "args": {"use_regime_condition": false, "regime_aux_lambda": 0.0, "run_id": "ch3abl_no_condition"}},
+    {"name": "c3_statistics_encoder", "args": {"regime_encoder_type": "statistics", "regime_aux_lambda": 0.0, "run_id": "ch3abl_statistics"}},
+    {"name": "c3_no_regime_aux", "args": {"regime_aux_lambda": 0.0, "run_id": "ch3abl_no_regime_aux"}},
+    {"name": "c3_transformer_residual_gate", "args": {"regime_condition_mode": "transformer_residual", "run_id": "ch3abl_residual_gate"}},
+    {"name": "c3_fixed_score_fusion", "args": {"score_fusion_mode": "fixed", "run_id": "ch3abl_fixed_fusion"}}
+  ]
+}

@@ -1,8 +1,8 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
     "python.terminal.activateEnvInCurrentTerminal": true,
     "python.analysis.extraPaths": [
-        "./src"
+        "${workspaceFolder}/src"
     ],
     "chat.useAgentSkills": true,
     "chat.agentSkillsLocations": {

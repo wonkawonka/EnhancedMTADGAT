@@ -1,36 +1,30 @@
-<!-- 说明：记录项目分析报告、生成报告和模板的统一目录。 -->
+# 报告阅读入口
 
-# 报告目录说明
+论文与实验按下面顺序梳理即可：
 
-`report/` 用来沉淀分析文档，不再把分析结论散落在聊天记录和临时截图里。
+1. [thesis_experiment_design.md](thesis_experiment_design.md)：先看研究问题、两章递进关系和完整实验流程。
+2. [dataset_inventory.md](dataset_inventory.md)：再确认每个数据集的条件变量、响应变量、划分和评价口径。
+3. [model_design_and_literature_audit.md](model_design_and_literature_audit.md)：需要写方法与相关工作时，查公式、创新边界和核心文献。
+4. [kaggle_runbook.md](kaggle_runbook.md)：实际运行实验时使用。
+5. [figures/](figures/)：第三章和第四章模型结构图。
 
-## 建议结构
+## 一句话主线
 
-- `report/analysis/`
-  - 各数据集的数据探索分析输出，包含 `csv/json/md/png`
-- `report/generated/`
-  - 项目级汇总报告，如实验计划盘点、消融矩阵、分析报告索引
-- `report/templates/`
-  - 报告模板，后续写论文或中期材料时直接复用
+- 第三章：用相对可信的运行条件形成连续上下文，并在关系融合表示上进行 FiLM 条件化，使正常响应随运行状态变化。
+- 第四章：在第三章上增加电压、温度、电荷流和 SOC—电流响应一致性。
 
-## 生成方式
+## 统一执行入口
 
-数据分析：
-
-```powershell
-.\.python312\python.exe -m src.runners.analyze --dataset MSL
-.\.python312\python.exe -m src.runners.analyze --dataset NASA_RANDOM_DISCHARGE --nasa_train_batteries RW1,RW2,RW7,RW8 --nasa_test_batteries RW1,RW2,RW7,RW8
+```bash
+.venv/bin/python run.py preflight --tsinghua-ev-root datasets/TSINGHUA_EV
+.venv/bin/python run.py internal --plan configs/internal/00_kaggle_smoke.json
+.venv/bin/python run.py internal --plan configs/internal/01_ch3_main.json --resume --skip-existing
 ```
 
-项目总报告：
+生成项目汇总：
 
-```powershell
-.\.python312\python.exe -m src.runners.build_report
+```bash
+.venv/bin/python -m src.runners.build_report
 ```
 
-统一入口：
-
-```powershell
-.\.python312\python.exe .\run.py full --internal-plan configs/internal/03_ch4_nasa_random_main.json --analysis-dataset NASA_RANDOM_DISCHARGE
-```
-
+`generated/` 是自动汇总，`analysis/` 是数据分析产物，`templates/` 仅放复用模板；论文口径以上述三个核心 Markdown 为准。

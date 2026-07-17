@@ -1,4 +1,6 @@
 /venv/
+/.venv/
+/.python312-runtime/
 __pycache__/
 .idea/
 .DS_Store
@@ -8,11 +10,11 @@ __pycache__/
 datasets/**/processed/
 datasets/**/processed/**
 datasets/CH-BATTERY/
-datasets/BMS/
 .ipynb_checkpoints/
 */logs
 output/
 experiment_runs/
+/runs/
 external_runs/
 kaggle离线output/
 external_baselines/**/__pycache__/

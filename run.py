@@ -60,6 +60,11 @@ def build_parser():
     add_common_execution_args(report_parser)
     report_parser.add_argument("--output-dir", default="", help="Optional project report output directory.")
 
+    preflight_parser = subparsers.add_parser("preflight", help="Check CUDA, data and model execution before training.")
+    add_common_execution_args(preflight_parser)
+    preflight_parser.add_argument("--tsinghua-ev-root", default=str(resolve_dataset_root("TSINGHUA-EV", "TSINGHUA_EV")))
+    preflight_parser.add_argument("--output", default="")
+
     full_parser = subparsers.add_parser("full", help="Run multiple configured stages in order.")
     add_common_execution_args(full_parser)
     full_parser.add_argument("--preprocess-dataset", action="append", default=[], help="Repeatable preprocess dataset.")
@@ -146,6 +151,13 @@ def handle_report(args):
     return run_subcommand(command, dry_run=args.dry_run)
 
 
+def handle_preflight(args):
+    command = [args.python, "-m", "src.runners.preflight", "--tsinghua-ev-root", args.tsinghua_ev_root]
+    if args.output.strip():
+        command.extend(["--output", args.output])
+    return run_subcommand(command, dry_run=args.dry_run)
+
+
 def handle_full(args):
     stages = []
     for dataset in args.preprocess_dataset:
@@ -208,6 +220,8 @@ def main():
         return_code = handle_analyze(args)
     elif args.command == "report":
         return_code = handle_report(args)
+    elif args.command == "preflight":
+        return_code = handle_preflight(args)
     elif args.command == "full":
         return_code = handle_full(args)
     else:

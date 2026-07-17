@@ -16,7 +16,7 @@ def normalize_model_name(model_name):
 
 def get_available_model_names():
 
-    return ["mtad_gat", "mtad_gat_c3"]
+    return ["mtad_gat", "mtad_gat_c3", "mtad_gat_c3_regime", "mtad_gat_c4_physics"]
 
 
 def get_model_family_defaults(model_name):
@@ -42,7 +42,7 @@ def get_model_family_defaults(model_name):
 
     }
 
-    if model_name == "mtad_gat_c3":
+    if model_name in {"mtad_gat_c3", "mtad_gat_c3_regime", "mtad_gat_c4_physics"}:
 
         defaults.update({
 
@@ -50,11 +50,33 @@ def get_model_family_defaults(model_name):
 
             "use_regime_condition": True,
 
-            "use_revin": True,
+            # RevIN remains available for compatibility, but it is not part of
+            # the formal C3/C4 model families.  The thesis focuses on explicit
+            # continuous-state conditioning instead of a separate
+            # normalization-based distribution-shift branch.
+            "use_revin": False,
 
             "score_fusion_mode": "quality_aware",
 
-            "use_event_consistency": True,
+            "use_event_consistency": False,
+
+            "regime_encoder_type": "temporal",
+
+            # C3 conditions the fused relation representation before the shared
+            # GRU/Transformer sequence encoders (scheme 3 / FiLM conditioning).
+            "regime_condition_mode": "fusion",
+
+        })
+
+    if model_name == "mtad_gat_c4_physics":
+
+        defaults.update({
+
+            "use_physical_state_encoding": True,
+
+            "use_physical_regularization": True,
+
+            "use_physical_response_score": True,
 
         })
 
@@ -87,7 +109,7 @@ def resolve_physical_state_config(args):
 
     dataset = str(getattr(args, "dataset", "")).upper()
 
-    if dataset not in {"BMS", "NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"}:
+    if dataset not in {"BMS", "NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE", "TSINGHUA_EV"}:
 
         return None
 
@@ -112,7 +134,21 @@ def resolve_physical_state_config(args):
 
         "smooth_temperature": True,
 
+        "voltage_max_index": None,
+
+        "voltage_min_index": None,
+
+        "temperature_max_index": None,
+
+        "temperature_min_index": None,
+
+        "response_terms": getattr(args, "physical_response_terms", ""),
+
     }
+
+    if not config["response_terms"]:
+
+        config.pop("response_terms")
 
 
     if dataset == "BMS":
@@ -125,6 +161,42 @@ def resolve_physical_state_config(args):
 
             "temperature_index": BMS_FEATURE_NAMES.index("BMSnTmean"),
 
+            "soc_index": BMS_FEATURE_NAMES.index("BMSnRSOC"),
+
+            "voltage_max_index": BMS_FEATURE_NAMES.index("BMSnVmax"),
+
+            "voltage_min_index": BMS_FEATURE_NAMES.index("BMSnVmin"),
+
+            "temperature_max_index": BMS_FEATURE_NAMES.index("BMSnTmax"),
+
+            "temperature_min_index": BMS_FEATURE_NAMES.index("BMSnTmin"),
+
+            "smooth_voltage": False,
+
+        })
+
+        return config
+
+    if dataset == "TSINGHUA_EV":
+
+        config.update({
+
+            "voltage_index": 0,
+
+            "current_index": 1,
+
+            "soc_index": 2,
+
+            "temperature_index": 5,
+
+            "voltage_max_index": 3,
+
+            "voltage_min_index": 4,
+
+            "temperature_max_index": 5,
+
+            "temperature_min_index": 6,
+
             "smooth_voltage": False,
 
         })
@@ -134,13 +206,11 @@ def resolve_physical_state_config(args):
 
     config.update({
 
-        "step_type_index": 0,
+        "voltage_index": 0,
 
-        "voltage_index": 1,
+        "current_index": 1,
 
-        "current_index": 2,
-
-        "temperature_index": 3,
+        "temperature_index": 2,
 
         "smooth_voltage": True,
 
@@ -149,14 +219,54 @@ def resolve_physical_state_config(args):
     return config
 
 
+def resolve_regime_config(args, n_features):
+
+    dataset = str(getattr(args, "dataset", "")).upper()
+
+    if dataset == "BMS":
+
+        return {
+
+            "control_indices": [
+                BMS_FEATURE_NAMES.index("SYS_I"),
+                BMS_FEATURE_NAMES.index("BMSnRSOC"),
+            ],
+
+            "current_index": BMS_FEATURE_NAMES.index("SYS_I"),
+
+            "soc_index": BMS_FEATURE_NAMES.index("BMSnRSOC"),
+
+        }
+
+    if dataset == "TSINGHUA_EV":
+
+        return {"control_indices": [1, 2], "current_index": 1, "soc_index": 2}
+
+    if dataset in {"NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"}:
+
+        # Raw step_type_code is removed by the loader.  Model-facing order is
+        # voltage, current, temperature, and only current describes the condition.
+        return {"control_indices": [1], "current_index": 1, "soc_index": None}
+
+    if dataset == "MSL" and n_features > 1:
+
+        # Channel 0 is the forecast/detection target in these benchmarks.  The
+        # remaining anonymous channels provide latent context, not battery state.
+        return {"control_indices": list(range(1, n_features)), "current_index": None, "soc_index": None}
+
+    return {"control_indices": list(range(n_features)), "current_index": None, "soc_index": None}
+
+
 def build_model(args, n_features, window_size, out_dim, target_dims=None):
 
     model_name = normalize_model_name(getattr(args, "model_name", "mtad_gat"))
 
     physical_state_config = resolve_physical_state_config(args)
 
+    regime_config = resolve_regime_config(args, n_features)
 
-    if model_name in {"mtad_gat", "mtad_gat_c3"}:
+
+    if model_name in {"mtad_gat", "mtad_gat_c3", "mtad_gat_c3_regime", "mtad_gat_c4_physics"}:
 
         return Enhanced_MTADGAT(
 
@@ -222,7 +332,7 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
 
             regime_emb_dim=getattr(args, "regime_emb_dim", 32),
 
-            regime_condition_mode=getattr(args, "regime_condition_mode", "transformer_residual"),
+            regime_condition_mode=getattr(args, "regime_condition_mode", "fusion"),
 
             regime_stat_features=[
 
@@ -233,6 +343,14 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
                 if stat.strip()
 
             ],
+
+            regime_encoder_type=getattr(args, "regime_encoder_type", "temporal"),
+
+            regime_control_indices=regime_config["control_indices"],
+
+            regime_current_index=regime_config["current_index"],
+
+            regime_soc_index=regime_config["soc_index"],
 
             use_physical_state_encoding=(
 
@@ -260,5 +378,3 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
         f"Add new baselines in model_factory.py before using them in train/predict."
 
     )
-
-

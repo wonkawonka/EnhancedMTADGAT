@@ -1,0 +1,41 @@
+{
+  "plan_name": "05_condition_validation",
+  "_thesis_role": "动态状态表征有效性与真实BMS案例，不参与故障检测主表",
+  "_comment": "NASA Random Walk的原始工步码不进入模型，仅按电流方向做事后弱表征探针与跨电池稳定性检查；BMS用于静置/调频告警率和切换稳定性，不报告故障F1。",
+  "common_args": {
+    "model_name": "mtad_gat_c3_regime",
+    "epochs": 30,
+    "bs": 256,
+    "lookback": 100,
+    "val_split": 0.0,
+    "use_transformer": true,
+    "use_revin": false,
+    "use_regime_condition": true,
+    "regime_encoder_type": "temporal",
+    "regime_aux_lambda": 0.05,
+    "regime_condition_mode": "fusion",
+    "use_event_consistency": false,
+    "normalize": true,
+    "use_cuda": true,
+    "require_cuda": true,
+    "early_stopping_patience": 0,
+    "log_tensorboard": false,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "nasa_random_condition",
+      "args": {
+        "dataset": "NASA_RANDOM_DISCHARGE",
+        "nasa_train_batteries": "RW1,RW2,RW7",
+        "nasa_test_batteries": "RW8",
+        "window_stride": 4,
+        "run_id": "condition_nasa_lobo_rw8"
+      }
+    },
+    {
+      "name": "bms_idle_frequency_regulation",
+      "args": {"dataset": "BMS", "window_stride": 4, "run_id": "condition_bms_case"}
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "plan_name": "00_kaggle_smoke",
+  "_thesis_role": "Kaggle GPU、数据和完整链路冒烟检查，不进入论文表格",
+  "_comment": "先运行本计划确认CUDA、Train.zip读取、训练、批量评分和报告输出，再运行正式50 epoch计划。",
+  "common_args": {
+    "dataset": "TSINGHUA_EV",
+    "epochs": 2,
+    "bs": 256,
+    "lookback": 64,
+    "window_stride": 8,
+    "tsinghua_ev_validation_ratio": 0.02,
+    "tsinghua_ev_max_train_samples": 1000,
+    "tsinghua_ev_max_validation_samples": 200,
+    "tsinghua_ev_max_test_samples_per_class": 200,
+    "regime_encoder_type": "temporal",
+    "regime_aux_lambda": 0.05,
+    "regime_condition_mode": "fusion",
+    "use_revin": false,
+    "use_event_consistency": false,
+    "normalize": true,
+    "use_cuda": true,
+    "require_cuda": true,
+    "num_workers": 2,
+    "predict_num_workers": 2,
+    "early_stopping_patience": 0,
+    "log_tensorboard": false,
+    "seed": 3407
+  },
+  "experiments": [
+    {"name": "smoke_c3", "args": {"model_name": "mtad_gat_c3_regime", "run_id": "smoke_c3"}},
+    {"name": "smoke_c4", "args": {"model_name": "mtad_gat_c4_physics", "run_id": "smoke_c4"}}
+  ]
+}

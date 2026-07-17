@@ -1,0 +1,50 @@
+{
+  "plan_name": "01_ch3_main",
+  "_thesis_role": "第三章动态状态条件化时序异常检测主结果",
+  "_comment": "MSL验证通用时序异常检测能力；清华公开包按有标签充电片段评估，因缺少车辆ID不宣称车辆级泛化。",
+  "_metrics": "MSL报告raw AUPRC、raw point-F1、precision、recall和AUROC；TSINGHUA_EV报告片段级AUROC、AUPRC及独立正常校准集阈值下的F1/recall/FPR。",
+  "seeds": [3407, 2024, 2025],
+  "common_args": {
+    "epochs": 50,
+    "bs": 256,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "regime_emb_dim": 32,
+    "regime_encoder_type": "temporal",
+    "regime_aux_lambda": 0.05,
+    "regime_condition_mode": "fusion",
+    "use_revin": false,
+    "tsinghua_ev_validation_ratio": 0.15,
+    "sample_score_top_ratio": 0.05,
+    "use_event_consistency": false,
+    "use_physical_state_encoding": false,
+    "use_physical_regularization": false,
+    "use_physical_response_score": false,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_cuda": true,
+    "require_cuda": true,
+    "early_stopping_patience": 8,
+    "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false
+  },
+  "experiments": [
+    {
+      "name": "msl_mtadgat_baseline",
+      "args": {"dataset": "MSL", "model_name": "mtad_gat", "lookback": 100, "run_id": "ch3_msl_mtadgat"}
+    },
+    {
+      "name": "msl_c3_regime",
+      "args": {"dataset": "MSL", "model_name": "mtad_gat_c3_regime", "lookback": 100, "regime_aux_lambda": 0.0, "run_id": "ch3_msl_regime"}
+    },
+    {
+      "name": "tsinghua_mtadgat_baseline",
+      "args": {"dataset": "TSINGHUA_EV", "model_name": "mtad_gat", "lookback": 64, "window_stride": 4, "run_id": "ch3_tsinghua_mtadgat"}
+    },
+    {
+      "name": "tsinghua_c3_regime",
+      "args": {"dataset": "TSINGHUA_EV", "model_name": "mtad_gat_c3_regime", "lookback": 64, "window_stride": 4, "run_id": "ch3_tsinghua_regime"}
+    }
+  ]
+}

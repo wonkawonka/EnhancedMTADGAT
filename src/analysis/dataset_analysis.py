@@ -48,8 +48,6 @@ from src.data.utils import (
 
     get_data,
 
-    get_nasa_battery_data,
-
     get_nasa_random_battery_data,
 
     is_sequence_container,
@@ -59,28 +57,7 @@ from src.data.utils import (
 from src.project_paths import resolve_dataset_root
 
 
-NASA_FEATURE_NAMES = [
-
-    "cycle_number",
-
-    "voltage_measured",
-
-    "current_measured",
-
-    "temperature_measured",
-
-    "current_charge",
-
-    "voltage_charge",
-
-    "capacity",
-
-]
-
-
 NASA_RANDOM_FEATURE_NAMES = [
-
-    "step_type_code",
 
     "voltage",
 
@@ -147,10 +124,6 @@ def _infer_feature_names(dataset: str, n_features: int, extra_feature_names: lis
     if dataset == "BMS":
 
         return get_bms_feature_names()
-
-    if dataset == "NASA":
-
-        return NASA_FEATURE_NAMES[:n_features]
 
     if dataset in {"NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"}:
 
@@ -1037,7 +1010,7 @@ def load_dataset_bundle(dataset: str, **kwargs) -> DatasetBundle:
     dataset_notes = []
 
 
-    if dataset in {"MSL", "SMAP", "CALCE", "CALCE2"}:
+    if dataset in {"MSL", "CALCE", "CALCE2"}:
 
         (train_array, _), (test_array, point_labels) = get_data(dataset, normalize=False)
 
@@ -1115,49 +1088,6 @@ def load_dataset_bundle(dataset: str, **kwargs) -> DatasetBundle:
         feature_names = _infer_feature_names(dataset, train_array.shape[1])
 
         dataset_notes.append("BMS 分析基于全部 processed cluster 聚合视图。")
-
-        return DatasetBundle(
-
-            dataset=dataset,
-
-            train_array=train_array,
-
-            test_array=test_array,
-
-            point_labels=point_labels,
-
-            feature_names=feature_names,
-
-            train_entity_rows=train_entity_rows,
-
-            test_entity_rows=test_entity_rows,
-
-            extra_metadata={"dataset_notes": dataset_notes},
-
-        )
-
-
-    if dataset == "NASA":
-
-        (train_map, _), (test_map, label_map) = get_nasa_battery_data(
-
-            normalize=False,
-
-            nasa_battery_id=kwargs.get("nasa_battery_id"),
-
-            nasa_train_batteries=kwargs.get("nasa_train_batteries"),
-
-            nasa_test_batteries=kwargs.get("nasa_test_batteries"),
-
-        )
-
-        train_array, _, train_entity_rows = _flatten_named_collection(train_map)
-
-        test_array, point_labels, test_entity_rows = _flatten_named_collection(test_map, label_mapping=label_map)
-
-        feature_names = _infer_feature_names(dataset, train_array.shape[1])
-
-        dataset_notes.append("NASA 分析使用 battery 级聚合视图。")
 
         return DatasetBundle(
 
@@ -1462,5 +1392,3 @@ def run_dataset_analysis(dataset: str, output_dir: Path, **kwargs) -> dict:
 
 
     return manifest
-
-

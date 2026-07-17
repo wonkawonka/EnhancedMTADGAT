@@ -3,6 +3,8 @@
 
 import json
 
+import time
+
 
 from tqdm import tqdm
 
@@ -10,6 +12,8 @@ from tqdm import tqdm
 from src.data.utils import *
 
 from src.engine.eval_methods import *
+
+from src.models.physical_response import compute_numpy_physical_response_errors
 
 
 def _autocast_context(device):
@@ -52,6 +56,16 @@ class Predictor:
 
         self.target_dims = pred_args["target_dims"]
 
+        self.score_dims = pred_args.get("score_dims")
+
+        if self.score_dims is None:
+
+            self.score_dims = get_score_dims(self.dataset, self.target_dims)
+
+        if self.score_dims is not None:
+
+            self.score_dims = [int(index) for index in self.score_dims]
+
         self.scale_scores = pred_args["scale_scores"]
 
         self.q = pred_args["q"]
@@ -72,17 +86,73 @@ class Predictor:
 
         self.event_min_length = pred_args.get("event_min_length", 3)
 
+        self.use_physical_response_score = pred_args.get("use_physical_response_score", False)
+
+        self.physical_response_config = pred_args.get("physical_response_config")
+
+        self.physical_response_max_weight = float(pred_args.get("physical_response_max_weight", 0.35))
+
+        self._physical_fusion_calibration = None
+
+        self.last_physical_response_term_summary = {}
+
+        self.last_scoring_stats = {}
+
+        self._fusion_weights = None
+
         self.reg_level = pred_args["reg_level"]
 
         self.save_path = pred_args["save_path"]
 
-        self.batch_size = 256
+        self.batch_size = int(pred_args.get("predict_batch_size", 256))
 
-        self.use_cuda = True
+        self.window_stride = max(1, int(pred_args.get("window_stride", 1)))
+
+        default_workers = 2 if os.name == "nt" else 4
+
+        self.num_workers = max(0, int(pred_args.get("predict_num_workers", default_workers)))
+
+        self.pin_memory = bool(pred_args.get("predict_pin_memory", True))
+
+        self.use_cuda = bool(pred_args.get("use_cuda", True))
 
         self.pred_args = pred_args
 
         self.summary_file_name = summary_file_name
+
+
+    def _score_view(self, values):
+
+        """Select response dimensions that are allowed to raise the global alarm."""
+
+        if self.score_dims is None:
+
+            return values
+
+        if values.ndim < 2:
+
+            raise ValueError("score dimension selection requires a 2-D array")
+
+        invalid = [index for index in self.score_dims if index < 0 or index >= values.shape[1]]
+
+        if invalid:
+
+            raise ValueError(
+
+                f"score_dims {invalid} exceed model output dimension {values.shape[1]}"
+
+            )
+
+        if not self.score_dims:
+
+            raise ValueError("No configured response dimension is present in model outputs")
+
+        return values[:, self.score_dims]
+
+
+    def _aggregate_output_scores(self, values):
+
+        return np.mean(self._score_view(values), axis=1)
 
 
     @staticmethod
@@ -108,6 +178,10 @@ class Predictor:
 
             return pred_weights, recon_weights
 
+        if self._fusion_weights is not None:
+
+            return self._fusion_weights
+
 
         pred_weights = []
 
@@ -132,7 +206,165 @@ class Predictor:
             recon_weights.append(recon_quality / quality_sum)
 
 
-        return np.asarray(pred_weights, dtype=np.float32), np.asarray(recon_weights, dtype=np.float32)
+        self._fusion_weights = (
+
+            np.asarray(pred_weights, dtype=np.float32),
+
+            np.asarray(recon_weights, dtype=np.float32),
+
+        )
+
+        return self._fusion_weights
+
+
+    def _restore_fusion_weights(self, score_df):
+
+        if self.score_fusion_mode != "quality_aware" or self._fusion_weights is not None or score_df.empty:
+
+            return
+
+        out_dim = self.n_features if self.target_dims is None else len(self.target_dims)
+
+        pred_columns = [f"Pred_Weight_{index}" for index in range(out_dim)]
+
+        recon_columns = [f"Recon_Weight_{index}" for index in range(out_dim)]
+
+        if all(column in score_df.columns for column in pred_columns + recon_columns):
+
+            self._fusion_weights = (
+
+                score_df[pred_columns].iloc[0].to_numpy(dtype=np.float32),
+
+                score_df[recon_columns].iloc[0].to_numpy(dtype=np.float32),
+
+            )
+
+
+    def _compute_physical_response_score(self, actual, recons, segment_lengths=None):
+
+        config = self.physical_response_config
+
+        if not self.use_physical_response_score or not config:
+
+            return None
+
+        if segment_lengths is None:
+            segment_lengths = [len(actual)]
+        if sum(segment_lengths) != len(actual):
+            raise ValueError("Physical-response segment lengths do not match score arrays")
+
+        score_parts = []
+        summary_values = {}
+        offset = 0
+        for segment_length in segment_lengths:
+            segment_slice = slice(offset, offset + segment_length)
+            term_errors = compute_numpy_physical_response_errors(
+                actual[segment_slice],
+                recons[segment_slice],
+                config,
+            )
+            if not term_errors:
+                return None
+            score_parts.append(np.mean(np.stack(list(term_errors.values()), axis=1), axis=1))
+            for name, values in term_errors.items():
+                summary_values.setdefault(name, []).append(np.asarray(values))
+            offset += segment_length
+
+        if not score_parts:
+
+            return None
+
+        self.last_physical_response_term_summary = {
+            name: float(np.mean(np.concatenate(values)))
+            for name, values in summary_values.items()
+        }
+        return np.concatenate(score_parts).astype(np.float32)
+
+
+    def _fuse_physical_response(self, model_scores, physical_scores):
+
+        if self._physical_fusion_calibration is None:
+
+            model_center = float(np.median(model_scores))
+
+            model_scale = float(np.median(np.abs(model_scores - model_center)) + 1e-6)
+
+            physical_center = float(np.median(physical_scores))
+
+            physical_scale = float(np.median(np.abs(physical_scores - physical_center)) + 1e-6)
+
+            model_stability = self._branch_stability(model_scores)
+
+            physical_stability = self._branch_stability(physical_scores)
+
+            physical_quality = 1.0 / (physical_stability + 1e-6)
+
+            model_quality = 1.0 / (model_stability + 1e-6)
+
+            weight = physical_quality / (physical_quality + model_quality)
+
+            weight = float(np.clip(weight, 0.0, self.physical_response_max_weight))
+
+            self._physical_fusion_calibration = {
+
+                "model_center": model_center,
+
+                "model_scale": model_scale,
+
+                "physical_center": physical_center,
+
+                "physical_scale": physical_scale,
+
+                "weight": weight,
+
+            }
+
+        calibration = self._physical_fusion_calibration
+
+        physical_standardized = np.maximum(
+
+            0.0,
+
+            (physical_scores - calibration["physical_center"]) / calibration["physical_scale"],
+
+        )
+
+        physical_aligned = calibration["model_center"] + calibration["model_scale"] * physical_standardized
+
+        weight = calibration["weight"]
+
+        return (1.0 - weight) * model_scores + weight * physical_aligned, weight
+
+
+    def get_calibration_summary(self):
+
+        """Expose validation-fitted score weights for reproducible reporting."""
+
+        summary = {
+
+            "score_fusion_mode": self.score_fusion_mode,
+
+            "global_score_dims": self.score_dims,
+
+        }
+
+        if self._fusion_weights is not None:
+
+            pred_weights, recon_weights = self._fusion_weights
+
+            summary["prediction_weights"] = [float(value) for value in pred_weights]
+
+            summary["reconstruction_weights"] = [float(value) for value in recon_weights]
+
+        if self._physical_fusion_calibration is not None:
+
+            summary["physical_response_weight"] = float(self._physical_fusion_calibration["weight"])
+
+            summary["physical_response_max_weight"] = float(self.physical_response_max_weight)
+
+            summary["calibration_source"] = "normal_validation_or_training_reference"
+
+        return summary
 
 
     @staticmethod
@@ -324,9 +556,216 @@ class Predictor:
 
             "latency": float(latency),
 
+            "metric_scope": "legacy_point_adjusted",
+
+            "point_adjustment": True,
+
         })
 
         return metrics
+
+
+    @staticmethod
+
+    def _binary_intervals(values):
+
+        values = np.asarray(values, dtype=np.int32)
+
+        padded = np.pad(values, (1, 1), mode="constant")
+
+        changes = np.diff(padded)
+
+        starts = np.where(changes == 1)[0]
+
+        ends = np.where(changes == -1)[0]
+
+        return list(zip(starts.tolist(), ends.tolist()))
+
+
+    def _evaluate_raw_events(self, pred, true_anomalies, score_df=None):
+
+        """Evaluate unadjusted interval detection and first-hit delay."""
+
+        if true_anomalies is None:
+
+            return {}
+
+        predictions = np.asarray(pred, dtype=np.int32)
+
+        labels = np.asarray(true_anomalies, dtype=np.int32)
+
+        if len(predictions) != len(labels):
+
+            raise ValueError("Event metric predictions and labels must have the same length")
+
+        segment_slices = self._split_segment_slices(score_df) if score_df is not None else [slice(0, len(labels))]
+
+        true_event_count = 0
+
+        detected_true_events = 0
+
+        predicted_event_count = 0
+
+        overlapping_predicted_events = 0
+
+        delays = []
+
+        for segment_slice in segment_slices:
+
+            segment_pred = predictions[segment_slice]
+
+            segment_labels = labels[segment_slice]
+
+            true_intervals = self._binary_intervals(segment_labels)
+
+            predicted_intervals = self._binary_intervals(segment_pred)
+
+            true_event_count += len(true_intervals)
+
+            predicted_event_count += len(predicted_intervals)
+
+            for start, end in true_intervals:
+
+                hits = np.where(segment_pred[start:end] == 1)[0]
+
+                if hits.size:
+
+                    detected_true_events += 1
+
+                    delays.append(int(hits[0]))
+
+            for pred_start, pred_end in predicted_intervals:
+
+                if any(pred_start < true_end and pred_end > true_start for true_start, true_end in true_intervals):
+
+                    overlapping_predicted_events += 1
+
+        event_precision = overlapping_predicted_events / predicted_event_count if predicted_event_count else 0.0
+
+        event_recall = detected_true_events / true_event_count if true_event_count else 0.0
+
+        event_f1 = (
+
+            2.0 * event_precision * event_recall / (event_precision + event_recall)
+
+            if event_precision + event_recall > 0
+
+            else 0.0
+
+        )
+
+        result = {
+
+            "metric_scope": "raw_event",
+
+            "point_adjustment": False,
+
+            "true_event_count": int(true_event_count),
+
+            "detected_true_event_count": int(detected_true_events),
+
+            "missed_true_event_count": int(true_event_count - detected_true_events),
+
+            "predicted_event_count": int(predicted_event_count),
+
+            "overlapping_predicted_event_count": int(overlapping_predicted_events),
+
+            "event_precision": float(event_precision),
+
+            "event_recall": float(event_recall),
+
+            "event_f1": float(event_f1),
+
+            "delay_unit": "scored_step",
+
+            "source_timestep_multiplier": int(self.window_stride),
+
+        }
+
+        if delays:
+
+            result.update({
+
+                "mean_first_hit_delay_scored_steps": float(np.mean(delays)),
+
+                "median_first_hit_delay_scored_steps": float(np.median(delays)),
+
+                "max_first_hit_delay_scored_steps": int(np.max(delays)),
+
+                "mean_first_hit_delay_source_timesteps": float(np.mean(delays) * self.window_stride),
+
+                "median_first_hit_delay_source_timesteps": float(np.median(delays) * self.window_stride),
+
+            })
+
+        else:
+
+            result.update({
+
+                "mean_first_hit_delay_scored_steps": None,
+
+                "median_first_hit_delay_scored_steps": None,
+
+                "max_first_hit_delay_scored_steps": None,
+
+                "mean_first_hit_delay_source_timesteps": None,
+
+                "median_first_hit_delay_source_timesteps": None,
+
+            })
+
+        return result
+
+
+    @staticmethod
+
+    def _evaluate_raw_scores(scores, pred, true_anomalies):
+
+        """Compute point metrics without point adjustment or threshold search."""
+
+        if true_anomalies is None:
+
+            return {}
+
+        from sklearn.metrics import average_precision_score, precision_recall_fscore_support, roc_auc_score
+
+        labels = np.asarray(true_anomalies, dtype=np.int32)
+
+        predictions = np.asarray(pred, dtype=np.int32)
+
+        precision, recall, f1, _ = precision_recall_fscore_support(
+
+            labels,
+
+            predictions,
+
+            average="binary",
+
+            zero_division=0,
+
+        )
+
+        result = {
+
+            "auprc": float(average_precision_score(labels, scores)),
+
+            "point_precision": float(precision),
+
+            "point_recall": float(recall),
+
+            "point_f1": float(f1),
+
+            "threshold_source": "normal_calibration_reference_epsilon",
+
+            "point_adjustment": False,
+
+        }
+
+        if np.unique(labels).size > 1:
+
+            result["auroc"] = float(roc_auc_score(labels, scores))
+
+        return result
 
 
     @staticmethod
@@ -687,19 +1126,26 @@ class Predictor:
 
         print("Predicting and calculating anomaly scores..")
 
-        data = SlidingWindowDataset(values, self.window_size, self.target_dims)
+        data = SlidingWindowDataset(
 
+            values,
 
-        # 优化数据加载器
-        num_workers = 2 if os.name == 'nt' else 4
+            self.window_size,
 
-        pin_memory = torch.cuda.is_available()
+            self.target_dims,
+
+            stride=self.window_stride,
+
+        )
+
 
         loader = torch.utils.data.DataLoader(
 
             data, batch_size=self.batch_size, shuffle=False,
 
-            num_workers=num_workers, pin_memory=pin_memory
+            num_workers=self.num_workers,
+
+            pin_memory=self.pin_memory and torch.cuda.is_available(),
 
         )
 
@@ -745,7 +1191,9 @@ class Predictor:
 
         recons = np.concatenate(recons, axis=0)
 
-        actual = values.detach().cpu().numpy()[self.window_size:]
+        actual_indices = self.window_size + np.arange(len(data)) * self.window_stride
+
+        actual = values.detach().cpu().numpy()[actual_indices]
 
 
         if self.target_dims is not None:
@@ -817,21 +1265,190 @@ class Predictor:
 
         df = pd.DataFrame(df_dict)
 
-        df['Pred_Error_Global'] = np.mean(pred_errors, axis=1)
+        df['Pred_Error_Global'] = self._aggregate_output_scores(pred_errors)
 
-        df['Recon_Error_Global'] = np.mean(recon_errors, axis=1)
+        df['Recon_Error_Global'] = self._aggregate_output_scores(recon_errors)
 
 
-        global_scores = np.mean(anomaly_scores, axis=1)
+        global_scores = self._aggregate_output_scores(anomaly_scores)
+
+        physical_scores = self._compute_physical_response_score(actual, recons)
+
+        if physical_scores is not None:
+
+            global_scores, physical_weight = self._fuse_physical_response(global_scores, physical_scores)
+
+            df['Physical_Response_Score'] = physical_scores
+
+            df['Physical_Response_Weight'] = physical_weight
 
         df['A_Score_Global'] = global_scores
 
-        df['Pred_Weight_Global'] = float(np.mean(pred_weights))
+        selected_pred_weights = self._score_view(pred_weights[None, :])[0]
 
-        df['Recon_Weight_Global'] = float(np.mean(recon_weights))
+        selected_recon_weights = self._score_view(recon_weights[None, :])[0]
+
+        df['Pred_Weight_Global'] = float(np.mean(selected_pred_weights))
+
+        df['Recon_Weight_Global'] = float(np.mean(selected_recon_weights))
 
 
         return df
+
+
+    def get_sample_map_scores(self, values_map):
+
+        """Score many equal-role snippets in one DataLoader and split scores by sample."""
+
+        sample_ids = []
+
+        datasets = []
+
+        counts = []
+
+        actual_parts = []
+
+        for sample_id, values in values_map.items():
+
+            dataset = SlidingWindowDataset(
+
+                values,
+
+                self.window_size,
+
+                self.target_dims,
+
+                stride=self.window_stride,
+
+            )
+
+            if len(dataset) == 0:
+
+                continue
+
+            indices = self.window_size + np.arange(len(dataset)) * self.window_stride
+
+            actual = values.detach().cpu().numpy()[indices]
+
+            if self.target_dims is not None:
+
+                actual = actual[:, self.target_dims]
+
+            sample_ids.append(sample_id)
+
+            datasets.append(dataset)
+
+            counts.append(len(dataset))
+
+            actual_parts.append(actual)
+
+        if not datasets:
+
+            raise ValueError("No Tsinghua snippet is longer than the configured lookback")
+
+        loader = torch.utils.data.DataLoader(
+
+            torch.utils.data.ConcatDataset(datasets),
+
+            batch_size=self.batch_size,
+
+            shuffle=False,
+
+            num_workers=self.num_workers,
+
+            pin_memory=self.pin_memory and torch.cuda.is_available(),
+
+        )
+
+        device = "cuda" if self.use_cuda and torch.cuda.is_available() else "cpu"
+
+        self.model.eval()
+
+        predictions = []
+
+        reconstructions = []
+
+        if device == "cuda":
+            torch.cuda.synchronize()
+            torch.cuda.reset_peak_memory_stats()
+        inference_started = time.perf_counter()
+
+        with torch.no_grad():
+
+            for x, y in tqdm(loader, desc="Scoring snippets"):
+
+                x = x.to(device)
+
+                y = y.to(device)
+
+                with _autocast_context(device):
+
+                    y_hat, _ = self.model(x)
+
+                    recon_x = torch.cat((x[:, 1:, :], y), dim=1)
+
+                    _, window_recon = self.model(recon_x)
+
+                predictions.append(y_hat.detach().cpu().numpy())
+
+                reconstructions.append(window_recon[:, -1, :].detach().cpu().numpy())
+
+        if device == "cuda":
+            torch.cuda.synchronize()
+        inference_seconds = time.perf_counter() - inference_started
+        total_windows = int(sum(counts))
+        self.last_scoring_stats = {
+            "device": device,
+            "window_count": total_windows,
+            "inference_seconds": float(inference_seconds),
+            "windows_per_second": float(total_windows / max(inference_seconds, 1e-9)),
+            "milliseconds_per_window": float(1000.0 * inference_seconds / max(total_windows, 1)),
+            "peak_cuda_memory_mb": (
+                float(torch.cuda.max_memory_allocated() / (1024 ** 2)) if device == "cuda" else 0.0
+            ),
+        }
+
+        predictions = np.concatenate(predictions, axis=0)
+
+        reconstructions = np.concatenate(reconstructions, axis=0)
+
+        actual = np.concatenate(actual_parts, axis=0)
+
+        pred_errors = np.abs(predictions - actual)
+
+        recon_errors = np.abs(reconstructions - actual)
+
+        pred_weights, recon_weights = self._compute_fusion_weights(pred_errors, recon_errors)
+
+        anomaly_scores = pred_errors * pred_weights[None, :] + recon_errors * recon_weights[None, :]
+
+        if self.scale_scores:
+
+            q75, q25 = np.percentile(anomaly_scores, [75, 25], axis=0)
+
+            median = np.median(anomaly_scores, axis=0)
+
+            anomaly_scores = (anomaly_scores - median) / (1.0 + q75 - q25)
+
+        global_scores = self._aggregate_output_scores(anomaly_scores)
+
+        physical_scores = self._compute_physical_response_score(actual, reconstructions, segment_lengths=counts)
+
+        if physical_scores is not None:
+
+            global_scores, _ = self._fuse_physical_response(global_scores, physical_scores)
+
+        result = {}
+
+        offset = 0
+
+        for sample_id, count in zip(sample_ids, counts):
+
+            result[sample_id] = global_scores[offset:offset + count]
+
+            offset += count
+
+        return result
 
 
     def get_score_for_sequences(self, values):
@@ -1003,6 +1620,8 @@ class Predictor:
 
                 train_pred_df = cached_train_pred_df.copy()
 
+                self._restore_fusion_weights(train_pred_df)
+
                 print("Using cached training data scores, skipping redundant model inference")
 
             else:
@@ -1152,11 +1771,33 @@ class Predictor:
 
             "min_event_length": int(self.event_min_length),
 
-            "raw_result": self._evaluate_binary_predictions(raw_test_preds, true_anomalies),
+            "legacy_point_adjusted_raw_threshold_result": self._evaluate_binary_predictions(
 
-            "event_result": self._evaluate_binary_predictions(event_test_preds, true_anomalies),
+                raw_test_preds, true_anomalies
+
+            ),
+
+            "legacy_point_adjusted_persistence_result": self._evaluate_binary_predictions(
+
+                event_test_preds, true_anomalies
+
+            ),
+
+            "raw_event_result": self._evaluate_raw_events(
+
+                raw_test_preds, true_anomalies, score_df=test_pred_df
+
+            ),
+
+            "persistence_filtered_raw_event_result": self._evaluate_raw_events(
+
+                event_test_preds, true_anomalies, score_df=test_pred_df
+
+            ),
 
         }
+
+        raw_metric_report = self._evaluate_raw_scores(test_anomaly_scores, raw_test_preds, true_anomalies)
 
         self._save_standard_reports(
 
@@ -1173,6 +1814,8 @@ class Predictor:
             extra_reports={
 
                 "event_consistency_result": event_report,
+
+                "raw_point_result": raw_metric_report,
 
             },
 
@@ -1213,7 +1856,17 @@ class Predictor:
 
             if true_anomalies is not None:
 
-                test_preds_global = adjust_predicts(None, true_anomalies, global_epsilon, pred=test_preds_global)
+                test_pred_df["A_Pred_Global_PointAdjusted"] = adjust_predicts(
+
+                    None,
+
+                    true_anomalies,
+
+                    global_epsilon,
+
+                    pred=test_preds_global.copy(),
+
+                )
 
             test_pred_df[f"A_Pred_Global"] = test_preds_global
 
@@ -1228,5 +1881,3 @@ class Predictor:
 
 
         return test_pred_df
-
-

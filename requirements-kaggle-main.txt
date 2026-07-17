@@ -1,0 +1,3 @@
+# Main repository only. Keep Kaggle's preinstalled CUDA-enabled PyTorch.
+# Do not use requirements-kaggle-cu118.txt unless running DGL/PyG baselines.
+-r requirements.txt

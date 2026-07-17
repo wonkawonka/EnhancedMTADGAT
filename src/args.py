@@ -22,6 +22,7 @@ def apply_dataset_defaults(args):
         "BMS": 4,
         "NASA_RANDOM_DISCHARGE": 2,
         "CH_BATTERY_LFP_DISCHARGE": 8,
+        "TSINGHUA_EV": 4,
     }
     if getattr(args, "window_stride", None) is None:
         args.window_stride = default_window_stride.get(dataset, 1)
@@ -51,8 +52,16 @@ def get_parser():
     parser.add_argument("--transformer_norm_first", type=str2bool, default=True, help="Whether to use Pre-LN for lightweight transformer")
     parser.add_argument("--use_revin", type=str2bool, default=False, help="Whether to enable RevIN to mitigate cross-regime distribution shift")
     parser.add_argument("--revin_affine", type=str2bool, default=True, help="Whether RevIN uses learnable affine parameters")
-    parser.add_argument("--use_regime_condition", type=str2bool, default=False, help="Whether to enable regime-aware relational modeling")
-    parser.add_argument("--regime_emb_dim", type=int, default=32, help="Regime embedding dimension")
+    parser.add_argument("--use_regime_condition", type=str2bool, default=False, help="Whether to enable learned dynamic-state conditioning")
+    parser.add_argument("--regime_emb_dim", type=int, default=32, help="Dynamic-state embedding dimension")
+    parser.add_argument(
+        "--regime_encoder_type",
+        type=str,
+        default="temporal",
+        choices=["temporal", "statistics"],
+        help="Temporal learned encoder for the proposed model; statistics is retained only for ablation",
+    )
+    parser.add_argument("--regime_aux_lambda", type=float, default=0.05, help="Self-supervised dynamic descriptor loss weight")
     parser.add_argument(
         "--use_physical_state_encoding",
         type=str2bool,
@@ -101,12 +110,20 @@ def get_parser():
         default=0.1,
         help="Smoothness constraint decay coefficient near phase transition points",
     )
+    parser.add_argument("--use_physical_response_score", type=str2bool, default=False, help="Fuse electrical/thermal response residuals into anomaly score")
+    parser.add_argument("--physical_response_max_weight", type=float, default=0.35, help="Maximum adaptive physical-response score weight")
+    parser.add_argument(
+        "--physical_response_terms",
+        type=str,
+        default="voltage_rate,temperature_rate,charge_flow,voltage_spread,temperature_spread,soc_current_coupling",
+        help="Comma-separated electrical/thermal response terms used by both training regularization and inference scoring",
+    )
     parser.add_argument(
         "--regime_condition_mode",
         type=str,
-        default="transformer_residual",
+        default="fusion",
         choices=["transformer_residual", "feature_gat", "temporal_gat", "fusion"],
-        help="工况条件化注入位置: transformer_residual=工况感知的Transformer残差增强, 其余为旧版注入方式",
+        help="动态状态条件化位置：fusion为关系融合表示上的FiLM条件化，其他选项用于消融/兼容",
     )
     parser.add_argument(
         "--regime_stat_features",
@@ -118,18 +135,17 @@ def get_parser():
     parser.add_argument(
         '--dataset',
         type=str.upper,
-        default='NASA',
+        default='MSL',
         choices=[
             'SMD',
-            'SMAP',
             'MSL',
-            'NASA',
             'NASA_RANDOM_CHARGE',
             'NASA_RANDOM_DISCHARGE',
             'CALCE',
             'CALCE2',
             'BMS',
             'CH_BATTERY_LFP_DISCHARGE',
+            'TSINGHUA_EV',
         ],
         help='dataset name'
     )
@@ -139,6 +155,18 @@ def get_parser():
         default=str(resolve_dataset_root("CH-BATTERY", "CH-BATTERY")),
         help="CH-BATTERY root directory",
     )
+    parser.add_argument(
+        "--tsinghua_ev_root",
+        type=str,
+        default=str(resolve_dataset_root("TSINGHUA-EV", "TSINGHUA_EV")),
+        help="Tsinghua real-world EV battery dataset root directory",
+    )
+    parser.add_argument("--tsinghua_ev_train_ratio", type=float, default=0.7, help="Normal snippet ratio used for training")
+    parser.add_argument("--tsinghua_ev_validation_ratio", type=float, default=0.15, help="Normal snippet ratio used for validation and threshold calibration")
+    parser.add_argument("--sample_score_top_ratio", type=float, default=0.05, help="Top-window ratio used to aggregate each charging snippet score")
+    parser.add_argument("--tsinghua_ev_max_train_samples", type=int, default=0, help="Optional normal-train cap for smoke tests; 0 uses all")
+    parser.add_argument("--tsinghua_ev_max_validation_samples", type=int, default=0, help="Optional normal-validation cap for smoke tests; 0 uses all")
+    parser.add_argument("--tsinghua_ev_max_test_samples_per_class", type=int, default=0, help="Optional per-class test cap for smoke tests; 0 uses all")
     parser.add_argument(
         "--ch_battery_preprocessed_dir",
         type=str,
@@ -172,7 +200,7 @@ def get_parser():
         "--model_name",
         type=str,
         default="mtad_gat",
-        help="Model name. mtad_gat is the baseline, mtad_gat_c3 is the enhanced backbone version.",
+        help="Model name: mtad_gat baseline, mtad_gat_c3_regime chapter 3, mtad_gat_c4_physics chapter 4.",
     )
     # 卷积参数
     parser.add_argument("--kernel_size", type=int, default=7)
@@ -203,6 +231,7 @@ def get_parser():
     parser.add_argument("--shuffle_dataset", type=str2bool, default=True,help="Whether to shuffle the dataset")
     parser.add_argument("--dropout", type=float, default=0.3)
     parser.add_argument("--use_cuda", type=str2bool, default=True)
+    parser.add_argument("--require_cuda", type=str2bool, default=False, help="Fail instead of silently falling back to CPU when CUDA is unavailable")
     parser.add_argument("--num_workers", type=int, default=8, help="Number of DataLoader workers")
     parser.add_argument("--persistent_workers", type=str2bool, default=True, help="Whether to keep DataLoader workers persistent")
     parser.add_argument("--prefetch_factor", type=int, default=2, help="Number of batches to prefetch per worker")
@@ -211,6 +240,8 @@ def get_parser():
     parser.add_argument("--predict_pin_memory", type=str2bool, default=True, help="Whether to enable pin_memory for scheduled prediction")
     parser.add_argument("--print_every", type=int, default=1,help="Print training info every N epochs")
     parser.add_argument("--log_tensorboard", type=str2bool, default=True,help="Whether to log training to TensorBoard")
+    parser.add_argument("--early_stopping_patience", type=int, default=10, help="Validation epochs without improvement before stopping; 0 disables")
+    parser.add_argument("--early_stopping_min_delta", type=float, default=1e-4, help="Minimum validation-loss improvement for early stopping")
 
     # 异常分数参数
     parser.add_argument("--scale_scores", type=str2bool, default=False, help="Whether to normalize anomaly scores")
@@ -237,5 +268,3 @@ def get_parser():
     parser.add_argument("--resume", type=str2bool, default=False, help="Whether to resume training from last_checkpoint.pt in output directory")
 
     return parser
-
-

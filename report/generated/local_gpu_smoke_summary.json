@@ -1,0 +1,42 @@
+{
+  "date": "2026-07-12",
+  "device": {
+    "name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+    "memory_gib": 6.0,
+    "driver": "527.99",
+    "driver_cuda": "12.0",
+    "python": "3.12.13",
+    "torch": "2.5.1+cu118",
+    "torch_cuda_runtime": "11.8"
+  },
+  "dataset": {
+    "name": "TSINGHUA_EV",
+    "train_samples": 1000,
+    "validation_samples": 200,
+    "test_normal_samples": 200,
+    "test_abnormal_samples": 200,
+    "lookback": 64,
+    "stride": 8,
+    "train_windows": 24000,
+    "validation_windows": 4800,
+    "test_windows": 9600,
+    "batch_size": 256
+  },
+  "runs": {
+    "chapter3": {
+      "model": "mtad_gat_c3_regime",
+      "epochs": 2,
+      "epoch_seconds": [24.8, 25.3],
+      "final_validation_loss": 0.01693,
+      "status": "passed"
+    },
+    "chapter4": {
+      "model": "mtad_gat_c4_physics",
+      "epochs": 2,
+      "epoch_seconds": [25.3, 25.9],
+      "final_validation_loss": 0.04099,
+      "status": "passed"
+    }
+  },
+  "interpretation": "GPU forward, backward, validation, checkpointing and snippet-level scoring passed. Two-epoch anomaly metrics are not formal model results."
+}

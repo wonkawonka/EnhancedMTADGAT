@@ -16,11 +16,15 @@ TRACKED_ABLATION_KEYS = [
     "model_name",
     "use_transformer",
     "use_regime_condition",
-    "use_revin",
+    "regime_encoder_type",
+    "regime_aux_lambda",
+    "regime_condition_mode",
     "score_fusion_mode",
     "use_event_consistency",
     "use_physical_state_encoding",
     "use_physical_regularization",
+    "use_physical_response_score",
+    "physical_response_terms",
     "nasa_train_batteries",
     "nasa_test_batteries",
 ]
@@ -35,13 +39,18 @@ def collect_plan_inventory(plan_dir: Path, plan_type: str) -> pd.DataFrame:
     rows = []
     for plan_path in sorted(plan_dir.glob("*.json")):
         plan = load_json(plan_path)
+        global_seeds = plan.get("seeds", [])
+        experiment_count = sum(
+            max(1, len(experiment.get("seeds", global_seeds)))
+            for experiment in plan.get("experiments", [])
+        )
         rows.append(
             {
                 "plan_type": plan_type,
                 "plan_name": plan.get("plan_name", plan_path.stem),
                 "file_name": plan_path.name,
                 "thesis_role": plan.get("_thesis_role", ""),
-                "experiment_count": int(len(plan.get("experiments", []))),
+                "experiment_count": int(experiment_count),
                 "comment": plan.get("_comment", ""),
             }
         )
@@ -165,4 +174,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

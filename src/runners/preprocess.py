@@ -4,16 +4,12 @@ import os
 import time
 from ast import literal_eval
 from csv import reader
-from datetime import datetime
 from os import listdir, makedirs, path
 from pickle import dump
 
-import datetime
-import h5py
 import numpy as np
 import pandas as pd
 from scipy.io import loadmat
-from scipy.interpolate import interp1d
 
 from src.args import get_parser
 from src.data.spectral_residual import apply_spectral_residual_cleaning
@@ -210,87 +206,6 @@ def _cleanup_existing_bms_processed_files(output_folder):
     return removed_count
 
 
-def interpolate_capacity_to_timesteps(cycle_capacities, cycle_lengths, cycle_types):
-    """
-    将周期级的容量值插值到每个时间步（仅对充电周期进行插值）
-    :param cycle_capacities: 每个周期的容量值数组
-    :param cycle_lengths: 每个周期的时间步数
-    :param cycle_types: 每个周期的类型（charge/discharge）
-    :return: 插值后的每个时间步的容量值
-    """
-    # print("=" * 50)
-    # print("容量插值计算过程详解:")
-    # print("=" * 50)
-    # print("1. 插值原理:")
-    # print("   - 充电周期本身没有容量值，需要使用放电周期的容量值进行插值估算")
-    # print("   - 放电周期具有真实的周期级容量值")
-    # print("   - 使用相邻放电周期的容量值作为参考点，在充电周期内进行插值")
-
-    total_steps = sum(cycle_lengths)
-    interpolated_capacities = np.zeros(total_steps, dtype=np.float32)
-
-    step_idx = 0
-    discharge_cycle_points = []  # 放电周期的中心点和容量值
-    charge_cycle_indices = []     # 充电周期在数组中的索引
-    charge_cycle_lengths = []    # 充电周期的长度
-
-    # 遍历所有周期，记录放电周期信息和充电周期信息
-    # print("\n2. 识别周期信息:")
-    for i, (capacity, length, cycle_type) in enumerate(zip(cycle_capacities, cycle_lengths, cycle_types)):
-        if cycle_type == 'discharge':
-            # 记录放电周期的中心点和容量值
-            center_point = step_idx + length // 2
-            discharge_cycle_points.append((center_point, capacity))
-            # print(f"   放电周期 {i}: 时间步范围 [{step_idx}, {step_idx + length - 1}], 中心点={center_point}, 容量={capacity:.4f}")
-        else:  # 充电
-            # 记录充电周期信息
-            charge_cycle_indices.append(i)
-            charge_cycle_lengths.append(length)
-            # print(f"   充电周期 {i}: 时间步范围 [{step_idx}, {step_idx + length - 1}], 容量={capacity:.4f} (默认值)")
-
-        # 对于所有周期，先填入周期平均容量值
-        interpolated_capacities[step_idx:step_idx+length] = capacity
-        step_idx += length
-
-    # 对充电周期进行插值处理
-    if len(discharge_cycle_points) > 1 and len(charge_cycle_indices) > 0:
-        # print(f"\n3. 执行插值:")
-        # print(f"   发现 {len(discharge_cycle_points)} 个放电周期和 {len(charge_cycle_indices)} 个充电周期，可以进行插值")
-        # 提取放电周期的中心点和容量值
-        centers = [point[0] for point in discharge_cycle_points]
-        capacities = [point[1] for point in discharge_cycle_points]
-
-        # print(f"   参考点坐标: {list(zip(centers, capacities))}")
-
-        # 创建插值函数
-        f = interp1d(centers, capacities, kind='linear', fill_value='extrapolate')
-        # print(f"   插值函数已创建: 使用 {centers[0]}-{centers[-1]} 范围内的点进行线性插值")
-
-        # 对充电周期覆盖的区域进行插值
-        for i, cycle_idx in enumerate(charge_cycle_indices):
-            start_step = sum(cycle_lengths[:cycle_idx])
-            end_step = start_step + charge_cycle_lengths[i]
-
-            # 在充电周期范围内进行插值
-            cycle_steps = np.arange(start_step, end_step)
-            interpolated_values = f(cycle_steps)
-            interpolated_capacities[start_step:end_step] = interpolated_values
-
-            # print(f"   充电周期 {cycle_idx} 插值完成: 时间步 {start_step}-{end_step-1}")
-            # if end_step - start_step > 5:
-            #     print(f"     前5个插值结果: {interpolated_values[:5]}")
-            #     print(f"     后5个插值结果: {interpolated_values[-5:]}")
-            # else:
-            #     print(f"     所有插值结果: {interpolated_values}")
-    # else:
-    #     print(f"\n3. 插值条件不足:")
-    #     print(f"   放电周期数: {len(discharge_cycle_points)}, 充电周期数: {len(charge_cycle_indices)}")
-    #     print(f"   无法进行有效插值，所有周期将保持原始容量值")
-
-    # print("\n4. 插值完成!")
-    return interpolated_capacities
-
-
 def _extract_matlab_scalar(value):
     while isinstance(value, np.ndarray):
         if value.size == 0:
@@ -424,7 +339,7 @@ def _process_nasa_random_dataset(dataset_folder, output_folder, file_prefix, app
 
         # 保持 NASA_RANDOM 与项目的已处理数据约定一致：
         # 按电池实体划分训练/测试片段
-        # 后续保存格式与普通 NASA 数据保持一致
+        # 后续按电池实体保存分段训练/测试数据
         train_segments, test_segments = _split_nasa_random_segments(segments, train_ratio=0.8)
         train_data = [segment.astype(np.float32, copy=False) for segment in train_segments]
         test_data = [segment.astype(np.float32, copy=False) for segment in test_segments]
@@ -511,7 +426,7 @@ def load_data(dataset, apply_sr_cleaning=False):
                     False,  # 不对测试数据应用清洗
                 )
 
-    elif dataset == "SMAP" or dataset == "MSL":
+    elif dataset == "MSL":
         dataset_folder = str(resolve_dataset_root("DATA", "data"))
         output_folder = str(processed_dataset_path("data"))
         makedirs(output_folder, exist_ok=True)
@@ -537,10 +452,12 @@ def load_data(dataset, apply_sr_cleaning=False):
 
         def concatenate_and_save(category):
             data = []
+            sequence_lengths = []
             for row in data_info:
                 filename = row[0]
                 temp = np.load(path.join(dataset_folder, category, filename + ".npy"))
                 data.extend(temp)
+                sequence_lengths.append(len(temp))
             data = np.asarray(data)
             print(dataset, category, data.shape)
 
@@ -552,6 +469,8 @@ def load_data(dataset, apply_sr_cleaning=False):
 
             with open(path.join(output_folder, dataset + "_" + category + ".pkl"), "wb") as file:
                 dump(data, file)
+            with open(path.join(output_folder, dataset + "_" + category + "_lengths.pkl"), "wb") as file:
+                dump(sequence_lengths, file)
 
         for c in ["train", "test"]:
             concatenate_and_save(c)
@@ -710,303 +629,6 @@ def load_data(dataset, apply_sr_cleaning=False):
             f"merged BMS pkl files are no longer generated."
         )
         print(f"[BMS] Total elapsed: {time.perf_counter() - bms_start_time:.2f}s")
-    elif dataset == "NASA":
-        dataset_folder = str(resolve_dataset_root("NASA", "NASA"))
-        output_folder = str(processed_dataset_path("NASA"))
-        makedirs(output_folder, exist_ok=True)
-
-        # 获取所有MAT文件
-        mat_files = [f for f in os.listdir(dataset_folder) if f.endswith(".mat")]
-
-        # 处理每个电池文件
-        for filename in mat_files:
-            # 提取电池编号
-            battery_id = filename.split(".mat")[0]
-
-            print(f"[NASA] Processing {filename}...")
-
-            # 加载数据
-            try:
-                # 首先尝试使用loadmat读取
-                data = loadmat(os.path.join(dataset_folder, filename))
-                battery_data = data[battery_id][0, 0]
-            except Exception as e:
-                print(f"使用scipy.io.loadmat读取失败: {e}")
-                # 如果失败，尝试使用h5py
-                try:
-                    with h5py.File(os.path.join(dataset_folder, filename), 'r') as f:
-                        battery_data = f[battery_id]
-                except Exception as e:
-                    raise Exception(f"无法读取文件 {filename}: {e}")
-
-            # 解析NASA电池数据结构
-            # MATLAB结构中的存储方式。整个循环数据都存储在cycle[0]这个数组中
-            num_cycles = len(battery_data['cycle'][0])
-            print(f"[NASA][{battery_id}] Total cycle entries: {num_cycles}")
-
-            # 收集所有周期的数据（包括充电和放电）
-            cycle_data_list = []
-
-            # 遍历所有周期
-            for i in range(num_cycles):
-                row = battery_data['cycle'][0, i]
-                cycle_type = row['type'][0]
-
-                # 处理充电和放电数据
-                if cycle_type in ['charge', 'discharge']:
-                    ambient_temperature = row['ambient_temperature'][0][0]
-                    date_time = datetime.datetime(int(row['time'][0][0]),
-                                                  int(row['time'][0][1]),
-                                                  int(row['time'][0][2]),
-                                                  int(row['time'][0][3]),
-                                                  int(row['time'][0][4])) + datetime.timedelta(
-                        seconds=int(row['time'][0][5]))
-                    data = row['data']
-
-                    # 检查数据结构，确保Capacity字段存在且可访问
-                    try:
-                        capacity = data[0][0]['Capacity'][0][0]
-
-                        # 检查容量值是否合理（大于0）
-                        if capacity <= 0:
-                            print(f"警告: 周期 {i} ({cycle_type}) 的容量值为 {capacity}，这可能是无效数据")
-                    except (IndexError, KeyError, ValueError):
-                        # 如果没有容量数据，设置为默认值
-                        capacity = np.nan  # 改为使用 NaN 而不是 0.0
-                        print(f"周期 {i} ({cycle_type}) 无法获取容量值，设置为 NaN: {capacity}")
-
-                    # 检查电压测量值字段是否存在
-                    try:
-                        voltage_data = data[0][0]['Voltage_measured'][0]
-                    except (IndexError, KeyError):
-                        print(f"Warning: Could not access Voltage_measured data for cycle {i}. Skipping this cycle.")
-                        continue
-
-                    # 收集该周期内的所有测量数据
-                    cycle_measurements = []
-                    for j in range(len(voltage_data)):
-                        try:
-                            voltage_measured = data[0][0]['Voltage_measured'][0][j]
-                            current_measured = data[0][0]['Current_measured'][0][j]
-                            temperature_measured = data[0][0]['Temperature_measured'][0][j]
-                            # 根据cycle类型选择合适的字段
-                            if cycle_type == 'charge':
-                                current_load = data[0][0]['Current_charge'][0][j]
-                                voltage_load = data[0][0]['Voltage_charge'][0][j]
-                            else:  # 放电
-                                current_load = data[0][0]['Current_load'][0][j]
-                                voltage_load = data[0][0]['Voltage_load'][0][j]
-                            step_time = data[0][0]['Time'][0][j]
-
-                            # 构造该时间点的数据（暂时使用周期级别的capacity）
-                            measurement = [capacity, voltage_measured, current_measured,
-                                          temperature_measured, current_load, voltage_load]
-                            cycle_measurements.append(measurement)
-                        except (IndexError, KeyError) as e:
-                            print(f"Warning: Error accessing data at index {j} in cycle {i}: {e}")
-                            continue
-
-                    # 将该周期的数据作为一个独立片段添加到列表中
-                    if cycle_measurements:
-                        cycle_array = np.array(cycle_measurements, dtype=np.float32)
-                        cycle_data_list.append({
-                            'cycle_index': i,
-                            'cycle_type': cycle_type,
-                            'date_time': date_time,
-                            'data': cycle_array,
-                            'capacity': capacity  # 保存该周期的容量值
-                        })
-
-            print(f"[NASA][{battery_id}] Parsed usable charge/discharge cycles: {len(cycle_data_list)}")
-
-            # 按时间顺序排列周期
-            cycle_data_list.sort(key=lambda x: x['date_time'])
-
-            # 提取所有周期的数据和容量值
-            all_cycle_data = [cycle_info['data'] for cycle_info in cycle_data_list]
-            all_capacities = [cycle_info['capacity'] for cycle_info in cycle_data_list]
-            all_cycle_types = [cycle_info['cycle_type'] for cycle_info in cycle_data_list]
-            all_cycle_indices = [cycle_info['cycle_index'] for cycle_info in cycle_data_list]
-
-            # 转换为numpy数组
-            all_capacities = np.array(all_capacities, dtype=np.float32)
-
-            # 检查容量数据中是否存在无效值
-            nan_capacities = np.isnan(all_capacities)
-            zero_or_negative_capacities = ~nan_capacities & (all_capacities <= 0)
-
-            if np.any(nan_capacities):
-                print(f"警告: 发现 {np.sum(nan_capacities)} 个 NaN 容量值")
-            if np.any(zero_or_negative_capacities):
-                print(f"警告: 发现 {np.sum(zero_or_negative_capacities)} 个零或负容量值")
-
-            # NASA 在本文中作为无监督退化偏离案例数据使用，这里不再人为构造 20% 容量衰减标签
-            cycle_labels = None
-
-            # 按周期顺序划分训练集和测试集（80%训练，20%测试）
-            total_cycles = len(all_cycle_data)
-            if total_cycles == 0:
-                print(f"Warning: No valid cycles found for {battery_id}")
-                continue
-
-            split_ratio = 0.8
-            split_index = int(total_cycles * split_ratio)
-            print(
-                f"[NASA][{battery_id}] Split cycles -> train: {split_index}, "
-                f"test: {total_cycles - split_index}"
-            )
-
-            # 划分训练集和测试集数据（按周期分割）
-            train_cycle_data = all_cycle_data[:split_index]
-            test_cycle_data = all_cycle_data[split_index:]
-
-            # 划分对应的标签（按周期）
-            train_cycle_labels = None
-            test_cycle_labels = None
-
-            # 创建展开后的完整数据和标签
-            # 将周期级的容量和标签插值到每个时间点（仅针对充电周期）
-            train_data_full = []
-            train_labels_full = []
-            test_data_full = []
-            test_labels_full = []
-
-            # 处理训练数据
-            train_cycle_lengths = []  # 记录每个周期的长度
-            train_cycle_capacities = []  # 记录每个周期的容量值
-            train_cycle_numbers = []    # 记录每个周期的编号
-
-            for i, cycle_data in enumerate(train_cycle_data):
-                cycle_length = len(cycle_data)
-                cycle_type = all_cycle_types[i]
-                cycle_index = all_cycle_indices[i]
-
-                # 记录周期信息
-                train_cycle_lengths.append(cycle_length)
-                train_cycle_capacities.append(cycle_data[0, 0])  # 周期容量
-                train_cycle_numbers.append(cycle_index)         # 周期编号
-
-                train_data_full.append(cycle_data)
-
-            # 处理测试数据
-            test_cycle_lengths = []  # 记录每个周期的长度
-            test_cycle_capacities = []  # 记录每个周期的容量值
-            test_cycle_numbers = []     # 记录每个周期的编号
-
-            for i, cycle_data in enumerate(test_cycle_data):
-                cycle_length = len(cycle_data)
-                cycle_type = all_cycle_types[split_index + i]  # 注意索引偏移
-                cycle_index = all_cycle_indices[split_index + i]  # 注意索引偏移
-
-                # 记录周期信息
-                test_cycle_lengths.append(cycle_length)
-                test_cycle_capacities.append(cycle_data[0, 0])  # 周期容量
-                test_cycle_numbers.append(cycle_index)         # 周期编号
-
-                test_data_full.append(cycle_data)
-
-            # 合并所有周期的数据
-            if train_data_full:
-                train_data_combined = np.vstack(train_data_full)
-                train_labels_combined = None
-
-                # 对训练数据中的容量进行插值处理（仅充电周期）
-                train_interpolated_capacities = interpolate_capacity_to_timesteps(
-                    np.array(train_cycle_capacities), train_cycle_lengths, all_cycle_types[:split_index])
-                train_data_combined[:, 0] = train_interpolated_capacities  # 更新容量列
-
-                # 检查插值后的容量值
-                negative_interp_capacities = np.sum(train_data_combined[:, 0] <= 0)
-                if negative_interp_capacities > 0:
-                    print(f"警告: 训练数据插值后发现 {negative_interp_capacities} 个非正值容量")
-
-                # 添加周期编号作为新的一列特征（先添加到最后）
-                cycle_number_column = np.zeros(len(train_data_combined), dtype=np.float32)
-                step_idx = 0
-                for cycle_num, cycle_length in zip(train_cycle_numbers, train_cycle_lengths):
-                    cycle_number_column[step_idx:step_idx+cycle_length] = cycle_num
-                    step_idx += cycle_length
-
-                # 将周期编号列添加到数据中（现在在最后）
-                train_data_combined = np.column_stack([train_data_combined, cycle_number_column])
-
-                # 调整列顺序：将周期编号移到第一列，容量移到最后一列
-                # 当前列顺序：[Capacity, Voltage_measured, Current_measured, Temperature_measured, Current_load, Voltage_load, Cycle_Number]
-                # 目标顺序：[Cycle_Number, Voltage_measured, Current_measured, Temperature_measured, Current_load, Voltage_load, Capacity]
-                cols_order = [6, 1, 2, 3, 4, 5, 0]  # 新的列索引顺序
-                train_data_combined = train_data_combined[:, cols_order]
-            else:
-                train_data_combined = np.array([])
-                train_labels_combined = None
-
-            if test_data_full:
-                test_data_combined = np.vstack(test_data_full)
-                test_labels_combined = None
-
-                # 对测试数据中的容量进行插值处理（仅充电周期）
-                test_interpolated_capacities = interpolate_capacity_to_timesteps(
-                    np.array(test_cycle_capacities), test_cycle_lengths, all_cycle_types[split_index:])
-                test_data_combined[:, 0] = test_interpolated_capacities  # 更新容量列
-
-                # 检查插值后的容量值
-                negative_interp_capacities = np.sum(test_data_combined[:, 0] <= 0)
-                if negative_interp_capacities > 0:
-                    print(f"警告: 测试数据插值后发现 {negative_interp_capacities} 个非正值容量")
-
-                # 添加周期编号作为新的一列特征（先添加到最后）
-                cycle_number_column = np.zeros(len(test_data_combined), dtype=np.float32)
-                step_idx = 0
-                for cycle_num, cycle_length in zip(test_cycle_numbers, test_cycle_lengths):
-                    cycle_number_column[step_idx:step_idx+cycle_length] = cycle_num
-                    step_idx += cycle_length  # 修复错误：应该使用 cycle_length 而不是 length
-
-                # 将周期编号列添加到数据中（现在在最后）
-                test_data_combined = np.column_stack([test_data_combined, cycle_number_column])
-
-                # 调整列顺序：将周期编号移到第一列，容量移到最后一列
-                # 当前列顺序：[Capacity, Voltage_measured, Current_measured, Temperature_measured, Current_load, Voltage_load, Cycle_Number]
-                # 目标顺序：[Cycle_Number, Voltage_measured, Current_measured, Temperature_measured, Current_load, Voltage_load, Capacity]
-                cols_order = [6, 1, 2, 3, 4, 5, 0]  # 新的列索引顺序
-                test_data_combined = test_data_combined[:, cols_order]
-            else:
-                test_data_combined = np.array([])
-                test_labels_combined = None
-
-            # 应用谱残差清洗（如果启用）
-            if apply_sr_cleaning and len(train_data_combined) > 0:
-                print(f"[NASA][{battery_id}] Applying spectral residual cleaning to train data...")
-                train_data_combined = apply_spectral_residual_cleaning(train_data_combined, threshold=3.0)
-                print(f"[NASA][{battery_id}] Cleaning completed. Shape: {train_data_combined.shape}")
-
-            print(
-                f"[NASA][{battery_id}] Final arrays -> train: {train_data_combined.shape}, "
-                f"test: {test_data_combined.shape}, labels: None"
-            )
-
-            # 保存处理后的数据（展开的时间点数据，不按周期组织）
-            with open(path.join(output_folder, f"NASA_{battery_id}_train.pkl"), "wb") as file:
-                dump(train_data_combined, file)
-
-            with open(path.join(output_folder, f"NASA_{battery_id}_test.pkl"), "wb") as file:
-                dump(test_data_combined, file)
-
-            with open(path.join(output_folder, f"NASA_{battery_id}_test_label.pkl"), "wb") as file:
-                dump(test_labels_combined, file)
-
-            # 保存完整的周期级容量信息，供评估阶段使用
-            with open(path.join(output_folder, f"NASA_{battery_id}_capacities.pkl"), "wb") as file:
-                dump(all_capacities, file)
-
-            # 保存周期类型信息
-            with open(path.join(output_folder, f"NASA_{battery_id}_cycle_types.pkl"), "wb") as file:
-                dump(all_cycle_types, file)
-
-            # 保存周期索引信息
-            with open(path.join(output_folder, f"NASA_{battery_id}_cycle_indices.pkl"), "wb") as file:
-                dump(all_cycle_indices, file)
-
-            print(f"[NASA][{battery_id}] Saved processed files to {output_folder}")
-
     elif dataset == "CALCE":
         # 处理CALCE数据集
         dataset_folder = str(resolve_dataset_root("CALCE", "CALCE") / "Dataset1")
@@ -1260,5 +882,3 @@ if __name__ == "__main__":
     # 获取是否应用谱残差清洗的参数
     apply_sr_cleaning = args.apply_sr_cleaning
     load_data(ds, apply_sr_cleaning)
-
-

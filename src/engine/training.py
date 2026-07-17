@@ -11,7 +11,7 @@ import torch
 
 import torch.nn as nn
 
-import torch.nn.functional as F
+from src.models.physical_response import compute_torch_physical_response_errors
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -144,6 +144,12 @@ class Trainer:
 
         window_stride=1,
 
+        regime_aux_lambda=0.0,
+
+        early_stopping_patience=0,
+
+        early_stopping_min_delta=1e-4,
+
     ):
 
 
@@ -191,6 +197,8 @@ class Trainer:
 
         self.physical_transition_relax = float(physical_transition_relax)
 
+        self.last_physical_response_terms = {}
+
         self.loader_num_workers = max(int(num_workers), 0)
 
         self.loader_persistent_workers = bool(persistent_workers)
@@ -198,6 +206,14 @@ class Trainer:
         self.loader_prefetch_factor = max(int(prefetch_factor), 1)
 
         self.window_stride = max(int(window_stride), 1)
+
+        self.regime_aux_lambda = max(0.0, float(regime_aux_lambda))
+
+        self.early_stopping_patience = max(0, int(early_stopping_patience))
+
+        self.early_stopping_min_delta = max(0.0, float(early_stopping_min_delta))
+
+        self.early_stopping_bad_epochs = 0
 
 
         # 计算批次损失
@@ -216,6 +232,8 @@ class Trainer:
 
             "train_phys_smooth": [],
 
+            "train_regime_aux": [],
+
             "val_total": [],
 
             "val_forecast": [],
@@ -225,6 +243,8 @@ class Trainer:
             "val_phys_alg": [],
 
             "val_phys_smooth": [],
+
+            "val_regime_aux": [],
 
         }
 
@@ -275,17 +295,6 @@ class Trainer:
         return x[:, :, index:index + 1]
 
 
-    @staticmethod
-
-    def _normalized_cumsum(value, eps=1e-6):
-
-        cumulative = torch.cumsum(value, dim=1)
-
-        scale = cumulative.abs().amax(dim=1, keepdim=True).clamp_min(eps)
-
-        return torch.clamp(cumulative / scale, -1.0, 1.0)
-
-
     def _compute_phase_signal(self, x, current):
 
         step_type = self._safe_channel(x, self.physical_reg_config.get("step_type_index"))
@@ -330,41 +339,17 @@ class Trainer:
 
         current = self._safe_channel(x, self.physical_reg_config.get("current_index"))
 
-        current_hat = self._safe_channel(recons, self.physical_reg_config.get("current_index"))
-
-        temperature = self._safe_channel(x, self.physical_reg_config.get("temperature_index"))
-
         temperature_hat = self._safe_channel(recons, self.physical_reg_config.get("temperature_index"))
 
 
-        alg_terms = []
+        response_errors = compute_torch_physical_response_errors(x, recons, self.physical_reg_config)
+        self.last_physical_response_terms = {
+            name: float(value.detach().cpu()) for name, value in response_errors.items()
+        }
 
-        if voltage is not None and voltage_hat is not None and x.size(1) >= 2:
+        if response_errors:
 
-            alg_terms.append(F.l1_loss(torch.diff(voltage_hat, dim=1), torch.diff(voltage, dim=1)))
-
-        if temperature is not None and temperature_hat is not None and x.size(1) >= 2:
-
-            alg_terms.append(F.l1_loss(torch.diff(temperature_hat, dim=1), torch.diff(temperature, dim=1)))
-
-        if current is not None and current_hat is not None:
-
-            alg_terms.append(
-
-                F.l1_loss(
-
-                    self._normalized_cumsum(current_hat),
-
-                    self._normalized_cumsum(current),
-
-                )
-
-            )
-
-
-        if alg_terms:
-
-            alg_loss = torch.stack(alg_terms).mean()
+            alg_loss = torch.stack(list(response_errors.values())).mean()
 
         else:
 
@@ -466,7 +451,11 @@ class Trainer:
 
             phys_smooth_b_losses = []
 
+            regime_aux_b_losses = []
+
             reg_scale = self._get_reg_scale(epoch)
+
+            should_stop = False
 
 
             for x, y in train_loader:
@@ -511,6 +500,16 @@ class Trainer:
 
                     phys_alg_loss, phys_smooth_loss = self._compute_physical_regularization(x_target, recons)
 
+                    base_model = _unwrap_model(self.model)
+
+                    if self.regime_aux_lambda > 0.0 and hasattr(base_model, "regime_auxiliary_loss"):
+
+                        regime_aux_loss = base_model.regime_auxiliary_loss(x)
+
+                    else:
+
+                        regime_aux_loss = x.new_tensor(0.0)
+
                     loss = (
 
                         forecast_loss
@@ -520,6 +519,8 @@ class Trainer:
                         + reg_scale * self.physical_alg_lambda * phys_alg_loss
 
                         + reg_scale * self.physical_smooth_lambda * phys_smooth_loss
+
+                        + self.regime_aux_lambda * regime_aux_loss
 
                     )
 
@@ -539,6 +540,8 @@ class Trainer:
 
                 phys_smooth_b_losses.append(phys_smooth_loss.item())
 
+                regime_aux_b_losses.append(regime_aux_loss.item())
+
 
             forecast_b_losses = np.array(forecast_b_losses)
 
@@ -547,6 +550,8 @@ class Trainer:
             phys_alg_b_losses = np.array(phys_alg_b_losses)
 
             phys_smooth_b_losses = np.array(phys_smooth_b_losses)
+
+            regime_aux_b_losses = np.array(regime_aux_b_losses)
 
 
             forecast_epoch_loss = np.sqrt((forecast_b_losses ** 2).mean())
@@ -557,6 +562,8 @@ class Trainer:
 
             phys_smooth_epoch_loss = np.sqrt((phys_smooth_b_losses ** 2).mean()) if len(phys_smooth_b_losses) else 0.0
 
+            regime_aux_epoch_loss = np.sqrt((regime_aux_b_losses ** 2).mean()) if len(regime_aux_b_losses) else 0.0
+
             total_epoch_loss = (
 
                 forecast_epoch_loss
@@ -566,6 +573,8 @@ class Trainer:
                 + reg_scale * self.physical_alg_lambda * phys_alg_epoch_loss
 
                 + reg_scale * self.physical_smooth_lambda * phys_smooth_epoch_loss
+
+                + self.regime_aux_lambda * regime_aux_epoch_loss
 
             )
 
@@ -578,6 +587,8 @@ class Trainer:
 
             self.losses["train_phys_smooth"].append(phys_smooth_epoch_loss)
 
+            self.losses["train_regime_aux"].append(regime_aux_epoch_loss)
+
             self.losses["train_total"].append(total_epoch_loss)
 
 
@@ -585,11 +596,11 @@ class Trainer:
 
             forecast_val_loss, recon_val_loss, total_val_loss = "NA", "NA", "NA"
 
-            phys_alg_val_loss, phys_smooth_val_loss = "NA", "NA"
+            phys_alg_val_loss, phys_smooth_val_loss, regime_aux_val_loss = "NA", "NA", "NA"
 
             if val_loader is not None:
 
-                forecast_val_loss, recon_val_loss, total_val_loss, phys_alg_val_loss, phys_smooth_val_loss = self.evaluate(
+                forecast_val_loss, recon_val_loss, total_val_loss, phys_alg_val_loss, phys_smooth_val_loss, regime_aux_val_loss = self.evaluate(
 
                     val_loader, epoch=epoch
 
@@ -603,14 +614,38 @@ class Trainer:
 
                 self.losses["val_phys_smooth"].append(phys_smooth_val_loss)
 
+                self.losses["val_regime_aux"].append(regime_aux_val_loss)
+
                 self.losses["val_total"].append(total_val_loss)
 
 
-                if self.best_val_loss is None or total_val_loss <= self.best_val_loss:
+                improved = (
+
+                    self.best_val_loss is None
+
+                    or total_val_loss < self.best_val_loss - self.early_stopping_min_delta
+
+                )
+
+                if improved:
 
                     self.best_val_loss = total_val_loss
 
+                    self.early_stopping_bad_epochs = 0
+
                     self.save(f"model.pt")
+
+                else:
+
+                    self.early_stopping_bad_epochs += 1
+
+                    should_stop = (
+
+                        self.early_stopping_patience > 0
+
+                        and self.early_stopping_bad_epochs >= self.early_stopping_patience
+
+                    )
 
 
             if self.log_tensorboard:
@@ -641,6 +676,8 @@ class Trainer:
 
                     f"phys_smooth = {phys_smooth_epoch_loss:.5f}, "
 
+                    f"regime_aux = {regime_aux_epoch_loss:.5f}, "
+
                     f"total_loss = {total_epoch_loss:.5f}"
 
                 )
@@ -658,6 +695,8 @@ class Trainer:
 
                         f"val_phys_smooth = {phys_smooth_val_loss:.5f}, "
 
+                        f"val_regime_aux = {regime_aux_val_loss:.5f}, "
+
                         f"val_total_loss = {total_val_loss:.5f}"
 
                     )
@@ -666,6 +705,18 @@ class Trainer:
                 s += f" [{epoch_time:.1f}s]"
 
                 print(s)
+
+            if should_stop:
+
+                print(
+
+                    f"Early stopping at epoch {epoch + 1}: validation loss did not improve by "
+
+                    f"{self.early_stopping_min_delta:g} for {self.early_stopping_patience} epochs."
+
+                )
+
+                break
 
 
         if val_loader is None:
@@ -704,6 +755,8 @@ class Trainer:
         phys_alg_losses = []
 
         phys_smooth_losses = []
+
+        regime_aux_losses = []
 
         reg_scale = self._get_reg_scale(self.start_epoch - 1 if epoch is None else epoch)
 
@@ -750,6 +803,16 @@ class Trainer:
 
                     phys_alg_loss, phys_smooth_loss = self._compute_physical_regularization(x_target, recons)
 
+                    base_model = _unwrap_model(self.model)
+
+                    if self.regime_aux_lambda > 0.0 and hasattr(base_model, "regime_auxiliary_loss"):
+
+                        regime_aux_loss = base_model.regime_auxiliary_loss(x)
+
+                    else:
+
+                        regime_aux_loss = x.new_tensor(0.0)
+
 
                 forecast_losses.append(forecast_loss.item())
 
@@ -758,6 +821,8 @@ class Trainer:
                 phys_alg_losses.append(phys_alg_loss.item())
 
                 phys_smooth_losses.append(phys_smooth_loss.item())
+
+                regime_aux_losses.append(regime_aux_loss.item())
 
 
         forecast_losses = np.array(forecast_losses)
@@ -768,6 +833,8 @@ class Trainer:
 
         phys_smooth_losses = np.array(phys_smooth_losses)
 
+        regime_aux_losses = np.array(regime_aux_losses)
+
 
         forecast_loss = np.sqrt((forecast_losses ** 2).mean())
 
@@ -776,6 +843,8 @@ class Trainer:
         phys_alg_loss = np.sqrt((phys_alg_losses ** 2).mean()) if len(phys_alg_losses) else 0.0
 
         phys_smooth_loss = np.sqrt((phys_smooth_losses ** 2).mean()) if len(phys_smooth_losses) else 0.0
+
+        regime_aux_loss = np.sqrt((regime_aux_losses ** 2).mean()) if len(regime_aux_losses) else 0.0
 
         total_loss = (
 
@@ -787,10 +856,12 @@ class Trainer:
 
             + reg_scale * self.physical_smooth_lambda * phys_smooth_loss
 
+            + self.regime_aux_lambda * regime_aux_loss
+
         )
 
 
-        return forecast_loss, recon_loss, total_loss, phys_alg_loss, phys_smooth_loss
+        return forecast_loss, recon_loss, total_loss, phys_alg_loss, phys_smooth_loss, regime_aux_loss
 
 
     def save(self, file_name):
@@ -839,6 +910,8 @@ class Trainer:
             "epoch_times": self.epoch_times,
 
             "best_val_loss": self.best_val_loss,
+
+            "early_stopping_bad_epochs": self.early_stopping_bad_epochs,
 
             "n_epochs": self.n_epochs,
 
@@ -900,6 +973,8 @@ class Trainer:
         self.epoch_times = checkpoint.get("epoch_times", [])
 
         self.best_val_loss = checkpoint.get("best_val_loss")
+
+        self.early_stopping_bad_epochs = int(checkpoint.get("early_stopping_bad_epochs", 0))
 
         self.start_epoch = int(checkpoint.get("epoch", 0))
 
@@ -1076,6 +1151,8 @@ class Trainer:
 
             phys_smooth_b_losses = []
 
+            regime_aux_b_losses = []
+
             reg_scale = self._get_reg_scale(epoch)
 
 
@@ -1121,6 +1198,16 @@ class Trainer:
 
                     phys_alg_loss, phys_smooth_loss = self._compute_physical_regularization(x_target, recons)
 
+                    base_model = _unwrap_model(self.model)
+
+                    if self.regime_aux_lambda > 0.0 and hasattr(base_model, "regime_auxiliary_loss"):
+
+                        regime_aux_loss = base_model.regime_auxiliary_loss(x)
+
+                    else:
+
+                        regime_aux_loss = x.new_tensor(0.0)
+
                     loss = (
 
                         forecast_loss
@@ -1130,6 +1217,8 @@ class Trainer:
                         + reg_scale * self.physical_alg_lambda * phys_alg_loss
 
                         + reg_scale * self.physical_smooth_lambda * phys_smooth_loss
+
+                        + self.regime_aux_lambda * regime_aux_loss
 
                     )
 
@@ -1149,6 +1238,8 @@ class Trainer:
 
                 phys_smooth_b_losses.append(phys_smooth_loss.item())
 
+                regime_aux_b_losses.append(regime_aux_loss.item())
+
 
             forecast_b_losses = np.array(forecast_b_losses)
 
@@ -1157,6 +1248,8 @@ class Trainer:
             phys_alg_b_losses = np.array(phys_alg_b_losses)
 
             phys_smooth_b_losses = np.array(phys_smooth_b_losses)
+
+            regime_aux_b_losses = np.array(regime_aux_b_losses)
 
 
             forecast_epoch_loss = np.sqrt((forecast_b_losses ** 2).mean())
@@ -1167,6 +1260,8 @@ class Trainer:
 
             phys_smooth_epoch_loss = np.sqrt((phys_smooth_b_losses ** 2).mean()) if len(phys_smooth_b_losses) else 0.0
 
+            regime_aux_epoch_loss = np.sqrt((regime_aux_b_losses ** 2).mean()) if len(regime_aux_b_losses) else 0.0
+
             total_epoch_loss = (
 
                 forecast_epoch_loss
@@ -1176,6 +1271,8 @@ class Trainer:
                 + reg_scale * self.physical_alg_lambda * phys_alg_epoch_loss
 
                 + reg_scale * self.physical_smooth_lambda * phys_smooth_epoch_loss
+
+                + self.regime_aux_lambda * regime_aux_epoch_loss
 
             )
 
@@ -1188,6 +1285,8 @@ class Trainer:
 
             self.losses["train_phys_smooth"].append(phys_smooth_epoch_loss)
 
+            self.losses["train_regime_aux"].append(regime_aux_epoch_loss)
+
             self.losses["train_total"].append(total_epoch_loss)
 
 
@@ -1195,11 +1294,11 @@ class Trainer:
 
             forecast_val_loss, recon_val_loss, total_val_loss = "NA", "NA", "NA"
 
-            phys_alg_val_loss, phys_smooth_val_loss = "NA", "NA"
+            phys_alg_val_loss, phys_smooth_val_loss, regime_aux_val_loss = "NA", "NA", "NA"
 
             if val_loader is not None:
 
-                forecast_val_loss, recon_val_loss, total_val_loss, phys_alg_val_loss, phys_smooth_val_loss = self.evaluate(
+                forecast_val_loss, recon_val_loss, total_val_loss, phys_alg_val_loss, phys_smooth_val_loss, regime_aux_val_loss = self.evaluate(
 
                     val_loader, epoch=epoch
 
@@ -1212,6 +1311,8 @@ class Trainer:
                 self.losses["val_phys_alg"].append(phys_alg_val_loss)
 
                 self.losses["val_phys_smooth"].append(phys_smooth_val_loss)
+
+                self.losses["val_regime_aux"].append(regime_aux_val_loss)
 
                 self.losses["val_total"].append(total_val_loss)
 
@@ -1254,6 +1355,8 @@ class Trainer:
 
                     f"phys_smooth = {phys_smooth_epoch_loss:.5f}, "
 
+                    f"regime_aux = {regime_aux_epoch_loss:.5f}, "
+
                     f"total_loss = {total_epoch_loss:.5f}"
 
                 )
@@ -1270,6 +1373,8 @@ class Trainer:
                         f"val_phys_alg = {phys_alg_val_loss:.5f}, "
 
                         f"val_phys_smooth = {phys_smooth_val_loss:.5f}, "
+
+                        f"val_regime_aux = {regime_aux_val_loss:.5f}, "
 
                         f"val_total_loss = {total_val_loss:.5f}"
 
@@ -1288,5 +1393,3 @@ class Trainer:
             self.writer.add_text("total_train_time", str(train_time))
 
         print(f"-- Round-robin training done in {train_time}s.")
-
-

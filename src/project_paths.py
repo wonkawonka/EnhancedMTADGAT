@@ -2,16 +2,56 @@
 
 
 import os
+import sys
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+
+def _platform_name() -> str:
+    """Return the supported platform key used by the path configuration."""
+    if sys.platform.startswith("win"):
+        return "windows"
+    if sys.platform.startswith("linux"):
+        return "linux"
+    return "linux"
+
+
+CURRENT_PLATFORM = _platform_name()
+
+# Keep platform-specific defaults in one place. Environment variables can
+# override machine-specific dataset and run locations without code changes.
+PLATFORM_PATHS = {
+    "linux": {
+        "python": PROJECT_ROOT / ".venv" / "bin" / "python",
+        "datasets": PROJECT_ROOT / "datasets",
+        "runs": PROJECT_ROOT / "runs",
+    },
+    "windows": {
+        "python": PROJECT_ROOT / ".venv" / "Scripts" / "python.exe",
+        "datasets": PROJECT_ROOT / "datasets",
+        "runs": PROJECT_ROOT / "runs",
+    },
+}
+
+
+def _platform_path(name: str) -> Path:
+    platform_key = CURRENT_PLATFORM.upper()
+    env_name = f"MTAD_GAT_{platform_key}_{name.upper()}_ROOT"
+    configured = os.getenv(env_name)
+    if configured:
+        return Path(configured).expanduser()
+    return PLATFORM_PATHS[CURRENT_PLATFORM][name]
+
+
+PYTHON_EXECUTABLE = _platform_path("python")
+
 KAGGLE_INPUT_ROOT = Path("/kaggle/input")
 
 CONFIGS_ROOT = PROJECT_ROOT / "configs"
 
-DATASETS_ROOT = PROJECT_ROOT / "datasets"
+DATASETS_ROOT = Path(os.getenv("MTAD_GAT_DATASETS_ROOT", _platform_path("datasets")))
 
 KAGGLE_DATASET_SLUGS = {
     "CH-BATTERY": ("ch-battery", "CH-BATTERY"),
@@ -19,7 +59,7 @@ KAGGLE_DATASET_SLUGS = {
     "NASA-RANDOM-DISCHARGE": ("nasa-random-discharge", "NASA_RANDOM_DISCHARGE"),
     "NASA-RANDOM-CHARGE": ("nasa-random-charge", "NASA_RANDOM_CHARGE"),
     "DATA": ("smap-msl", "data"),
-    "SMAP-MSL": ("smap-msl", "data"),
+    "TSINGHUA-EV": ("tsinghua-ev", "TSINGHUA_EV"),
 }
 
 
@@ -64,7 +104,7 @@ def dataset_path(*parts: str) -> Path:
 def processed_dataset_path(dataset_name: str, local_name: str | None = None) -> Path:
     return DATASETS_ROOT / (local_name or dataset_name) / "processed"
 
-RUNS_ROOT = PROJECT_ROOT / "runs"
+RUNS_ROOT = Path(os.getenv("MTAD_GAT_RUNS_ROOT", _platform_path("runs")))
 
 INTERNAL_RUNS_ROOT = RUNS_ROOT / "internal"
 
@@ -73,4 +113,3 @@ EXTERNAL_RUNS_ROOT = RUNS_ROOT / "external"
 MANUAL_RUNS_ROOT = RUNS_ROOT / "manual"
 
 REPORT_ROOT = PROJECT_ROOT / "report"
-

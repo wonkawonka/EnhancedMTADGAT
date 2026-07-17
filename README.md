@@ -1,6 +1,6 @@
 ﻿﻿## 项目说明
 
-这是一个基于 `MTAD-GAT` 扩展的多变量时间序列异常检测项目，当前已经完成第一阶段目录整理，便于后续继续重构和重做实验。
+这是一个面向复杂运行状态下电池异常检测的 `MTAD-GAT` 扩展项目。第三章实现连续动态状态条件化模型，第四章在其上增加电-热响应一致性约束。
 
 - 主仓实现集中在 `src/`
 - 内部实验计划放在 `configs/internal/`
@@ -29,10 +29,12 @@ mtad-gat-pytorch/
 
 ## 环境使用
 
-如果你本地使用仓库内的解释器，直接调用：
+项目按操作系统使用仓库内的 .venv 解释器。Linux 路径为 .venv/bin/python，Windows 路径为 .venv\Scripts\python.exe；VS Code 已配置为自动从 .venv 选择当前系统的解释器。
+
+Linux 下直接调用：
 
 ```powershell
-.\.python312\python.exe -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
 Kaggle CUDA 11.8 环境需要同时跑 DGL/PyG/外部基线时，使用专用依赖文件：
@@ -41,10 +43,12 @@ Kaggle CUDA 11.8 环境需要同时跑 DGL/PyG/外部基线时，使用专用依
 pip install -r requirements-kaggle-cu118.txt
 ```
 
+Windows 下将解释器替换为 .venv\Scripts\python.exe。
+
 后续命令默认都可以写成：
 
 ```powershell
-.\.python312\python.exe -m <module>
+.venv/bin/python -m <module>
 ```
 
 ## 常用命令
@@ -52,60 +56,59 @@ pip install -r requirements-kaggle-cu118.txt
 ### 数据预处理
 
 ```powershell
-.\.python312\python.exe -m src.runners.preprocess --dataset MSL
-.\.python312\python.exe -m src.runners.preprocess --dataset SMAP
-.\.python312\python.exe -m src.runners.preprocess --dataset SMD --group 1-1
+.venv/bin/python -m src.runners.preprocess --dataset MSL
+.venv/bin/python -m src.runners.preprocess --dataset SMD --group 1-1
 ```
 
 ### 单次训练
 
 ```powershell
-.\.python312\python.exe -m src.runners.train --dataset MSL
-.\.python312\python.exe -m src.runners.train --dataset SMAP
-.\.python312\python.exe -m src.runners.train --dataset BMS
+.venv/bin/python -m src.runners.train --dataset MSL
+.venv/bin/python -m src.runners.train --dataset BMS
+.venv/bin/python -m src.runners.train --dataset TSINGHUA_EV --model_name mtad_gat_c3_regime --lookback 64
 ```
 
 ### 单次预测
 
 ```powershell
-.\.python312\python.exe -m src.runners.predict --dataset MSL --model_id -1
+.venv/bin/python -m src.runners.predict --dataset MSL --model_id -1
 ```
 
 ### 批量运行主仓计划
 
 ```powershell
-.\.python312\python.exe -m src.runners.compare_experiments --plan configs/internal/01_ch3_msl_main.json --skip-existing
-.\.python312\python.exe -m src.runners.compare_experiments --plan configs/internal/03_ch4_nasa_random_main.json --skip-existing
+.venv/bin/python run.py preflight --tsinghua-ev-root datasets/TSINGHUA_EV
+.venv/bin/python -m src.runners.compare_experiments --plan configs/internal/00_kaggle_smoke.json
+.venv/bin/python -m src.runners.compare_experiments --plan configs/internal/01_ch3_main.json --skip-existing
+.venv/bin/python -m src.runners.compare_experiments --plan configs/internal/03_ch4_tsinghua_main.json --skip-existing
 ```
 
 ### 批量运行外部基线
 
 ```powershell
-.\.python312\python.exe -m src.runners.run_external_baselines --plan configs/external/01_ch3_msl_external.json --skip-existing
-.\.python312\python.exe -m src.runners.run_external_baselines --plan configs/external/02_ch4_nasa_random_external.json --skip-existing
+.venv/bin/python -m src.runners.run_external_baselines --plan configs/external/01_ch3_msl_external.json --skip-existing
 ```
 
 ### 数据分析与报告
 
 ```powershell
-.\.python312\python.exe -m src.runners.analyze --dataset MSL
-.\.python312\python.exe -m src.runners.analyze --dataset NASA_RANDOM_DISCHARGE --nasa_train_batteries RW1,RW2,RW7,RW8 --nasa_test_batteries RW1,RW2,RW7,RW8
-.\.python312\python.exe -m src.runners.build_report
+.venv/bin/python -m src.runners.analyze --dataset MSL
+.venv/bin/python -m src.runners.analyze --dataset NASA_RANDOM_DISCHARGE --nasa_train_batteries RW1,RW2,RW7 --nasa_test_batteries RW8
+.venv/bin/python -m src.runners.build_report
 ```
 
 ### 统一入口
 
 ```powershell
-.\.python312\python.exe .\run.py internal --plan configs/internal/03_ch4_nasa_random_main.json --skip-existing
-.\.python312\python.exe .\run.py analyze --dataset CH_BATTERY_LFP_DISCHARGE
-.\.python312\python.exe .\run.py full --internal-plan configs/internal/03_ch4_nasa_random_main.json --external-plan configs/external/02_ch4_nasa_random_external.json --analysis-dataset NASA_RANDOM_DISCHARGE --nasa-train-batteries RW1,RW2,RW7,RW8 --nasa-test-batteries RW1,RW2,RW7,RW8
+.venv/bin/python run.py internal --plan configs/internal/03_ch4_tsinghua_main.json --skip-existing
+.venv/bin/python run.py analyze --dataset NASA_RANDOM_DISCHARGE --nasa-train-batteries RW1,RW2,RW7 --nasa-test-batteries RW8
 ```
 
 ### 导出外部基线所需数据
 
 ```powershell
-.\.python312\python.exe -m src.runners.prepare_external_baseline_data list --source-dataset MSL
-.\.python312\python.exe -m src.runners.prepare_external_baseline_data export --source-dataset MSL --target tranad --output-dir .\tmp\tranad_msl
+.venv/bin/python -m src.runners.prepare_external_baseline_data list --source-dataset MSL
+.venv/bin/python -m src.runners.prepare_external_baseline_data export --source-dataset MSL --target tranad --output-dir .\tmp\tranad_msl
 ```
 
 ## 输出位置
@@ -129,6 +132,11 @@ pip install -r requirements-kaggle-cu118.txt
 - 预测与阈值：`src/engine/prediction.py`
 - 数据工具：`src/data/utils.py`
 - CH-BATTERY 工具：`src/data/ch_battery_utils.py`
+- 清华 EV 有标签片段数据工具：`src/data/tsinghua_ev_utils.py`
+- 工况标签推导：`src/data/regime_utils.py`
+- 论文实验设计：`report/thesis_experiment_design.md`
+- Kaggle GPU 执行手册：`report/kaggle_runbook.md`
+- 第三/四章模型图：`report/figures/`
 
 ## 相关说明
 
