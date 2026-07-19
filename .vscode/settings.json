@@ -8,5 +8,22 @@
     "chat.agentSkillsLocations": {
         ".vscode/skills": true
     },
-    "git.ignoreLimitWarning": true
+    "git.ignoreLimitWarning": true,
+    "files.watcherExclude": {
+        "**/datasets/**": true,
+        "**/runs/**": true,
+        "**/__pycache__/**": true,
+        "**/.ipynb_checkpoints/**": true
+    },
+    "search.exclude": {
+        "**/datasets/**": true,
+        "**/runs/**": true,
+        "**/__pycache__/**": true,
+        "**/.ipynb_checkpoints/**": true
+    },
+    "python.analysis.exclude": [
+        "**/datasets/**",
+        "**/runs/**",
+        "**/__pycache__/**"
+    ]
 }

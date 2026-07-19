@@ -1,46 +1,22 @@
-# 实验计划说明
+# 实验计划
 
-当前配置按“第三章动态状态条件化、第四章电-热响应一致性”的论文主线组织。
+- `internal/00_kaggle_smoke.json`：官方电池数据小样本链路检查，不进论文表。
+- `internal/01_ch3_main.json`：MSL 上 MTAD-GAT 与 C3 的通用性补充。
+- `internal/05_condition_validation.json`：NASA Random 表征探针，以及BMS正常调频数据上条件化前后的误报与稳定性对照，不进故障主表。
+- `internal/06_kaggle_formal.json`：电池正式主入口；完整三品牌、品牌独立、车辆级五折、主模型和核心消融。
+- `external/01_nc_battery_official.json`：严格正常校准协议下的五个通用基线（Isolation Forest、GDN、AE、Deep SVDD、LSTM-AD）和同数据集专用 DyAD。
+- `external/02_nc_battery_paper_protocol.json`：按 Zhang et al. 2023 Supplementary Note 2 的带标签校准协议复核 DyAD、GDN、AE 和 Deep SVDD；不得与严格协议结果混表。
 
-## 内部计划
-
-- `configs/internal/00_kaggle_smoke.json`
-  - 正式占用 GPU 前的两轮小样本链路检查，不进入论文表格。
-- `configs/internal/01_ch3_main.json`
-  - MSL 通用异常检测与清华 EV 充电片段级故障主结果。
-- `configs/internal/02_ch3_regime_ablation.json`
-  - 学习式动态状态编码、FiLM 条件化位置、统计量编码和分数融合消融。
-- `configs/internal/03_ch4_tsinghua_main.json`
-  - 第三章模型与第四章电-热物理响应增强模型的递进比较。
-- `configs/internal/04_ch4_physics_ablation.json`
-  - 第三章到第四章的加法递进，以及电压、温度、电荷流、SOC-电流响应的留一消融。
-- `configs/internal/05_condition_validation.json`
-  - NASA Random Walk 电流方向表征探针与 BMS 静置/调频案例，不进入故障检测主表。
-- `configs/internal/06_kaggle_formal.json`
-  - Kaggle 正式整合计划；完整数据和正式训练预算，只去重，主结果三种子、消融单种子。
-
-清华公开包没有车辆 ID，因此不能报告车辆级泛化结果。CH-BATTERY 和 2024 EV Fault Dataset 不在当前论文实验计划中。NASA Random Walk 没有异常标签，不报告异常检测 F1；BMS 没有可靠告警标签，只报告运行稳定性和误报警统计。
-
-正式 C3/C4 使用 `regime_condition_mode=fusion`：状态向量调制关系融合表示，再共同送入 GRU 和 Transformer。MSL 用非目标通道作为潜在上下文并关闭电池描述辅助任务；BMS 用 `SYS_I` 和簇 SOC 表示运行条件，簇电流仍参与异常评分。
-
-## 外部计划
-
-- `configs/external/01_ch3_msl_external.json`
-  - MSL 上的 TranAD、Anomaly Transformer、GDN 和 DCdetector 对比。
-
-## 运行顺序
-
-```text
-1. 00_kaggle_smoke.json
-2. 06_kaggle_formal.json（正式整合入口）
-3. 01_ch3_msl_external.json（外部基线，独立环境）
-```
-
-## 常用命令
+公平主对照按统一的严格车辆折运行；DyAD 单列为同数据集专用强基线，其余五项覆盖传统、图、重构、单分类和循环时序方法。论文协议复核使用一组故障车辆校准阈值，单独汇总。说明见 `external_baselines/BatteryFaultNC/README.md`。
 
 ```bash
-.venv/bin/python -m src.runners.compare_experiments --plan configs/internal/06_kaggle_formal.json --resume --skip-existing
-.venv/bin/python -m src.runners.run_external_baselines --plan configs/external/01_ch3_msl_external.json --skip-existing
+python run.py preprocess --dataset TSINGHUA_EV
+python run.py internal --plan configs/internal/00_kaggle_smoke.json
+python run.py internal --plan configs/internal/06_kaggle_formal.json --resume --skip-existing
+python run.py external --plan configs/external/01_nc_battery_official.json --skip-existing
+python run.py external --plan configs/external/02_nc_battery_paper_protocol.json --skip-existing
 ```
 
-完整的指标、数据集角色和论文表述见 `report/thesis_experiment_design.md`。
+执行顺序为：路径核对 → Tsinghua 索引预处理 → GPU/data/model preflight → smoke →
+内部正式计划 → 外部严格协议 → 论文协议复核 → 完整批次归档。Tsinghua 原始片段
+无需复制或重采样；按折训练集拟合的归一化不属于可提前合并的全局预处理。

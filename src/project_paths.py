@@ -47,7 +47,7 @@ def _platform_path(name: str) -> Path:
 
 PYTHON_EXECUTABLE = _platform_path("python")
 
-KAGGLE_INPUT_ROOT = Path("/kaggle/input")
+KAGGLE_INPUT_ROOT = Path(os.getenv("KAGGLE_INPUT_ROOT", "/kaggle/input"))
 
 CONFIGS_ROOT = PROJECT_ROOT / "configs"
 
@@ -55,12 +55,76 @@ DATASETS_ROOT = Path(os.getenv("MTAD_GAT_DATASETS_ROOT", _platform_path("dataset
 
 KAGGLE_DATASET_SLUGS = {
     "CH-BATTERY": ("ch-battery", "CH-BATTERY"),
-    "BMS": ("bms", "BMS"),
+    "BMS": ("bms", "BMS", "bms-data"),
     "NASA-RANDOM-DISCHARGE": ("nasa-random-discharge", "NASA_RANDOM_DISCHARGE"),
     "NASA-RANDOM-CHARGE": ("nasa-random-charge", "NASA_RANDOM_CHARGE"),
     "DATA": ("smap-msl", "data"),
-    "TSINGHUA-EV": ("tsinghua-ev", "TSINGHUA_EV"),
+    "TSINGHUA-EV": (
+        "tsinghua-ev",
+        "TSINGHUA_EV",
+        "tsinghua-ev-battery",
+        "realistic-battery-fault-detection",
+    ),
 }
+
+
+def _dataset_root_matches(candidate: Path, dataset_key: str) -> bool:
+    """Return whether a directory contains the requested dataset, not merely exists."""
+    if not candidate.is_dir():
+        return False
+    if dataset_key == "TSINGHUA-EV":
+        return all((candidate / f"battery_brand{brand}").is_dir() for brand in (1, 2, 3))
+    if dataset_key == "BMS":
+        processed = candidate if candidate.name == "processed" else candidate / "processed"
+        if processed.is_dir() and any(processed.glob("BMS_*_train.pkl")):
+            return True
+        # Raw BMS uploads consist of four workbooks per acquisition bundle.
+        # Recognising the suffixes here lets preprocessing consume a read-only
+        # Kaggle Input without requiring a fixed dataset slug.
+        raw_suffixes = (
+            "_BMS0Data.xls",
+            "_BMS0Data.xlsx",
+            "_BMSnStatData.xls",
+            "_BMSnStatData.xlsx",
+            "_BMSnDetailTempData.xls",
+            "_BMSnDetailTempData.xlsx",
+            "_BMSnDetailVoltData.xls",
+            "_BMSnDetailVoltData.xlsx",
+        )
+        found_types = {
+            suffix
+            for path in candidate.iterdir()
+            if path.is_file()
+            for suffix in raw_suffixes
+            if path.name.endswith(suffix)
+        }
+        return any(suffix.startswith("_BMS0Data") for suffix in found_types) and all(
+            any(suffix.startswith(prefix) for suffix in found_types)
+            for prefix in ("_BMSnStatData", "_BMSnDetailTempData", "_BMSnDetailVoltData")
+        )
+    return True
+
+
+def _candidate_dataset_roots(base: Path, dataset_key: str, local_name: str):
+    """Yield common local/Kaggle layouts while preserving deterministic priority."""
+    yield base / local_name
+    aliases = {local_name.lower(), *(slug.lower() for slug in KAGGLE_DATASET_SLUGS.get(dataset_key, ()))}
+    if dataset_key in {"TSINGHUA-EV", "BMS"} or base.name.lower() in aliases:
+        yield base
+    for slug in KAGGLE_DATASET_SLUGS.get(dataset_key, ()):
+        slug_root = base / slug
+        yield slug_root
+        yield slug_root / local_name
+        yield slug_root / "datasets" / local_name
+    if base.is_dir():
+        # Kaggle dataset slugs are user-defined. Search one level below
+        # /kaggle/input and support uploads made from either the dataset folder
+        # itself or the repository's datasets/ directory.
+        for mounted_dataset in sorted(path for path in base.iterdir() if path.is_dir()):
+            if dataset_key in {"TSINGHUA-EV", "BMS"} or mounted_dataset.name.lower() in aliases:
+                yield mounted_dataset
+            yield mounted_dataset / local_name
+            yield mounted_dataset / "datasets" / local_name
 
 
 def resolve_dataset_root(dataset_name: str | None = None, default_relative: str | None = None) -> Path:
@@ -71,43 +135,44 @@ def resolve_dataset_root(dataset_name: str | None = None, default_relative: str 
         if dataset_env_root:
             return Path(dataset_env_root)
 
-    env_root = os.getenv("MTAD_GAT_DATASETS_ROOT")
-    if env_root:
-        base = Path(env_root)
-    elif DATASETS_ROOT.exists():
-        # Kaggle always exposes /kaggle/input, but a repository can carry the
-        # required datasets itself. Prefer that reproducible project-local copy
-        # and use a Kaggle input only when the local dataset root is absent.
-        base = DATASETS_ROOT
-    elif KAGGLE_INPUT_ROOT.exists():
-        base = KAGGLE_INPUT_ROOT
-    else:
-        base = DATASETS_ROOT
-
     if not dataset_name:
-        return base
+        return Path(os.getenv("MTAD_GAT_DATASETS_ROOT", DATASETS_ROOT))
 
     local_name = default_relative or str(dataset_name)
-    candidates = []
-    if base == KAGGLE_INPUT_ROOT:
-        slug_names = KAGGLE_DATASET_SLUGS.get(dataset_key, ())
-        for slug in slug_names:
-            candidates.extend([base / slug, base / slug / local_name])
-    candidates.append(base / local_name)
-    candidates.append(PROJECT_ROOT / local_name)
+    bases = []
+    env_root = os.getenv("MTAD_GAT_DATASETS_ROOT")
+    if env_root:
+        bases.append(Path(env_root))
+    bases.extend([DATASETS_ROOT, KAGGLE_INPUT_ROOT])
 
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return candidates[0]
+    seen = set()
+    for base in bases:
+        for candidate in _candidate_dataset_roots(base, dataset_key, local_name):
+            normalized = str(candidate.resolve()) if candidate.exists() else str(candidate.absolute())
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            if _dataset_root_matches(candidate, dataset_key):
+                return candidate
+    return DATASETS_ROOT / local_name
 
 
 def dataset_path(*parts: str) -> Path:
     return resolve_dataset_root() / Path(*parts)
 
 
-def processed_dataset_path(dataset_name: str, local_name: str | None = None) -> Path:
-    return DATASETS_ROOT / (local_name or dataset_name) / "processed"
+def processed_dataset_path(
+    dataset_name: str,
+    local_name: str | None = None,
+    *,
+    for_write: bool = False,
+) -> Path:
+    """Resolve processed data for reading; preprocessing writes stay project-local."""
+    name = local_name or dataset_name
+    if for_write:
+        return DATASETS_ROOT / name / "processed"
+    root = resolve_dataset_root(dataset_name, name)
+    return root if root.name == "processed" else root / "processed"
 
 RUNS_ROOT = Path(os.getenv("MTAD_GAT_RUNS_ROOT", _platform_path("runs")))
 

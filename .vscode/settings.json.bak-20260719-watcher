@@ -1,0 +1,12 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/src"
+    ],
+    "chat.useAgentSkills": true,
+    "chat.agentSkillsLocations": {
+        ".vscode/skills": true
+    },
+    "git.ignoreLimitWarning": true
+}

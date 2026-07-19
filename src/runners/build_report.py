@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import json
 from pathlib import Path
 
@@ -40,16 +41,17 @@ def collect_plan_inventory(plan_dir: Path, plan_type: str) -> pd.DataFrame:
     for plan_path in sorted(plan_dir.glob("*.json")):
         plan = load_json(plan_path)
         global_seeds = plan.get("seeds", [])
-        experiment_count = sum(
-            max(1, len(experiment.get("seeds", global_seeds)))
-            for experiment in plan.get("experiments", [])
-        )
+        experiment_count = 0
+        for experiment in plan.get("experiments", []):
+            matrix_count = math.prod(len(values) for values in experiment.get("matrix", {}).values())
+            seed_count = max(1, len(experiment.get("seeds", global_seeds)))
+            experiment_count += max(1, matrix_count) * seed_count
         rows.append(
             {
                 "plan_type": plan_type,
                 "plan_name": plan.get("plan_name", plan_path.stem),
                 "file_name": plan_path.name,
-                "thesis_role": plan.get("_thesis_role", ""),
+                "thesis_role": plan.get("_thesis_role", plan.get("_purpose", "")),
                 "experiment_count": int(experiment_count),
                 "comment": plan.get("_comment", ""),
             }
@@ -63,7 +65,11 @@ def collect_ablation_matrix(internal_plan_dir: Path) -> pd.DataFrame:
         plan = load_json(plan_path)
         plan_name = str(plan.get("plan_name", plan_path.stem))
         thesis_role = str(plan.get("_thesis_role", ""))
-        if "ablation" not in plan_name.lower() and "消融" not in thesis_role:
+        contains_ablation = any(
+            "消融" in str(experiment.get("comment", ""))
+            for experiment in plan.get("experiments", [])
+        )
+        if "ablation" not in plan_name.lower() and "消融" not in thesis_role and not contains_ablation:
             continue
 
         common_args = dict(plan.get("common_args", {}))

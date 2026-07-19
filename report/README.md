@@ -18,8 +18,12 @@
 ```bash
 .venv/bin/python run.py preflight --tsinghua-ev-root datasets/TSINGHUA_EV
 .venv/bin/python run.py internal --plan configs/internal/00_kaggle_smoke.json
-.venv/bin/python run.py internal --plan configs/internal/01_ch3_main.json --resume --skip-existing
+.venv/bin/python run.py internal --plan configs/internal/06_kaggle_formal.json --resume --skip-existing
+.venv/bin/python run.py external --plan configs/external/01_nc_battery_official.json --skip-existing
+.venv/bin/python run.py external --plan configs/external/02_nc_battery_paper_protocol.json --skip-existing
 ```
+
+`01` 是严格正常校准的公平主对照，`02` 是 Zhang et al. 2023 Supplementary Note 2 的带标签校准协议复核，两者分开汇总。内部车辆实验还会生成 `voltage_spread_case.csv/png`，其解释依据在方法文档中明确标为原文 Supplementary Figure 3。
 
 生成项目汇总：
 

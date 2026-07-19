@@ -113,7 +113,9 @@ def handle_internal(args):
         command.append("--resume")
     if args.only.strip():
         command.extend(["--only", args.only])
-    return run_subcommand(command, dry_run=args.dry_run)
+    if args.dry_run:
+        command.append("--dry-run")
+    return run_subcommand(command, dry_run=False)
 
 
 def handle_external(args):
@@ -122,7 +124,9 @@ def handle_external(args):
         command.append("--skip-existing")
     if args.only.strip():
         command.extend(["--only", args.only])
-    return run_subcommand(command, dry_run=args.dry_run)
+    if args.dry_run:
+        command.append("--dry-run")
+    return run_subcommand(command, dry_run=False)
 
 
 def handle_analyze(args):

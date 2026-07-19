@@ -1060,7 +1060,7 @@ if __name__ == "__main__":
 
             print("BMS按簇输出已生成（联合训练、分簇测试，训练基线缓存复用）")
             operational_report = save_bms_operational_report(save_path, bms_test_tensors, window_size)
-            print(f"[BMS] operational stability: {operational_report}")
+            print(f"[BMS] known-normal false alarms and stability: {operational_report}")
         elif dataset == CH_BATTERY_DATASET_NAME and ch_battery_test_tensors is not None:
             total_samples = len(ch_battery_test_tensors)
             train_reference = ch_battery_train_tensors if ch_battery_train_tensors is not None else x_train

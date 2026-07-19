@@ -1,0 +1,76 @@
+{
+  "plan_name": "01_nc_battery_official",
+  "_thesis_role": "新电池正式外部对照：五种通用无监督基线加同数据集专用DyAD",
+  "_protocol": "公平主对照复用内部模型的strict_normal_validation品牌独立车辆折、训练集统计量和车辆级top比例；每次推理同时报告top-1/5/10/20%及均值。论文协议复核另见02_nc_battery_paper_protocol.json。",
+  "_source": "Zhang et al., Realistic fault detection of Li-ion battery via dynamical deep learning, Nature Communications 2023",
+  "common_env": {
+    "PYTHONIOENCODING": "utf-8",
+    "MPLCONFIGDIR": "/tmp/matplotlib"
+  },
+  "common_args": {
+    "batch_size": 128,
+    "num_workers": 4,
+    "vehicle_top_ratio": 0.05,
+    "battery_split_protocol": "strict_normal_validation",
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "dyad",
+      "baseline": "DyAD",
+      "cwd": ".",
+      "module": "src.runners.train_nc_external",
+      "flags": ["require_cuda"],
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"method": "dyad", "epochs": 0}
+    },
+    {
+      "name": "gdn",
+      "baseline": "GDN-Battery",
+      "cwd": ".",
+      "module": "src.runners.train_nc_external",
+      "flags": ["require_cuda"],
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"method": "gdn", "epochs": 20}
+    },
+    {
+      "name": "auto_encoder",
+      "baseline": "AE-Battery",
+      "cwd": ".",
+      "module": "src.runners.train_nc_external",
+      "flags": ["require_cuda"],
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"method": "auto_encoder", "epochs": 20}
+    },
+    {
+      "name": "deep_svdd",
+      "baseline": "Deep-SVDD-Battery",
+      "cwd": ".",
+      "module": "src.runners.train_nc_external",
+      "flags": ["require_cuda"],
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"method": "deepsvdd", "epochs": 10, "batch_size": 64}
+    },
+    {
+      "name": "lstm_ad",
+      "baseline": "LSTM-AD-Battery",
+      "cwd": ".",
+      "module": "src.runners.train_nc_external",
+      "flags": ["require_cuda"],
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"method": "lstm_ad", "epochs": 20}
+    },
+    {
+      "name": "isolation_forest",
+      "baseline": "IsolationForest-Battery",
+      "cwd": ".",
+      "module": "src.runners.train_nc_external",
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
+      "args": {
+        "method": "isolation_forest",
+        "isolation_train_samples": 0,
+        "isolation_trees": 200
+      }
+    }
+  ]
+}

@@ -3,6 +3,8 @@
 
 import argparse
 
+import itertools
+
 import json
 
 import os
@@ -114,9 +116,56 @@ def expand_experiment_seeds(experiments, seeds):
     return expanded
 
 
-def build_train_command(project_root, python_executable, merged_args):
+def expand_experiment_matrix(experiments):
 
-    cmd = [python_executable, "-m", "src.runners.train"]
+    """Expand compact Cartesian experiment matrices (for example brand x fold)."""
+
+    expanded = []
+
+    for experiment in experiments:
+
+        matrix = experiment.get("matrix", {})
+
+        if not matrix:
+
+            expanded.append(experiment)
+
+            continue
+
+        keys = list(matrix)
+
+        for values in itertools.product(*(matrix[key] for key in keys)):
+
+            item = dict(experiment)
+
+            item.pop("matrix", None)
+
+            item["args"] = dict(experiment.get("args", {}))
+
+            suffix = []
+
+            for key, value in zip(keys, values):
+
+                item["args"][key] = value
+
+                short_key = {"battery_brand": "b", "battery_fold": "f"}.get(key, key)
+
+                suffix.append(f"{short_key}{value}")
+
+            item["name"] = f"{experiment.get('name', 'experiment')}_{'_'.join(suffix)}"
+
+            if item["args"].get("run_id"):
+
+                item["args"]["run_id"] = f"{item['args']['run_id']}_{'_'.join(suffix)}"
+
+            expanded.append(item)
+
+    return expanded
+
+
+def build_train_command(project_root, python_executable, merged_args, runner="src.runners.train"):
+
+    cmd = [python_executable, "-m", runner]
 
     for key, value in merged_args.items():
 
@@ -204,6 +253,22 @@ def pack_experiment_output(output_dir):
 
     print(f"[PACK] {zip_path.name} ({size_mb:.1f} MB)")
 
+    return zip_path
+
+
+def pack_batch_output(batch_root):
+    """Archive the complete batch, including logs and run_registry.json."""
+    batch_root = Path(batch_root)
+    zip_path = batch_root.parent / f"{batch_root.name}.zip"
+    if zip_path.exists():
+        zip_path.unlink()
+    shutil.make_archive(
+        str(zip_path.with_suffix("")),
+        "zip",
+        root_dir=str(batch_root.parent),
+        base_dir=batch_root.name,
+    )
+    print(f"[PACK BATCH] {zip_path} ({zip_path.stat().st_size / (1024 * 1024):.1f} MB)")
     return zip_path
 
 
@@ -305,7 +370,9 @@ def main():
 
     common_args = dict(plan.get("common_args", {}))
 
-    experiments = expand_experiment_seeds(plan.get("experiments", []), plan.get("seeds", []))
+    experiments = expand_experiment_matrix(plan.get("experiments", []))
+
+    experiments = expand_experiment_seeds(experiments, plan.get("seeds", []))
 
     if not experiments:
 
@@ -408,7 +475,12 @@ def main():
 
             merged_args["resume"] = True
 
-        command = build_train_command(project_root, args.python, merged_args)
+        command = build_train_command(
+            project_root,
+            args.python,
+            merged_args,
+            runner=experiment.get("runner", plan.get("runner", "src.runners.train")),
+        )
 
         log_path = logs_dir / f"{name}.log"
 
@@ -439,7 +511,32 @@ def main():
 
         model_path = output_dir / "model.pt"
 
-        if args.skip_existing and model_path.exists():
+        skip_ready = model_path.exists()
+        if args.skip_existing and skip_ready and str(dataset).upper() == "BMS":
+            summary_path = output_dir / "bms_operational_summary.json"
+            summary = {}
+            if summary_path.is_file():
+                try:
+                    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    summary = {}
+            if "false_alarm_rate" not in summary:
+                cluster_names = {
+                    path.parent.name: None
+                    for path in output_dir.glob("*/test_output.pkl")
+                }
+                if cluster_names:
+                    from src.analysis.regime_evaluation import save_bms_operational_report
+
+                    save_bms_operational_report(
+                        output_dir,
+                        cluster_names,
+                        int(merged_args.get("lookback", 100)),
+                    )
+                    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            skip_ready = "false_alarm_rate" in summary
+
+        if args.skip_existing and skip_ready:
 
             result["status"] = "skipped_existing"
 
@@ -502,7 +599,6 @@ def main():
 
         json.dump(resolved_registry, f, indent=2, ensure_ascii=False)
 
-
     succeeded = sum(item["status"] == "done" for item in resolved_registry["experiments"])
 
     failed = sum(item["status"] == "failed" for item in resolved_registry["experiments"])
@@ -511,6 +607,15 @@ def main():
 
     dry_runs = sum(item["status"] == "dry_run" for item in resolved_registry["experiments"])
 
+    bms_comparison = None
+    if not args.dry_run:
+        from src.analysis.regime_evaluation import save_bms_conditioning_comparison
+
+        bms_comparison = save_bms_conditioning_comparison(batch_root)
+        resolved_registry["batch_archive"] = str(batch_root.parent / f"{batch_root.name}.zip")
+        with open(registry_path, "w", encoding="utf-8") as f:
+            json.dump(resolved_registry, f, indent=2, ensure_ascii=False)
+        pack_batch_output(batch_root)
 
     print("\nBatch finished")
 
@@ -523,6 +628,9 @@ def main():
     print(f"Skipped  : {skipped}")
 
     print(f"Dry run  : {dry_runs}")
+
+    if bms_comparison is not None:
+        print(f"BMS pair : {batch_root / 'bms_conditioning_comparison.json'}")
 
 
 if __name__ == "__main__":

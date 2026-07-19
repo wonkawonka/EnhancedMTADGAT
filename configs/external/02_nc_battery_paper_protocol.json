@@ -1,0 +1,55 @@
+{
+  "plan_name": "02_nc_battery_paper_protocol",
+  "_thesis_role": "协议复核：按Zhang等人Supplementary Note 2划分车辆，并使用带标签校准集选择阈值",
+  "_protocol": "每折以其余四组正常车训练，以这些正常车和一组故障车校准阈值，以留出正常车和其余故障车测试；该结果不得与严格正常校准主表混写。",
+  "_source": "Zhang et al., Nature Communications 2023, Supplementary Note 2, Five fold evaluation",
+  "common_env": {
+    "PYTHONIOENCODING": "utf-8",
+    "MPLCONFIGDIR": "/tmp/matplotlib"
+  },
+  "common_args": {
+    "batch_size": 128,
+    "num_workers": 4,
+    "vehicle_top_ratio": 0.05,
+    "battery_split_protocol": "paper_protocol",
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "dyad_paper_protocol",
+      "baseline": "DyAD",
+      "cwd": ".",
+      "module": "src.runners.train_nc_external",
+      "flags": ["require_cuda"],
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"method": "dyad", "epochs": 0}
+    },
+    {
+      "name": "gdn_paper_protocol",
+      "baseline": "GDN-Battery",
+      "cwd": ".",
+      "module": "src.runners.train_nc_external",
+      "flags": ["require_cuda"],
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"method": "gdn", "epochs": 20}
+    },
+    {
+      "name": "auto_encoder_paper_protocol",
+      "baseline": "AE-Battery",
+      "cwd": ".",
+      "module": "src.runners.train_nc_external",
+      "flags": ["require_cuda"],
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"method": "auto_encoder", "epochs": 20}
+    },
+    {
+      "name": "deep_svdd_paper_protocol",
+      "baseline": "Deep-SVDD-Battery",
+      "cwd": ".",
+      "module": "src.runners.train_nc_external",
+      "flags": ["require_cuda"],
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"method": "deepsvdd", "epochs": 10, "batch_size": 64}
+    }
+  ]
+}

@@ -1,122 +1,147 @@
-# Kaggle GPU 执行手册
+# Kaggle 正式实验
 
-## 1. 首次检查
+## 1. 数据目录
+
+Kaggle Input 中应存在已解压的数据目录（dataset slug 可以任意命名）：
+
+- 新电池数据：父目录下包含 `battery_brand1/2/3`；
+- BMS 原始数据：父目录下包含成组的 `BMS0Data`、`BMSnStatData`、
+  `BMSnDetailTempData`、`BMSnDetailVoltData.xls` 文件。
+
+代码会自动扫描 `/kaggle/input/<任意slug>/`、`TSINGHUA_EV/` 和
+`datasets/TSINGHUA_EV/` 等常见层级，并通过 `label/` 与 `train/test/` 内容确认
+真正的品牌目录。截图所示上传方式对应：
+
+```text
+/kaggle/input/dataset-bms/BMS/
+/kaggle/input/tsinghua-ev/TSINGHUA_EV/
+  battery_brand1/battery_brand1/{label,train,test,column.pkl}
+  battery_brand2/battery_brand2/{label,train,test,column.pkl}
+  battery_brand3/battery_brand3/{label,train,test,column.pkl}
+```
+
+双层 `battery_brandN` 已支持。实际 Kaggle slug 会转为小写或连字符也没关系，
+以 Notebook 路径核对单元格打印的结果为准。若上传层级更特殊，可显式指定：
+
+```bash
+export MTAD_GAT_TSINGHUA_EV_ROOT=/kaggle/input/<slug>/<数据父目录>
+export MTAD_GAT_BMS_ROOT=/kaggle/input/<slug>/<BMS父目录>
+```
+
+预处理与训练必须分开执行。新电池数据先建立经过校验的车辆/片段索引：
+
+```bash
+python run.py preprocess --dataset TSINGHUA_EV
+```
+
+索引写入可写的 `datasets/TSINGHUA_EV/processed/indices/`，不会尝试修改
+Kaggle Input。原始片段已经是固定长度模型输入，因此无需重采样或另存一份张量；
+每折归一化仍在训练入口中仅用该折训练车辆拟合，以避免数据泄漏。
+
+BMS 上传的是原始 Excel，需要在训练 BMS 前单独执行一次：
+
+```bash
+python run.py preprocess --dataset BMS
+```
+
+Input 只负责读取原始文件；预处理结果写入当前仓库的
+`datasets/BMS/processed/`（Kaggle 仓库位于 `/kaggle/working`，因此这里可写）。
+后续 BMS 训练会自动优先读取这一目录，不需要重复预处理。
+
+BMS 预处理完成后运行成对实验：
+
+```bash
+python run.py internal --plan configs/internal/05_condition_validation.json \
+  --only bms_frequency_regulation_unconditioned,bms_frequency_regulation_conditioned \
+  --resume --skip-existing
+```
+
+两项都完成后会在 `runs/internal/05_condition_validation/` 自动生成
+`bms_conditioning_comparison.json/csv`；负差值表示条件化后的误报或波动更低。
+
+仓库或 Kaggle Dataset 中应存在：
+
+```text
+datasets/TSINGHUA_EV/
+  battery_brand1/{data|train|test}/...
+  battery_brand2/{data|train|test}/...
+  battery_brand3/{data|train|test}/...
+```
+
+三个品牌包来自论文官方 Figshare。预处理阶段在项目可写缓存中生成
+`battery_brandN_snippet_index.jsonl`；索引只保存路径、车辆 ID 和元数据，不复制数据。
+后续五折直接复用。
+
+## 2. 环境与冒烟
 
 ```bash
 pip install -r requirements-kaggle-main.txt
-python run.py preflight --tsinghua-ev-root datasets/TSINGHUA_EV
 python run.py internal --plan configs/internal/00_kaggle_smoke.json
 ```
 
-MSL 首次使用前运行：
+冒烟每辆车只取 5 个片段，验证索引、车辆划分、训练、推理、车辆 top-5% 聚合和压缩包输出；不作为论文结果。
+
+## 3. 正式运行
+
+正式计划使用完整片段，不做采样：
 
 ```bash
-python run.py preprocess --dataset MSL
+python run.py internal \
+  --plan configs/internal/06_kaggle_formal.json \
+  --resume --skip-existing
 ```
 
-`preflight` 检查 CUDA、数据包和模型前向/反向。正式配置使用 `require_cuda=true`，不会静默切到 CPU。冒烟结果只证明链路可用，不能作为论文性能。
+矩阵名称为 `模型_b品牌_f折`。建议按品牌和折分会话，例如：
 
-## 2. 推荐顺序
+```bash
+python run.py internal --plan configs/internal/06_kaggle_formal.json \
+  --only battery_mtadgat_all_b3_f0,battery_c3_b3_f0,battery_c4_b3_f0 \
+  --resume --skip-existing
+```
+
+主结果共有 3 个模型 × 3 个品牌 × 5 折 = 45 次；brand3 三组需要重新训练的核心消融再增加15次，共60次。MTAD-GAT 的 all/response 计分和 C4 的有/无物理计分均由同一次推理报告，不重复训练。先完成三个主模型全部五折，再跑消融。
+
+原论文外部对照单独运行：
+
+```bash
+python run.py external \
+  --plan configs/external/01_nc_battery_official.json \
+  --skip-existing
+```
+
+外部矩阵为6种方法×3品牌×5折=90次训练与评估，其中包含五个通用基线和单列的 DyAD。输出稳定保存在 `runs/external/01_nc_battery_official/`，可用 `--only isolation_forest`、`--only dyad` 或具体名称分批运行。
+
+六个模型均已集成到本项目，正式运行不需要克隆官方仓库，也不需要旧版 `torch-geometric` 或 `easydict`。统一入口使用相同的车辆折、数据路径和结果导出协议。
+
+## 4. 每组实验的目的
+
+| 比较 | 回答的问题 |
+| --- | --- |
+| MTAD-GAT-all vs response | 性能变化来自模型，还是仅来自去掉控制通道计分 |
+| MTAD-GAT-response vs C3 | 电流/SOC工况条件化是否改善车辆故障排序 |
+| C3 vs C4 | 物理状态、响应损失和物理计分是否继续增益 |
+| C3 vs no-condition/no-aux | 条件化与辅助任务是否各自有效 |
+| C4 vs state-only/no-score | 物理训练约束与推理分数各自贡献 |
+| Isolation Forest/GDN/AE/SVDD/LSTM-AD | 五类通用无监督基线的横向比较 |
+| DyAD | 与同数据集原论文专用模型比较 |
+
+主指标是 top-5% 车辆级 AUROC、AUPRC、TPR@FPR=1%/5%，五折报告均值±标准差。同一次推理还保存 top-1%/10%/20%/均值聚合敏感性。验证集 P99 阈值 F1 只作辅助，不能用窗口级 F1 代替。
+
+## 5. 时间与结果保存
+
+完整数据超过 69 万个片段，正式实验以每个 128 点片段为一个样本（`lookback=127`），不再把一个片段展开成大量重叠窗口。配置上限 10 epoch、3 epoch 早停；论文 DyAD 本身按品牌只训练 3–5 epoch。先用 brand3 fold0 的首轮日志实测耗时，再按“首轮秒数 × 剩余轮数 × 剩余运行数”估算，不能沿用旧数据的时间。
+
+每个实验输出 `model.pt`、`metrics.json`、`vehicle_scores.csv` 和检查点。每个实验
+仍有自己的 zip，批处理结束还会在批次目录旁生成同名的完整批次 zip，包含
+`logs/`、`output/`、`run_registry.json` 及所有实验产物：
 
 ```text
-环境预检
-  -> C3/C4 冒烟
-  -> 06 正式计划的 seed 3407 主结果
-  -> 单种子消融
-  -> 主结果 seed 2024/2025
-  -> NASA Random 与 BMS
-  -> 外部基线
+runs/internal/06_kaggle_formal/
+runs/internal/06_kaggle_formal.zip
+runs/external/01_nc_battery_official/
+runs/external/01_nc_battery_official.zip
 ```
 
-`06_kaggle_formal.json` 不缩数据、不改变正式步长和训练上限，只去掉原计划之间的重复实验。先检查训练/验证损失、输出目录、峰值显存和片段级指标是否合理，再继续后续运行。每次使用 `--resume --skip-existing`，并及时保存 `runs/internal/06_kaggle_formal/`。
-
-## 3. 正式命令示例
-
-正式整合计划包含 18 个实验定义，主结果局部展开三种子后共 28 次运行：
-
-```bash
-python run.py internal --plan configs/internal/06_kaggle_formal.json --resume --skip-existing
-```
-
-整套计划不可能在一个会话跑完。建议一个清华模型一次会话，先跑三个核心模型的 seed 3407：
-
-```bash
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_mtadgat_seed3407 --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c3_full_seed3407 --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c4_full_seed3407 --resume --skip-existing
-```
-
-再逐个运行 C3/C4 消融；每个名称都是独立正式实验：
-
-```bash
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c3_no_condition --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c3_statistics_encoder --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c3_no_aux --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c3_residual_gate --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c3_fixed_score --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c4_state_only --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c4_state_loss --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c4_no_voltage --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c4_no_temperature --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c4_no_charge_flow --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only tsinghua_c4_no_soc_current --resume --skip-existing
-```
-
-MSL、NASA Random 和 BMS 同样使用完整数据：
-
-```bash
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only msl_mtadgat_seed3407,msl_mtadgat_seed2024,msl_mtadgat_seed2025,msl_c3_full_seed3407,msl_c3_full_seed2024,msl_c3_full_seed2025 --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only nasa_random_condition --resume --skip-existing
-python run.py internal --plan configs/internal/06_kaggle_formal.json --only bms_idle_frequency_regulation --resume --skip-existing
-```
-
-最后补清华主结果的 seed 2024/2025。命名规则是 `实验名_seed种子`，可按上面的 seed 3407 命令替换。
-
-4 个 MSL 外部基线使用第三方仓和旧依赖，建议另开 Kaggle 会话：
-
-```bash
-pip install -r requirements-kaggle-cu118.txt
-python run.py external --plan configs/external/01_ch3_msl_external.json --skip-existing
-```
-
-不要在已经运行内部模型的主环境中安装 `requirements-kaggle-cu118.txt`；它会把 PyTorch 切换到外部 GDN/DGL/PyG 使用的 CUDA 11.8 兼容栈。
-
-## 4. 规模与时间基线
-
-- 清华：训练 797,472 窗口，正常校准 170,880，测试 204,480。
-- 本机 RTX 3060 Laptop 6 GB 的 24,000 窗口冒烟约 25 秒/epoch；线性估计清华完整 epoch 约 13–15 分钟。
-- 单模型 20–35 epoch 约 5–9 小时，跑满 50 epoch 约 11–13 小时；Kaggle T4/P100 需用首个完整 epoch 重新估算。
-- 正式整合计划展开后为：MSL 6 次、清华 20 次、NASA Random 1 次、BMS 1 次，共 28 次内部运行。
-- 清华 20 次占主要耗时：若早停在 20–35 epoch，约 100–180 GPU 小时；若都跑满 50 epoch，约 220–260 GPU 小时。
-- 连同 MSL、NASA Random、BMS，内部正式计划先按约 110–210 GPU 小时准备。该估计来自本机吞吐外推，Kaggle GPU、I/O 和实际早停轮数会造成较大偏差。
-- 外部 4 基线另估 1–3 小时，但首次环境适配可能比训练本身更久，不计入内部时间。
-
-正式计划需要跨多个 Kaggle 会话保存并续跑。优先保证 MTAD-GAT、C3、C4 的 seed 3407 和关键消融，再补主结果另外两个种子。
-
-首个清华实验跑完一轮后，用日志中的 `[Epoch ... xx.xs]` 重新估算：
-
-```text
-剩余训练时间约 = 首轮秒数 × 剩余epoch数 × 剩余同规模模型数
-```
-
-## 5. 每组实验要回答什么
-
-| 组别 | 关键比较 | 希望看到的证据 |
-| --- | --- | --- |
-| 第三章主结果 | MTAD-GAT vs C3 | 清华 AUPRC/F1 提升或正常 FPR 降低；MSL 至少验证方法不是只对单一电池数据有效 |
-| C3 状态消融 | full vs no-condition/statistics/no-aux | 学习式状态编码和辅助约束确实提供增益，而不是单纯多参数 |
-| C3 位置与评分 | fusion vs residual-gate；quality-aware vs fixed | FiLM 条件化位置与分数融合设计分别有独立贡献 |
-| 第四章递进 | C3 -> state -> state+loss -> full | 响应 MAE 和检测指标逐步改善，且正常 FPR 不明显恶化 |
-| 物理项留一 | full vs 去掉四类响应 | 判断各响应项是否有效；不强求每项都同幅度下降 |
-| NASA Random | RW1/2/7训练，RW8探针 | 冻结状态嵌入能跨电池区分电流方向；不是故障检测结论 |
-| BMS | 静置/调频/切换统计和高分案例 | 工况切换不过度误报；可能发现簇电流份额异常，但无标签时不能给检测准确率 |
-| 外部基线 | C3 vs 4种公开模型 | 给第三章提供横向参照；必须统一数据、raw指标与阈值口径 |
-
-`06` 本身就是正式口径：完整数据、50 epoch 上限、主结果三种子。若某项不符合预期，应先查收敛和指标方差，不能只因结果不好就删除消融。
-
-## 6. 结果检查
-
-- 确认配置中 `regime_condition_mode=fusion`、`use_revin=false`。
-- MSL 的 `regime_aux_lambda=0`；清华/BMS 保留动态描述辅助任务。
-- 检查校准集与测试集没有交叉，阈值不使用测试标签。
-- 清华保存片段级指标；BMS 不应生成监督 F1/AUROC 结论。
+Notebook 最后的打包单元格会为任何尚无完整 zip 的旧批次/续跑批次补建同名外层
+压缩包；不会再把所有批次重复套入一个超大的总 zip，以免浪费 Kaggle 20GB 工作区。
+每次使用 `--resume --skip-existing`，会话结束前执行打包单元格。

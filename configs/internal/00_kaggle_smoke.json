@@ -1,33 +1,45 @@
 {
   "plan_name": "00_kaggle_smoke",
-  "_thesis_role": "Kaggle GPU、数据和完整链路冒烟检查，不进入论文表格",
-  "_comment": "先运行本计划确认CUDA、Train.zip读取、训练、批量评分和报告输出，再运行正式50 epoch计划。",
+  "_purpose": "只检查官方完整数据的索引、车辆级划分、训练、推理和结果打包链路；不作为论文结果。",
   "common_args": {
     "dataset": "TSINGHUA_EV",
-    "epochs": 2,
-    "bs": 256,
-    "lookback": 64,
-    "window_stride": 8,
-    "tsinghua_ev_validation_ratio": 0.02,
-    "tsinghua_ev_max_train_samples": 1000,
-    "tsinghua_ev_max_validation_samples": 200,
-    "tsinghua_ev_max_test_samples_per_class": 200,
-    "regime_encoder_type": "temporal",
-    "regime_aux_lambda": 0.05,
-    "regime_condition_mode": "fusion",
-    "use_revin": false,
-    "use_event_consistency": false,
+    "epochs": 1,
+    "bs": 64,
+    "lookback": 32,
+    "battery_brand": 3,
+    "battery_fold": 0,
+    "battery_split_protocol": "strict_normal_validation",
+    "battery_windows_per_snippet": 1,
+    "battery_max_snippets_per_vehicle": 5,
+    "battery_vehicle_top_ratio": 0.05,
     "normalize": true,
     "use_cuda": true,
     "require_cuda": true,
     "num_workers": 2,
-    "predict_num_workers": 2,
+    "persistent_workers": false,
     "early_stopping_patience": 0,
     "log_tensorboard": false,
     "seed": 3407
   },
   "experiments": [
-    {"name": "smoke_c3", "args": {"model_name": "mtad_gat_c3_regime", "run_id": "smoke_c3"}},
-    {"name": "smoke_c4", "args": {"model_name": "mtad_gat_c4_physics", "run_id": "smoke_c4"}}
+    {
+      "name": "battery_brand3_mtadgat_smoke",
+      "runner": "src.runners.train_nc_battery",
+      "args": {
+        "model_name": "mtad_gat",
+        "battery_score_channels": "all",
+        "score_fusion_mode": "fixed",
+        "run_id": "smoke_battery_brand3_mtadgat"
+      }
+    },
+    {
+      "name": "battery_brand3_c4_smoke",
+      "runner": "src.runners.train_nc_battery",
+      "args": {
+        "model_name": "mtad_gat_c4_physics",
+        "battery_score_channels": "response",
+        "run_id": "smoke_battery_brand3_c4"
+      }
+    }
   ]
 }

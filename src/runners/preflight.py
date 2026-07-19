@@ -6,14 +6,12 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from zipfile import ZipFile
-
 import torch
 
 from src.args import get_parser
-from src.data.tsinghua_ev_utils import load_tsinghua_ev_snippets
+from src.data.nc_battery import load_snippet, prepared_index_path, resolve_brand_root
 from src.models.model_factory import build_model
-from src.project_paths import REPORT_ROOT, resolve_dataset_root
+from src.project_paths import REPORT_ROOT, processed_dataset_path, resolve_dataset_root
 
 
 def parse_args():
@@ -30,33 +28,38 @@ def main():
         raise RuntimeError("CUDA is unavailable. Enable a Kaggle GPU accelerator before training.")
 
     root = Path(args.tsinghua_ev_root)
-    train_zip = root / "Train.zip"
-    if not train_zip.exists() and not any(root.rglob("*.pkl")):
-        raise FileNotFoundError(f"Tsinghua labeled data not found under {root}")
-
-    archive_count = None
-    if train_zip.exists():
-        with ZipFile(train_zip) as archive:
-            archive_count = sum(name.lower().endswith(".pkl") for name in archive.namelist())
-
-    records = load_tsinghua_ev_snippets(root)
-    scanned = records[:max(1, args.sample_scan)]
-    label_counts = {
-        "normal": sum(record["label"] == 0 for record in records),
-        "abnormal": sum(record["label"] == 1 for record in records),
-    }
+    bms_root = resolve_dataset_root("BMS", "BMS")
+    bms_processed = processed_dataset_path("BMS")
+    bms_train_files = sorted(bms_processed.glob("BMS_*_train.pkl"))
+    brand_reports = {}
+    for brand in (1, 2, 3):
+        brand_root = resolve_brand_root(root, brand)
+        paths = sorted(
+            path
+            for folder in ("data", "train", "test")
+            for path in (brand_root / folder).glob("*.pkl")
+        )
+        if not paths:
+            raise FileNotFoundError(f"No official snippets found under {brand_root}")
+        shapes = [list(load_snippet(path)[0].shape) for path in paths[:max(1, args.sample_scan)]]
+        brand_reports[f"brand{brand}"] = {
+            "snippet_files": len(paths),
+            "sample_shapes": shapes,
+            "index_ready": prepared_index_path(brand).is_file(),
+            "index_path": str(prepared_index_path(brand)),
+        }
 
     model_args = get_parser().parse_args([
         "--dataset", "TSINGHUA_EV",
         "--model_name", "mtad_gat_c4_physics",
-        "--lookback", "64",
+        "--lookback", "127",
         "--use_transformer", "true",
         "--use_regime_condition", "true",
         "--use_revin", "false",
         "--use_physical_state_encoding", "true",
     ])
-    model = build_model(model_args, n_features=7, window_size=64, out_dim=7, target_dims=None).cuda()
-    sample = torch.randn(4, 64, 7, device="cuda", requires_grad=True)
+    model = build_model(model_args, n_features=7, window_size=127, out_dim=7, target_dims=None).cuda()
+    sample = torch.randn(2, 127, 7, device="cuda", requires_grad=True)
     with torch.amp.autocast("cuda"):
         prediction, reconstruction = model(sample)
         loss = prediction.square().mean() + reconstruction.square().mean()
@@ -69,10 +72,10 @@ def main():
         "gpu": torch.cuda.get_device_name(0),
         "gpu_memory_gib": round(torch.cuda.get_device_properties(0).total_memory / (1024 ** 3), 2),
         "tsinghua_root": str(root),
-        "train_zip_entries": archive_count,
-        "loaded_labeled_snippets": len(records),
-        "label_counts": label_counts,
-        "sample_shapes": [list(record["data"].shape) for record in scanned],
+        "bms_raw_root": str(bms_root),
+        "bms_processed_root": str(bms_processed),
+        "bms_train_files": len(bms_train_files),
+        "brands": brand_reports,
         "model_parameters": sum(parameter.numel() for parameter in model.parameters()),
         "forward_backward": "passed",
     }

@@ -1,7 +1,7 @@
 {
   "plan_name": "05_condition_validation",
   "_thesis_role": "动态状态表征有效性与真实BMS案例，不参与故障检测主表",
-  "_comment": "NASA Random Walk的原始工步码不进入模型，仅按电流方向做事后弱表征探针与跨电池稳定性检查；BMS用于静置/调频告警率和切换稳定性，不报告故障F1。",
+  "_comment": "NASA Random Walk不是已删除的经典NASA数据；其原始工步码不进入模型，仅按电流方向做事后弱表征探针与跨电池稳定性检查。BMS测试段确认全程正常，仅比较状态条件化前后的经验误报率和跨簇/跨时段稳定性。",
   "common_args": {
     "model_name": "mtad_gat_c3_regime",
     "epochs": 30,
@@ -34,8 +34,22 @@
       }
     },
     {
-      "name": "bms_idle_frequency_regulation",
-      "args": {"dataset": "BMS", "window_stride": 4, "run_id": "condition_bms_case"}
+      "name": "bms_frequency_regulation_unconditioned",
+      "args": {
+        "dataset": "BMS",
+        "window_stride": 4,
+        "use_regime_condition": false,
+        "regime_aux_lambda": 0.0,
+        "run_id": "condition_bms_unconditioned"
+      }
+    },
+    {
+      "name": "bms_frequency_regulation_conditioned",
+      "args": {
+        "dataset": "BMS",
+        "window_stride": 4,
+        "run_id": "condition_bms_conditioned"
+      }
     }
   ]
 }

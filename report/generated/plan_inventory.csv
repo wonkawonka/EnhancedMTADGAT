@@ -1,9 +1,7 @@
 ﻿plan_type,plan_name,file_name,thesis_role,experiment_count,comment
-internal,00_kaggle_smoke,00_kaggle_smoke.json,Kaggle GPU、数据和完整链路冒烟检查，不进入论文表格,2,先运行本计划确认CUDA、Train.zip读取、训练、批量评分和报告输出，再运行正式50 epoch计划。
-internal,01_ch3_main,01_ch3_main.json,第三章动态状态条件化时序异常检测主结果,12,MSL验证通用时序异常检测能力；清华公开包按有标签充电片段评估，因缺少车辆ID不宣称车辆级泛化。
-internal,02_ch3_regime_ablation,02_ch3_regime_ablation.json,第三章动态状态编码与条件化消融,6,统计量编码器仅作为消融基线；完整方法使用控制/状态通道上的时序卷积与注意力池化。
-internal,03_ch4_tsinghua_main,03_ch4_tsinghua_main.json,第四章电-热物理响应一致性主结果,3,第四章严格继承第三章模型，只增加物理状态编码、响应一致性损失和自适应物理残差融合。
-internal,04_ch4_physics_ablation,04_ch4_physics_ablation.json,第四章相对第三章的递进、模块消融与响应项消融,8,同一数据划分和随机种子下先做C3到C4的加法式递进，再对完整C4按电压、温度、电荷流和SOC-电流响应组做留一消融。
-internal,05_condition_validation,05_condition_validation.json,动态状态表征有效性与真实BMS案例，不参与故障检测主表,2,NASA Random Walk的原始工步码不进入模型，仅按电流方向做事后弱表征探针与跨电池稳定性检查；BMS用于静置/调频告警率和切换稳定性，不报告故障F1。
-internal,06_kaggle_formal,06_kaggle_formal.json,Kaggle正式实验最小闭环：完整数据、主结果三种子、消融单种子,28,只去除01-05计划之间的重复运行，不减少数据、不增大正式窗口步长、不降低训练上限。18个实验定义按主结果局部展开为28次运行。
-external,01_ch3_msl_external,01_ch3_msl_external.json,第三章外部基线对比,4,第三章外部基线计划：只保留 MSL 上最常见、最能支撑论文主表的四类对比模型。
+internal,00_kaggle_smoke,00_kaggle_smoke.json,只检查官方完整数据的索引、车辆级划分、训练、推理和结果打包链路；不作为论文结果。,2,
+internal,01_ch3_msl_generality,01_ch3_main.json,第三章非电池通用性补充；电池主结果统一由06计划执行,6,
+internal,05_condition_validation,05_condition_validation.json,动态状态表征有效性与真实BMS案例，不参与故障检测主表,3,NASA Random Walk不是已删除的经典NASA数据；其原始工步码不进入模型，仅按电流方向做事后弱表征探针与跨电池稳定性检查。BMS测试段确认全程正常，仅比较状态条件化前后的经验误报率和跨簇/跨时段稳定性。
+internal,06_kaggle_formal,06_kaggle_formal.json,正式主实验：完整三品牌数据，品牌独立建模，车辆级五折评估,60,
+external,01_nc_battery_official,01_nc_battery_official.json,新电池正式外部对照：五种通用无监督基线加同数据集专用DyAD,90,
+external,02_nc_battery_paper_protocol,02_nc_battery_paper_protocol.json,协议复核：按Zhang等人Supplementary Note 2划分车辆，并使用带标签校准集选择阈值,60,

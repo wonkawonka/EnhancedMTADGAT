@@ -12,8 +12,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score
 from torch.utils.data import DataLoader, Subset
 
-from src.data.regime_utils import BMS_REGIME_NAMES, NASA_REGIME_NAMES, derive_bms_regime_labels
-from src.data.utils import BMS_FEATURE_NAMES, SlidingWindowDataset, ensure_sequence_list
+from src.data.regime_utils import NASA_REGIME_NAMES
+from src.data.utils import SlidingWindowDataset, ensure_sequence_list
 
 
 def _unwrap_model(model):
@@ -91,59 +91,172 @@ def save_nasa_regime_probe(
     return report
 
 
-def save_bms_operational_report(output_dir, test_entities, window_size):
-    """Report score/alarm stability by inferred idle/frequency-regulation regime."""
+def _distribution_stats(values, prefix):
+    values = np.asarray(values, dtype=np.float64)
+    if values.size == 0:
+        return {
+            f"{prefix}_mean": None,
+            f"{prefix}_std": None,
+            f"{prefix}_median": None,
+            f"{prefix}_mad": None,
+            f"{prefix}_cv": None,
+        }
+    mean = float(np.mean(values))
+    median = float(np.median(values))
+    std = float(np.std(values))
+    return {
+        f"{prefix}_mean": mean,
+        f"{prefix}_std": std,
+        f"{prefix}_median": median,
+        f"{prefix}_mad": float(np.median(np.abs(values - median))),
+        f"{prefix}_cv": float(std / max(abs(mean), 1e-12)),
+    }
+
+
+def _false_alarm_stats(alarms):
+    alarms = np.asarray(alarms, dtype=np.int64)
+    count = int(np.sum(alarms))
+    total = int(alarms.size)
+    rate = float(count / total) if total else None
+    return {
+        "window_count": total,
+        "false_alarm_count": count,
+        "false_alarm_rate": rate,
+        "false_alarms_per_10k_windows": None if rate is None else float(rate * 10_000),
+    }
+
+
+def save_bms_operational_report(output_dir, test_entities, window_size, block_size=1000):
+    """Report empirical false alarms and score stability on known-normal BMS data."""
     output_dir = Path(output_dir)
-    rows = []
-    transition_scores = []
-    transition_alarms = []
-    # Define the operating regime from the system-level command/current, not
-    # from the cluster current that the detector is expected to monitor.
-    current_index = BMS_FEATURE_NAMES.index("SYS_I")
-    for cluster_name, tensor in test_entities.items():
+    cluster_rows = []
+    block_rows = []
+    all_scores = []
+    all_normalized_scores = []
+    all_alarms = []
+    block_size = max(1, int(block_size))
+
+    for cluster_name in sorted(test_entities):
         score_path = output_dir / cluster_name / "test_output.pkl"
         if not score_path.exists():
             continue
         frame = pd.read_pickle(score_path)
-        values = tensor.detach().cpu().numpy() if isinstance(tensor, torch.Tensor) else np.asarray(tensor)
-        regimes = derive_bms_regime_labels(values, current_index=current_index)[window_size:]
-        length = min(len(frame), len(regimes))
-        frame = frame.iloc[:length]
-        regimes = regimes[:length]
+        required = {"A_Pred_Global", "A_Score_Global"}
+        missing = sorted(required - set(frame.columns))
+        if missing:
+            raise KeyError(f"{score_path} is missing required columns: {missing}")
         alarms = frame["A_Pred_Global"].to_numpy(dtype=np.int64)
         scores = frame["A_Score_Global"].to_numpy(dtype=np.float64)
-        for regime_id, regime_name in BMS_REGIME_NAMES.items():
-            mask = regimes == regime_id
-            if not np.any(mask):
-                continue
-            rows.append({
-                "cluster": cluster_name,
-                "regime": regime_name,
-                "window_count": int(mask.sum()),
-                "score_mean": float(scores[mask].mean()),
-                "score_std": float(scores[mask].std()),
-                "alarm_rate": float(alarms[mask].mean()),
-            })
-        transitions = np.zeros(length, dtype=bool)
-        transitions[1:] = regimes[1:] != regimes[:-1]
-        radius = min(10, max(1, window_size // 10))
-        transition_neighborhood = np.convolve(transitions.astype(np.int32), np.ones(2 * radius + 1), mode="same") > 0
-        if np.any(transition_neighborhood):
-            transition_scores.extend(scores[transition_neighborhood].tolist())
-            transition_alarms.extend(alarms[transition_neighborhood].tolist())
+        threshold = None
+        if "Thresh_Global" in frame and len(frame):
+            threshold = float(frame["Thresh_Global"].iloc[0])
+        normalized_scores = scores / max(abs(threshold), 1e-12) if threshold is not None else scores
 
-    frame = pd.DataFrame(rows)
-    frame.to_csv(output_dir / "bms_operational_stability.csv", index=False)
+        row = {
+            "cluster": cluster_name,
+            "threshold": threshold,
+            **_false_alarm_stats(alarms),
+            **_distribution_stats(scores, "score"),
+            **_distribution_stats(normalized_scores, "score_to_threshold"),
+        }
+        cluster_rows.append(row)
+        all_scores.extend(scores.tolist())
+        all_normalized_scores.extend(normalized_scores.tolist())
+        all_alarms.extend(alarms.tolist())
+
+        for block_index, start in enumerate(range(0, len(frame), block_size)):
+            stop = min(len(frame), start + block_size)
+            block_rows.append({
+                "cluster": cluster_name,
+                "block_index": int(block_index),
+                "start_window": int(start),
+                "stop_window": int(stop),
+                **_false_alarm_stats(alarms[start:stop]),
+                **_distribution_stats(normalized_scores[start:stop], "score_to_threshold"),
+            })
+
+    cluster_frame = pd.DataFrame(cluster_rows)
+    block_frame = pd.DataFrame(block_rows)
+    cluster_frame.to_csv(output_dir / "bms_false_alarm_by_cluster.csv", index=False)
+    block_frame.to_csv(output_dir / "bms_false_alarm_by_block.csv", index=False)
+    # Retain the previous filename so old collection scripts keep working.
+    cluster_frame.to_csv(output_dir / "bms_operational_stability.csv", index=False)
+
+    cluster_rates = cluster_frame.get("false_alarm_rate", pd.Series(dtype=float)).dropna().to_numpy()
+    block_rates = block_frame.get("false_alarm_rate", pd.Series(dtype=float)).dropna().to_numpy()
     report = {
-        "label_source": "regimes inferred from current activity; no anomaly ground truth",
-        "regime_current_feature": "SYS_I",
+        "data_assumption": "the evaluated BMS interval is confirmed normal operation",
+        "metric_semantics": "threshold exceedances are empirical false alarms, not detected faults",
+        "threshold_source": "normal training scores via the model's epsilon threshold",
         "reported_supervised_fault_metrics": False,
-        "cluster_regime_rows": int(len(frame)),
-        "transition_window_count": int(len(transition_scores)),
-        "transition_score_mean": float(np.mean(transition_scores)) if transition_scores else None,
-        "transition_alarm_rate": float(np.mean(transition_alarms)) if transition_alarms else None,
+        "window_size": int(window_size),
+        "time_block_size_windows": int(block_size),
+        "cluster_count": int(len(cluster_frame)),
+        **_false_alarm_stats(all_alarms),
+        **_distribution_stats(all_scores, "score"),
+        **_distribution_stats(all_normalized_scores, "score_to_threshold"),
+        "cluster_false_alarm_rate_std": float(np.std(cluster_rates)) if cluster_rates.size else None,
+        "cluster_false_alarm_rate_range": float(np.ptp(cluster_rates)) if cluster_rates.size else None,
+        "block_false_alarm_rate_std": float(np.std(block_rates)) if block_rates.size else None,
+        "block_false_alarm_rate_p95": float(np.quantile(block_rates, 0.95)) if block_rates.size else None,
+        "block_false_alarm_rate_max": float(np.max(block_rates)) if block_rates.size else None,
     }
     (output_dir / "bms_operational_summary.json").write_text(
         json.dumps(report, indent=2), encoding="utf-8"
     )
     return report
+
+
+def save_bms_conditioning_comparison(batch_root):
+    """Compare the paired BMS runs once both per-run reports are available."""
+    batch_root = Path(batch_root)
+    output_root = batch_root / "output"
+    run_names = {
+        "unconditioned": "bms_frequency_regulation_unconditioned",
+        "conditioned": "bms_frequency_regulation_conditioned",
+    }
+    reports = {}
+    for label, run_name in run_names.items():
+        path = output_root / run_name / "bms_operational_summary.json"
+        if not path.is_file():
+            return None
+        reports[label] = json.loads(path.read_text(encoding="utf-8"))
+
+    metric_names = (
+        "false_alarm_rate",
+        "false_alarms_per_10k_windows",
+        "cluster_false_alarm_rate_std",
+        "cluster_false_alarm_rate_range",
+        "block_false_alarm_rate_std",
+        "block_false_alarm_rate_p95",
+        "block_false_alarm_rate_max",
+        "score_to_threshold_cv",
+    )
+    rows = []
+    for metric in metric_names:
+        baseline = reports["unconditioned"].get(metric)
+        conditioned = reports["conditioned"].get(metric)
+        delta = None if baseline is None or conditioned is None else float(conditioned - baseline)
+        relative_change = None
+        if delta is not None and abs(float(baseline)) > 1e-12:
+            relative_change = float(delta / abs(float(baseline)))
+        rows.append({
+            "metric": metric,
+            "unconditioned": baseline,
+            "conditioned": conditioned,
+            "conditioned_minus_unconditioned": delta,
+            "relative_change": relative_change,
+            "preferred_direction": "lower",
+        })
+
+    comparison = {
+        "data_assumption": "all evaluated BMS windows are normal",
+        "interpretation": "negative deltas indicate fewer or more stable false alarms",
+        "fault_detection_claim_supported": False,
+        "metrics": rows,
+    }
+    pd.DataFrame(rows).to_csv(batch_root / "bms_conditioning_comparison.csv", index=False)
+    (batch_root / "bms_conditioning_comparison.json").write_text(
+        json.dumps(comparison, indent=2), encoding="utf-8"
+    )
+    return comparison

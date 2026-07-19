@@ -37,11 +37,13 @@ Linux 下直接调用：
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-Kaggle CUDA 11.8 环境需要同时跑 DGL/PyG/外部基线时，使用专用依赖文件：
+Kaggle 正式内部实验和电池外部对照都保留平台预装的 CUDA/Torch，只安装主项目依赖：
 
 ```bash
-pip install -r requirements-kaggle-cu118.txt
+pip install -r requirements-kaggle-main.txt
 ```
+
+`requirements-kaggle-cu118.txt` 只留给未纳入正式计划的旧版第三方 DGL/PyG 仓库，不要在当前正式环境安装。
 
 Windows 下将解释器替换为 .venv\Scripts\python.exe。
 
@@ -58,6 +60,7 @@ Windows 下将解释器替换为 .venv\Scripts\python.exe。
 ```powershell
 .venv/bin/python -m src.runners.preprocess --dataset MSL
 .venv/bin/python -m src.runners.preprocess --dataset SMD --group 1-1
+.venv/bin/python -m src.runners.preprocess --dataset BMS
 ```
 
 ### 单次训练
@@ -65,7 +68,7 @@ Windows 下将解释器替换为 .venv\Scripts\python.exe。
 ```powershell
 .venv/bin/python -m src.runners.train --dataset MSL
 .venv/bin/python -m src.runners.train --dataset BMS
-.venv/bin/python -m src.runners.train --dataset TSINGHUA_EV --model_name mtad_gat_c3_regime --lookback 64
+.venv/bin/python -m src.runners.train_nc_battery --dataset TSINGHUA_EV --battery_brand 3 --battery_fold 0 --model_name mtad_gat_c3_regime --lookback 127
 ```
 
 ### 单次预测
@@ -80,14 +83,17 @@ Windows 下将解释器替换为 .venv\Scripts\python.exe。
 .venv/bin/python run.py preflight --tsinghua-ev-root datasets/TSINGHUA_EV
 .venv/bin/python -m src.runners.compare_experiments --plan configs/internal/00_kaggle_smoke.json
 .venv/bin/python -m src.runners.compare_experiments --plan configs/internal/01_ch3_main.json --skip-existing
-.venv/bin/python -m src.runners.compare_experiments --plan configs/internal/03_ch4_tsinghua_main.json --skip-existing
+.venv/bin/python -m src.runners.compare_experiments --plan configs/internal/06_kaggle_formal.json --resume --skip-existing
 ```
 
 ### 批量运行外部基线
 
 ```powershell
-.venv/bin/python -m src.runners.run_external_baselines --plan configs/external/01_ch3_msl_external.json --skip-existing
+.venv/bin/python -m src.runners.run_external_baselines --plan configs/external/01_nc_battery_official.json --skip-existing
+.venv/bin/python -m src.runners.run_external_baselines --plan configs/external/02_nc_battery_paper_protocol.json --skip-existing
 ```
+
+`01` 是与内部模型共用的严格正常校准主对照；`02` 按 Zhang et al. 2023 Supplementary Note 2 使用带标签故障组校准阈值，只作论文协议复核。两套结果不能混表。外部计划使用五个通用基线（Isolation Forest、GDN、LSTM-AD、AE、Deep SVDD），并将同数据集专用 DyAD 单列为强基线；均由项目内入口运行，不需要另行克隆官方仓库。
 
 ### 数据分析与报告
 
@@ -100,7 +106,7 @@ Windows 下将解释器替换为 .venv\Scripts\python.exe。
 ### 统一入口
 
 ```powershell
-.venv/bin/python run.py internal --plan configs/internal/03_ch4_tsinghua_main.json --skip-existing
+.venv/bin/python run.py internal --plan configs/internal/06_kaggle_formal.json --resume --skip-existing
 .venv/bin/python run.py analyze --dataset NASA_RANDOM_DISCHARGE --nasa-train-batteries RW1,RW2,RW7 --nasa-test-batteries RW8
 ```
 
@@ -132,7 +138,8 @@ Windows 下将解释器替换为 .venv\Scripts\python.exe。
 - 预测与阈值：`src/engine/prediction.py`
 - 数据工具：`src/data/utils.py`
 - CH-BATTERY 工具：`src/data/ch_battery_utils.py`
-- 清华 EV 有标签片段数据工具：`src/data/tsinghua_ev_utils.py`
+- 官方车辆级电池数据工具：`src/data/nc_battery.py`
+- 官方车辆级电池训练入口：`src/runners/train_nc_battery.py`
 - 工况标签推导：`src/data/regime_utils.py`
 - 论文实验设计：`report/thesis_experiment_design.md`
 - Kaggle GPU 执行手册：`report/kaggle_runbook.md`

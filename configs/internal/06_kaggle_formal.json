@@ -1,237 +1,115 @@
 {
   "plan_name": "06_kaggle_formal",
-  "_thesis_role": "Kaggle正式实验最小闭环：完整数据、主结果三种子、消融单种子",
-  "_comment": "只去除01-05计划之间的重复运行，不减少数据、不增大正式窗口步长、不降低训练上限。18个实验定义按主结果局部展开为28次运行。",
-  "_formal_rule": "MSL与清华主结果使用3407/2024/2025三个种子；消融、NASA Random探针和BMS案例使用3407。",
+  "_thesis_role": "正式主实验：完整三品牌数据，品牌独立建模，车辆级五折评估",
+  "_protocol": "主结果使用strict_normal_validation：正常车辆划分训练/验证/测试，故障车辆只进入测试；片段窗口误差先聚合为片段分数，再取每辆车top-5%片段均值；主报vehicle AUROC/AUPRC和TPR@FPR。",
+  "_runtime_note": "论文DyAD在完整数据上仅训练3-5轮；内部模型预留10轮并用3轮早停，不削减车辆或片段。",
   "common_args": {
-    "epochs": 50,
-    "bs": 256,
-    "lookback": 64,
-    "window_stride": 4,
-    "feature_att_trans": false,
-    "multi_scale_mode": "none",
-    "regime_emb_dim": 32,
-    "regime_encoder_type": "temporal",
-    "regime_aux_lambda": 0.05,
-    "regime_condition_mode": "fusion",
-    "use_revin": false,
-    "use_event_consistency": false,
-    "physical_alg_lambda": 0.1,
-    "physical_smooth_lambda": 0.005,
-    "physical_response_max_weight": 0.35,
-    "physical_response_terms": "voltage_rate,temperature_rate,charge_flow,voltage_spread,temperature_spread,soc_current_coupling",
-    "tsinghua_ev_validation_ratio": 0.15,
-    "sample_score_top_ratio": 0.05,
+    "epochs": 10,
+    "bs": 128,
+    "lookback": 127,
+    "battery_windows_per_snippet": 1,
+    "battery_vehicle_top_ratio": 0.05,
+    "battery_split_protocol": "strict_normal_validation",
     "normalize": true,
     "init_lr": 0.001,
     "dropout": 0.3,
+    "use_revin": false,
+    "regime_emb_dim": 32,
+    "regime_encoder_type": "temporal",
+    "regime_condition_mode": "fusion",
+    "regime_aux_lambda": 0.05,
+    "physical_alg_lambda": 0.1,
+    "physical_smooth_lambda": 0.005,
+    "physical_response_max_weight": 0.35,
+    "score_fusion_mode": "quality_aware",
     "use_cuda": true,
     "require_cuda": true,
-    "num_workers": 2,
-    "predict_num_workers": 2,
-    "early_stopping_patience": 8,
+    "num_workers": 4,
+    "predict_num_workers": 4,
+    "persistent_workers": true,
+    "early_stopping_patience": 3,
     "early_stopping_min_delta": 0.0001,
     "log_tensorboard": false,
     "seed": 3407
   },
   "experiments": [
     {
-      "name": "msl_mtadgat",
-      "seeds": [3407, 2024, 2025],
-      "comment": "第三章通用基线；给C3提供同数据、同训练预算参照。",
-      "args": {
-        "dataset": "MSL",
-        "model_name": "mtad_gat",
-        "lookback": 100,
-        "window_stride": 1,
-        "regime_aux_lambda": 0.0,
-        "run_id": "kformal_msl_mtadgat"
-      }
-    },
-    {
-      "name": "msl_c3_full",
-      "seeds": [3407, 2024, 2025],
-      "comment": "验证C3在非电池数据上的通用性，报告三种子raw指标。",
-      "args": {
-        "dataset": "MSL",
-        "model_name": "mtad_gat_c3_regime",
-        "lookback": 100,
-        "window_stride": 1,
-        "regime_aux_lambda": 0.0,
-        "run_id": "kformal_msl_c3"
-      }
-    },
-    {
-      "name": "tsinghua_mtadgat",
-      "seeds": [3407, 2024, 2025],
-      "comment": "清华电池主基线；用于判断C3/C4是否真正改善片段级检测。",
+      "name": "battery_mtadgat_all",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "忠实MTAD-GAT：训练和计分均覆盖全部通道。",
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
       "args": {
         "dataset": "TSINGHUA_EV",
         "model_name": "mtad_gat",
-        "run_id": "kformal_ts_mtadgat"
+        "battery_score_channels": "all",
+        "score_fusion_mode": "fixed",
+        "regime_aux_lambda": 0.0,
+        "run_id": "kformal_battery_mtadgat_all"
       }
     },
     {
-      "name": "tsinghua_c3_full",
-      "seeds": [3407, 2024, 2025],
-      "comment": "第三章完整方法；报告三种子片段级AUPRC/AUROC及校准阈值指标。",
+      "name": "battery_c3",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "第三章主模型：电流/SOC工况编码及融合表示FiLM条件化。",
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
       "args": {
         "dataset": "TSINGHUA_EV",
         "model_name": "mtad_gat_c3_regime",
-        "run_id": "kformal_ts_c3_full"
+        "battery_score_channels": "response",
+        "run_id": "kformal_battery_c3"
       }
     },
     {
-      "name": "tsinghua_c3_no_condition",
-      "comment": "隔离状态条件化贡献；与C3 full之差回答状态向量是否有用。",
+      "name": "battery_c4",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "第四章主模型：C3加物理状态、响应一致性损失及物理响应计分。",
+      "matrix": {"battery_brand": [1, 2, 3], "battery_fold": [0, 1, 2, 3, 4]},
+      "args": {
+        "dataset": "TSINGHUA_EV",
+        "model_name": "mtad_gat_c4_physics",
+        "battery_score_channels": "response",
+        "run_id": "kformal_battery_c4"
+      }
+    },
+    {
+      "name": "battery_c3_no_condition",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "核心消融仅在brand3完整五折：去掉工况条件化。",
+      "matrix": {"battery_brand": [3], "battery_fold": [0, 1, 2, 3, 4]},
       "args": {
         "dataset": "TSINGHUA_EV",
         "model_name": "mtad_gat_c3_regime",
+        "battery_score_channels": "response",
         "use_regime_condition": false,
         "regime_aux_lambda": 0.0,
-        "run_id": "kformal_ts_c3_no_condition"
+        "run_id": "kformal_battery_c3_no_condition"
       }
     },
     {
-      "name": "tsinghua_c3_statistics_encoder",
-      "comment": "检验学习式时序状态编码是否优于简单窗口统计量。",
+      "name": "battery_c3_no_aux",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "核心消融仅在brand3完整五折：去掉状态辅助任务。",
+      "matrix": {"battery_brand": [3], "battery_fold": [0, 1, 2, 3, 4]},
       "args": {
         "dataset": "TSINGHUA_EV",
         "model_name": "mtad_gat_c3_regime",
-        "regime_encoder_type": "statistics",
+        "battery_score_channels": "response",
         "regime_aux_lambda": 0.0,
-        "run_id": "kformal_ts_c3_statistics"
+        "run_id": "kformal_battery_c3_no_aux"
       }
     },
     {
-      "name": "tsinghua_c3_no_aux",
-      "comment": "检验动态描述辅助任务是否防止状态表征退化。",
-      "args": {
-        "dataset": "TSINGHUA_EV",
-        "model_name": "mtad_gat_c3_regime",
-        "regime_aux_lambda": 0.0,
-        "run_id": "kformal_ts_c3_no_aux"
-      }
-    },
-    {
-      "name": "tsinghua_c3_residual_gate",
-      "comment": "与fusion-FiLM对比，回答条件化位置是否比只调Transformer残差权重更合适。",
-      "args": {
-        "dataset": "TSINGHUA_EV",
-        "model_name": "mtad_gat_c3_regime",
-        "regime_condition_mode": "transformer_residual",
-        "run_id": "kformal_ts_c3_residual"
-      }
-    },
-    {
-      "name": "tsinghua_c3_fixed_score",
-      "comment": "检验质量感知预测/重构分数融合是否优于固定权重。",
-      "args": {
-        "dataset": "TSINGHUA_EV",
-        "model_name": "mtad_gat_c3_regime",
-        "score_fusion_mode": "fixed",
-        "run_id": "kformal_ts_c3_fixed_score"
-      }
-    },
-    {
-      "name": "tsinghua_c4_state_only",
-      "comment": "C3加物理状态编码，回答前向物理状态表征本身的贡献。",
+      "name": "battery_c4_state_only",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "核心消融仅在brand3完整五折：保留物理状态编码，去掉物理损失与计分。",
+      "matrix": {"battery_brand": [3], "battery_fold": [0, 1, 2, 3, 4]},
       "args": {
         "dataset": "TSINGHUA_EV",
         "model_name": "mtad_gat_c4_physics",
+        "battery_score_channels": "response",
         "use_physical_regularization": false,
         "use_physical_response_score": false,
-        "run_id": "kformal_ts_c4_state"
-      }
-    },
-    {
-      "name": "tsinghua_c4_state_loss",
-      "comment": "再加响应一致性损失，主要观察响应MAE与检测指标是否改善。",
-      "args": {
-        "dataset": "TSINGHUA_EV",
-        "model_name": "mtad_gat_c4_physics",
-        "use_physical_response_score": false,
-        "run_id": "kformal_ts_c4_state_loss"
-      }
-    },
-    {
-      "name": "tsinghua_c4_full",
-      "seeds": [3407, 2024, 2025],
-      "comment": "完整第四章；三种子验证物理响应增强是否稳定有效。",
-      "args": {
-        "dataset": "TSINGHUA_EV",
-        "model_name": "mtad_gat_c4_physics",
-        "run_id": "kformal_ts_c4_full"
-      }
-    },
-    {
-      "name": "tsinghua_c4_no_voltage",
-      "comment": "留一消融电压变化率与电压极差响应。",
-      "args": {
-        "dataset": "TSINGHUA_EV",
-        "model_name": "mtad_gat_c4_physics",
-        "physical_response_terms": "temperature_rate,charge_flow,temperature_spread,soc_current_coupling",
-        "run_id": "kformal_ts_c4_no_voltage"
-      }
-    },
-    {
-      "name": "tsinghua_c4_no_temperature",
-      "comment": "留一消融温度变化率与温度极差响应。",
-      "args": {
-        "dataset": "TSINGHUA_EV",
-        "model_name": "mtad_gat_c4_physics",
-        "physical_response_terms": "voltage_rate,charge_flow,voltage_spread,soc_current_coupling",
-        "run_id": "kformal_ts_c4_no_temperature"
-      }
-    },
-    {
-      "name": "tsinghua_c4_no_charge_flow",
-      "comment": "留一消融累计电荷响应。",
-      "args": {
-        "dataset": "TSINGHUA_EV",
-        "model_name": "mtad_gat_c4_physics",
-        "physical_response_terms": "voltage_rate,temperature_rate,voltage_spread,temperature_spread,soc_current_coupling",
-        "run_id": "kformal_ts_c4_no_charge"
-      }
-    },
-    {
-      "name": "tsinghua_c4_no_soc_current",
-      "comment": "留一消融SOC-电流耦合响应。",
-      "args": {
-        "dataset": "TSINGHUA_EV",
-        "model_name": "mtad_gat_c4_physics",
-        "physical_response_terms": "voltage_rate,temperature_rate,charge_flow,voltage_spread,temperature_spread",
-        "run_id": "kformal_ts_c4_no_soc_current"
-      }
-    },
-    {
-      "name": "nasa_random_condition",
-      "comment": "完整RW1/RW2/RW7训练、RW8跨电池弱探针；只验证状态嵌入，不评价故障检测。",
-      "args": {
-        "dataset": "NASA_RANDOM_DISCHARGE",
-        "model_name": "mtad_gat_c3_regime",
-        "epochs": 30,
-        "lookback": 100,
-        "window_stride": 4,
-        "val_split": 0.0,
-        "early_stopping_patience": 0,
-        "nasa_train_batteries": "RW1,RW2,RW7",
-        "nasa_test_batteries": "RW8",
-        "run_id": "kformal_nasa_condition"
-      }
-    },
-    {
-      "name": "bms_idle_frequency_regulation",
-      "comment": "完整6簇数据；无标签案例只检查静置/调频、切换告警稳定性和高分案例。",
-      "args": {
-        "dataset": "BMS",
-        "model_name": "mtad_gat_c3_regime",
-        "epochs": 30,
-        "lookback": 100,
-        "window_stride": 4,
-        "val_split": 0.0,
-        "early_stopping_patience": 0,
-        "run_id": "kformal_bms_case"
+        "run_id": "kformal_battery_c4_state_only"
       }
     }
   ]

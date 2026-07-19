@@ -13,6 +13,7 @@ from scipy.io import loadmat
 
 from src.args import get_parser
 from src.data.spectral_residual import apply_spectral_residual_cleaning
+from src.data.nc_battery import build_index, prepared_index_path, resolve_brand_root
 from src.project_paths import processed_dataset_path, resolve_dataset_root
 
 
@@ -394,9 +395,25 @@ def load_and_save(category, filename, dataset, dataset_folder, output_folder, ap
 def load_data(dataset, apply_sr_cleaning=False):
     """ 来自 OmniAnomaly 的方法（https://github.com/NetManAIOps/OmniAnomaly）。 """
 
-    if dataset == "SMD":
+    if dataset == "TSINGHUA_EV":
+        dataset_root = resolve_dataset_root("TSINGHUA-EV", "TSINGHUA_EV")
+        print(f"[TSINGHUA_EV] Raw root: {dataset_root}")
+        print("[TSINGHUA_EV] Building validated vehicle/snippet indices in writable project storage")
+        for brand in (1, 2, 3):
+            brand_root = resolve_brand_root(dataset_root, brand)
+            records = build_index(dataset_root, brand, force=True)
+            cars = {record.car for record in records}
+            normal_cars = {record.car for record in records if record.label == 0}
+            faulty_cars = cars - normal_cars
+            print(
+                f"[TSINGHUA_EV] brand={brand} root={brand_root} snippets={len(records)} "
+                f"vehicles={len(cars)} normal={len(normal_cars)} faulty={len(faulty_cars)} "
+                f"index={prepared_index_path(brand)}"
+            )
+
+    elif dataset == "SMD":
         dataset_folder = str(resolve_dataset_root("SMD", "ServerMachineDataset"))
-        output_folder = str(processed_dataset_path("ServerMachineDataset"))
+        output_folder = str(processed_dataset_path("ServerMachineDataset", for_write=True))
         makedirs(output_folder, exist_ok=True)
         file_list = listdir(path.join(dataset_folder, "train"))
         for filename in file_list:
@@ -428,7 +445,7 @@ def load_data(dataset, apply_sr_cleaning=False):
 
     elif dataset == "MSL":
         dataset_folder = str(resolve_dataset_root("DATA", "data"))
-        output_folder = str(processed_dataset_path("data"))
+        output_folder = str(processed_dataset_path("data", for_write=True))
         makedirs(output_folder, exist_ok=True)
         with open(path.join(dataset_folder, "labeled_anomalies.csv"), "r") as file:
             csv_reader = reader(file, delimiter=",")
@@ -477,7 +494,7 @@ def load_data(dataset, apply_sr_cleaning=False):
 
     elif dataset == "NASA_RANDOM_CHARGE":
         dataset_folder = str(resolve_dataset_root("NASA_RANDOM_CHARGE", "NASA_RANDOM_CHARGE"))
-        output_folder = str(processed_dataset_path("NASA_RANDOM_CHARGE"))
+        output_folder = str(processed_dataset_path("NASA_RANDOM_CHARGE", for_write=True))
         makedirs(output_folder, exist_ok=True)
         _process_nasa_random_dataset(
             dataset_folder,
@@ -488,7 +505,7 @@ def load_data(dataset, apply_sr_cleaning=False):
 
     elif dataset == "NASA_RANDOM_DISCHARGE":
         dataset_folder = str(resolve_dataset_root("NASA_RANDOM_DISCHARGE", "NASA_RANDOM_DISCHARGE"))
-        output_folder = str(processed_dataset_path("NASA_RANDOM_DISCHARGE"))
+        output_folder = str(processed_dataset_path("NASA_RANDOM_DISCHARGE", for_write=True))
         makedirs(output_folder, exist_ok=True)
         _process_nasa_random_dataset(
             dataset_folder,
@@ -499,7 +516,7 @@ def load_data(dataset, apply_sr_cleaning=False):
 
     elif dataset == "BMS":
         dataset_folder = str(resolve_dataset_root("BMS", "BMS"))
-        output_folder = str(processed_dataset_path("BMS"))
+        output_folder = str(processed_dataset_path("BMS", for_write=True))
         makedirs(output_folder, exist_ok=True)
         _cleanup_existing_bms_processed_files(output_folder)
         print(f"[BMS] Dataset folder: {dataset_folder}")
@@ -632,7 +649,7 @@ def load_data(dataset, apply_sr_cleaning=False):
     elif dataset == "CALCE":
         # 处理CALCE数据集
         dataset_folder = str(resolve_dataset_root("CALCE", "CALCE") / "Dataset1")
-        output_folder = str(processed_dataset_path("CALCE"))
+        output_folder = str(processed_dataset_path("CALCE", for_write=True))
         makedirs(output_folder, exist_ok=True)
 
         # 定义文件路径
@@ -756,7 +773,7 @@ def load_data(dataset, apply_sr_cleaning=False):
     elif dataset == "CALCE2":
         # 处理CALCE Dataset2数据集
         dataset_folder = str(resolve_dataset_root("CALCE", "CALCE") / "Dataset2")
-        output_folder = str(processed_dataset_path("CALCE"))
+        output_folder = str(processed_dataset_path("CALCE", for_write=True))
         makedirs(output_folder, exist_ok=True)
 
         # 定义文件路径

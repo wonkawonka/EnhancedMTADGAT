@@ -167,6 +167,20 @@ def get_parser():
     parser.add_argument("--tsinghua_ev_max_train_samples", type=int, default=0, help="Optional normal-train cap for smoke tests; 0 uses all")
     parser.add_argument("--tsinghua_ev_max_validation_samples", type=int, default=0, help="Optional normal-validation cap for smoke tests; 0 uses all")
     parser.add_argument("--tsinghua_ev_max_test_samples_per_class", type=int, default=0, help="Optional per-class test cap for smoke tests; 0 uses all")
+    parser.add_argument("--battery_brand", type=int, default=3, choices=[1, 2, 3], help="Manufacturer package in the official Nature Communications battery dataset")
+    parser.add_argument("--battery_fold", type=int, default=0, choices=range(5), help="Vehicle-level five-fold test split")
+    parser.add_argument(
+        "--battery_split_protocol",
+        type=str,
+        default="strict_normal_validation",
+        choices=["strict_normal_validation", "paper_protocol"],
+        help="Strict normal-only calibration or the labelled protocol in Zhang et al. Supplementary Note 2",
+    )
+    parser.add_argument("--battery_windows_per_snippet", type=int, default=1, help="Evenly spaced model windows sampled from each charging snippet")
+    parser.add_argument("--battery_vehicle_top_ratio", type=float, default=0.05, help="Top charging-snippet fraction averaged into each vehicle anomaly score")
+    parser.add_argument("--battery_score_channels", type=str, default="response", choices=["all", "response"], help="Faithful MTAD-GAT all-channel score or battery response-only score")
+    parser.add_argument("--battery_max_index_snippets", type=int, default=0, help="Temporary in-memory index cap for smoke tests; 0 builds/uses the complete brand index")
+    parser.add_argument("--battery_max_snippets_per_vehicle", type=int, default=0, help="Per-vehicle cap for smoke tests only; 0 uses every charging snippet")
     parser.add_argument(
         "--ch_battery_preprocessed_dir",
         type=str,

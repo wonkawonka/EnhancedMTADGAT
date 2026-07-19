@@ -3,6 +3,8 @@
 
 import argparse
 
+import itertools
+
 import json
 
 import os
@@ -45,11 +47,50 @@ def sanitize_name(value):
     return cleaned.strip("-") or "exp"
 
 
+def pack_batch_output(batch_root):
+    """Archive output, logs and registry as one downloadable batch."""
+    batch_root = Path(batch_root)
+    zip_path = batch_root.parent / f"{batch_root.name}.zip"
+    if zip_path.exists():
+        zip_path.unlink()
+    shutil.make_archive(
+        str(zip_path.with_suffix("")),
+        "zip",
+        root_dir=str(batch_root.parent),
+        base_dir=batch_root.name,
+    )
+    print(f"[PACK BATCH] {zip_path} ({zip_path.stat().st_size / (1024 * 1024):.1f} MB)")
+    return zip_path
+
+
 def load_plan(plan_path):
 
     with open(plan_path, "r", encoding="utf-8") as f:
 
         return json.load(f)
+
+
+def expand_experiment_matrix(experiments):
+    """Expand compact Cartesian matrices such as battery brand x fold."""
+    expanded = []
+    for experiment in experiments:
+        matrix = experiment.get("matrix", {})
+        if not matrix:
+            expanded.append(experiment)
+            continue
+        keys = list(matrix)
+        for values in itertools.product(*(matrix[key] for key in keys)):
+            item = dict(experiment)
+            item.pop("matrix", None)
+            item["args"] = dict(experiment.get("args", {}))
+            suffix = []
+            for key, value in zip(keys, values):
+                item["args"][key] = value
+                short_key = {"battery_brand": "b", "battery_fold": "f"}.get(key, key)
+                suffix.append(f"{short_key}{value}")
+            item["name"] = f"{experiment.get('name', 'experiment')}_{'_'.join(suffix)}"
+            expanded.append(item)
+    return expanded
 
 
 def normalize_command_token(token, python_executable):
@@ -142,14 +183,18 @@ def build_command(experiment, python_executable):
         return [normalize_command_token(token, python_executable) for token in raw_command]
 
 
+    module = experiment.get("module")
+
     script = experiment.get("script")
 
-    if not script:
+    if not script and not module:
 
-        raise ValueError(f"Experiment '{experiment.get('name', 'unknown')}' must provide command or script")
+        raise ValueError(
+            f"Experiment '{experiment.get('name', 'unknown')}' must provide command, module or script"
+        )
 
 
-    command = [python_executable, str(script)]
+    command = [python_executable, "-m", str(module)] if module else [python_executable, str(script)]
 
     for value in experiment.get("positional_args", []):
 
@@ -292,6 +337,18 @@ def parse_args():
 
     )
 
+    parser.add_argument(
+
+        "--batch-tag",
+
+        type=str,
+
+        default="",
+
+        help="Optional suffix; by default a stable plan directory is reused for resume/skip.",
+
+    )
+
     return parser.parse_args()
 
 
@@ -306,7 +363,13 @@ def main():
     plan = load_plan(plan_path)
 
 
-    experiments = list(plan.get("experiments", []))
+    common_args = dict(plan.get("common_args", {}))
+    experiments = []
+    for raw_experiment in plan.get("experiments", []):
+        experiment = dict(raw_experiment)
+        experiment["args"] = {**common_args, **raw_experiment.get("args", {})}
+        experiments.append(experiment)
+    experiments = expand_experiment_matrix(experiments)
 
     if not experiments:
 
@@ -319,7 +382,9 @@ def main():
 
     batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    batch_root = EXTERNAL_RUNS_ROOT / f"{plan_name}_{batch_timestamp}"
+    batch_root_name = plan_name if not args.batch_tag.strip() else f"{plan_name}__{sanitize_name(args.batch_tag)}"
+
+    batch_root = EXTERNAL_RUNS_ROOT / batch_root_name
 
     logs_dir = batch_root / "logs"
 
@@ -444,7 +509,11 @@ def main():
 
         if args.skip_existing:
 
-            if skip_marker and skip_marker.exists():
+            if (output_dir / "metrics.json").exists():
+
+                record["status"] = "skipped_existing"
+
+            elif skip_marker and skip_marker.exists():
 
                 record["status"] = "skipped_existing"
 
@@ -517,6 +586,12 @@ def main():
 
         json.dump(registry, f, indent=2, ensure_ascii=False)
 
+    if not args.dry_run:
+        registry["batch_archive"] = str(batch_root.parent / f"{batch_root.name}.zip")
+        with open(registry_path, "w", encoding="utf-8") as f:
+            json.dump(registry, f, indent=2, ensure_ascii=False)
+        pack_batch_output(batch_root)
+
 
     succeeded = sum(item["status"] == "done" for item in registry["experiments"])
 
@@ -543,5 +618,3 @@ def main():
 if __name__ == "__main__":
 
     main()
-
-

@@ -2,7 +2,11 @@
 
 这里保留的是第三方基线仓与对齐说明，当前统一通过主仓脚本调度，不建议再手动分别到各个仓里临时敲命令。
 
-## 当前保留的基线
+## 当前分组
+
+电池主数据使用五个通用基线：Isolation Forest、GDN、AE、Deep SVDD、LSTM-AD；同数据集论文提出的 DyAD 单列为领域强基线。详见 `BatteryFaultNC/README.md`。
+
+下列通用时序仓只用于 MSL 等补充实验，不进入电池主表：
 
 - `TranAD`
 - `GDN`
@@ -12,28 +16,28 @@
 
 ## 统一调用
 
-主项目提供统一的外部基线运行脚本：
+新电池正式外部基线通过统一运行脚本执行：
 
-```powershell
-.\.python312\python.exe -m src.runners.run_external_baselines --plan configs/external/ch3_external_baselines.json --dry-run
+```bash
+python -m src.runners.run_external_baselines --plan configs/external/01_nc_battery_official.json --dry-run
 ```
 
 正式运行：
 
-```powershell
-.\.python312\python.exe -m src.runners.run_external_baselines --plan configs/external/ch3_external_baselines.json
+```bash
+python -m src.runners.run_external_baselines --plan configs/external/01_nc_battery_official.json
 ```
 
 只运行部分实验：
 
-```powershell
-.\.python312\python.exe -m src.runners.run_external_baselines --plan configs/external/ch3_external_baselines.json --only gdn_cpu_demo,tranad_smd_demo
+```bash
+python -m src.runners.run_external_baselines --plan configs/external/01_nc_battery_official.json --only dyad
 ```
 
 跳过已有输出：
 
-```powershell
-.\.python312\python.exe -m src.runners.run_external_baselines --plan configs/external/ch3_external_baselines.json --skip-existing
+```bash
+python -m src.runners.run_external_baselines --plan configs/external/01_nc_battery_official.json --skip-existing
 ```
 
 ## 计划文件位置
