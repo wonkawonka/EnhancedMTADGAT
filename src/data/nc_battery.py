@@ -12,6 +12,7 @@ import csv
 import json
 import math
 import pickle
+import random
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -258,11 +259,27 @@ def split_vehicle_folds(
     labels = {record.car: record.label for record in records}
     normal_cars = sorted(car for car, label in labels.items() if label == 0)
     faulty_cars = sorted(car for car, label in labels.items() if label == 1)
-    rng = np.random.default_rng(seed)
-    rng.shuffle(normal_cars)
-    rng.shuffle(faulty_cars)
-    normal_folds = [list(part) for part in np.array_split(normal_cars, folds)]
-    faulty_folds = [list(part) for part in np.array_split(faulty_cars, folds)]
+    if protocol == "paper_protocol":
+        # The released split notebook sorts vehicle IDs, applies Python's
+        # random.shuffle(seed=0), then slices with integer fifth boundaries.
+        rng = random.Random(seed)
+        rng.shuffle(normal_cars)
+        rng.shuffle(faulty_cars)
+
+        def paper_folds(cars):
+            return [
+                cars[int(index * len(cars) / folds):int((index + 1) * len(cars) / folds)]
+                for index in range(folds)
+            ]
+
+        normal_folds = paper_folds(normal_cars)
+        faulty_folds = paper_folds(faulty_cars)
+    else:
+        rng = np.random.default_rng(seed)
+        rng.shuffle(normal_cars)
+        rng.shuffle(faulty_cars)
+        normal_folds = [list(part) for part in np.array_split(normal_cars, folds)]
+        faulty_folds = [list(part) for part in np.array_split(faulty_cars, folds)]
     test_normal = set(normal_folds[fold])
 
     def select(cars: set[str]) -> list[SnippetRecord]:
@@ -315,13 +332,57 @@ class StreamingMinMaxScaler:
     def scale_(self) -> np.ndarray:
         return np.maximum(self.data_max_ - self.data_min_, 1e-6)
 
+    @property
+    def offset_(self) -> np.ndarray:
+        return self.data_min_
+
     def transform(self, values: np.ndarray) -> np.ndarray:
         return ((values - self.data_min_) / self.scale_).astype(np.float32, copy=False)
 
     def state_dict(self) -> dict[str, list[float]]:
         return {
+            "kind": "train_fold_minmax",
             "data_min": self.data_min_.tolist(),
             "data_max": self.data_max_.tolist(),
+            "feature_names": list(FEATURE_NAMES),
+        }
+
+
+class PaperChannelNormalizer:
+    """DyAD public-code channel normalizer fitted on 200 training snippets."""
+
+    def __init__(self, records: Sequence[SnippetRecord], sample_count: int = 200):
+        arrays = [load_snippet(record.path)[0] for record in records[:sample_count]]
+        if not arrays:
+            raise ValueError("No normal training snippets available for normalization")
+        stacked = np.stack(arrays)
+        self.mean = np.mean(np.mean(stacked, axis=1), axis=0)
+        self.std = np.mean(np.std(stacked, axis=1), axis=0)
+        self.minimum = np.min(stacked, axis=(0, 1))
+        self.maximum = np.max(stacked, axis=(0, 1))
+        self.scale = np.maximum(
+            np.maximum(1e-4, self.std),
+            0.1 * (self.maximum - self.minimum),
+        )
+        self.sample_count = len(arrays)
+
+    @property
+    def offset_(self) -> np.ndarray:
+        return self.mean
+
+    @property
+    def scale_(self) -> np.ndarray:
+        return self.scale
+
+    def transform(self, values: np.ndarray) -> np.ndarray:
+        return ((values - self.mean) / self.scale).astype(np.float32, copy=False)
+
+    def state_dict(self) -> dict:
+        return {
+            "kind": "zhang2023_dyad_first_200_channel_normalizer",
+            "mean": self.mean.tolist(),
+            "scale": self.scale.tolist(),
+            "sample_count": self.sample_count,
             "feature_names": list(FEATURE_NAMES),
         }
 
@@ -366,7 +427,8 @@ class BatterySnippetWindowDataset(Dataset):
         if not self.include_metadata:
             return x, y
         path = Path(record.path)
-        return x, y, record.car, record.label, f"{path.parent.name}/{path.stem}"
+        mileage = float("nan") if record.mileage is None else float(record.mileage)
+        return x, y, record.car, record.label, f"{path.parent.name}/{path.stem}", mileage
 
 
 def aggregate_vehicle_scores(

@@ -4,7 +4,7 @@
 import sys
 
 
-from src.data.utils import BMS_FEATURE_NAMES
+from src.data.utils import BMS_FEATURE_NAMES, get_score_dims
 
 from src.models.mtad_gat import Enhanced_MTADGAT
 
@@ -144,6 +144,10 @@ def resolve_physical_state_config(args):
 
         "response_terms": getattr(args, "physical_response_terms", ""),
 
+        "data_min": getattr(args, "physical_data_min", None),
+
+        "data_scale": getattr(args, "physical_data_scale", None),
+
     }
 
     if not config["response_terms"]:
@@ -172,6 +176,15 @@ def resolve_physical_state_config(args):
             "temperature_min_index": BMS_FEATURE_NAMES.index("BMSnTmin"),
 
             "smooth_voltage": False,
+
+            # C4 treats the pack-level imposed current and the cluster SOC as
+            # controls.  Cluster current/voltage/temperature remain responses:
+            # otherwise a cluster-local current excursion could be absorbed as
+            # an operating condition and never contribute to the consistency
+            # residual.
+            "consistency_current_index": BMS_FEATURE_NAMES.index("SYS_I"),
+            "consistency_soc_index": BMS_FEATURE_NAMES.index("BMSnRSOC"),
+            "consistency_response_dims": get_score_dims("BMS"),
 
         })
 
@@ -213,6 +226,12 @@ def resolve_physical_state_config(args):
         "temperature_index": 2,
 
         "smooth_voltage": True,
+        # NASA Random model inputs are [voltage, current, temperature].  The
+        # imposed current is the sole control; voltage and temperature are the
+        # physical responses scored by C4.
+        "consistency_current_index": 1,
+        "consistency_soc_index": None,
+        "consistency_response_dims": [0, 2],
 
     })
 
@@ -361,6 +380,46 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
             ),
 
             physical_state_hidden_dim=getattr(args, "physical_state_hidden_dim", 32),
+
+            physical_state_injection_mode=getattr(args, "physical_state_injection_mode", "direct"),
+
+            physical_state_feature_mode=getattr(args, "physical_state_feature_mode", "full"),
+
+            use_physical_response_features=getattr(args, "use_physical_response_features", False),
+
+            physical_feature_fusion_mode=getattr(args, "physical_feature_fusion_mode", "shared_residual"),
+
+            physical_feature_hidden_dim=getattr(args, "physical_feature_hidden_dim", 32),
+
+            use_control_response_decoder=getattr(args, "use_control_response_decoder", False),
+
+            control_response_hidden_dim=getattr(args, "control_response_hidden_dim", 32),
+
+            control_response_aux_weight=getattr(args, "control_response_aux_weight", 0.0),
+
+            use_physical_consistency_head=getattr(args, "use_physical_consistency_head", False),
+
+            physical_consistency_hidden_dim=getattr(args, "physical_consistency_hidden_dim", 64),
+
+            physical_consistency_latent_dim=getattr(args, "physical_consistency_latent_dim", 16),
+
+            physical_consistency_aux_weight=getattr(args, "physical_consistency_aux_weight", 0.0),
+
+            physical_consistency_kl_weight=getattr(args, "physical_consistency_kl_weight", 0.0001),
+
+            use_control_conditioned_graph=getattr(args, "use_control_conditioned_graph", False),
+
+            condition_graph_emb_dim=getattr(args, "condition_graph_emb_dim", 32),
+
+            condition_graph_experts=getattr(args, "condition_graph_experts", 3),
+
+            condition_graph_control_indices=regime_config["control_indices"],
+
+            use_variational_reconstruction=getattr(args, "use_variational_reconstruction", False),
+
+            variational_reconstruction_latent_dim=getattr(args, "variational_reconstruction_latent_dim", 32),
+
+            variational_reconstruction_kl_weight=getattr(args, "variational_reconstruction_kl_weight", 0.0001),
 
             physical_state_config=physical_state_config,
 

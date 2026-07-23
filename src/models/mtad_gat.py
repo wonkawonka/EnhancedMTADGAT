@@ -25,6 +25,18 @@ from src.models.modules import (
 
     PhysicalStateEncoding,
 
+    PhysicalResponseFeatureEncoding,
+
+    PhysicalFeatureAttentionBias,
+
+    ControlResponseDecoderConditioner,
+
+    ControlConditionedResponseVAE,
+
+    ControlConditionedGraphBias,
+
+    VariationalReconstructionModel,
+
     RevIN,
 
     WindowRegimeEncoder,
@@ -159,6 +171,46 @@ class Enhanced_MTADGAT(nn.Module):
 
             physical_state_hidden_dim=32,
 
+            physical_state_injection_mode="direct",
+
+            physical_state_feature_mode="full",
+
+            use_physical_response_features=False,
+
+            physical_feature_fusion_mode="shared_residual",
+
+            physical_feature_hidden_dim=32,
+
+            use_control_response_decoder=False,
+
+            control_response_hidden_dim=32,
+
+            control_response_aux_weight=0.0,
+
+            use_physical_consistency_head=False,
+
+            physical_consistency_hidden_dim=64,
+
+            physical_consistency_latent_dim=16,
+
+            physical_consistency_aux_weight=0.0,
+
+            physical_consistency_kl_weight=0.0001,
+
+            use_control_conditioned_graph=False,
+
+            condition_graph_emb_dim=32,
+
+            condition_graph_experts=3,
+
+            condition_graph_control_indices=None,
+
+            use_variational_reconstruction=False,
+
+            variational_reconstruction_latent_dim=32,
+
+            variational_reconstruction_kl_weight=0.0001,
+
             physical_state_config=None,
 
     ):
@@ -190,6 +242,82 @@ class Enhanced_MTADGAT(nn.Module):
 
         self.use_physical_state_encoding = use_physical_state_encoding and (feature_att_trans or use_transformer)
 
+        self.physical_state_injection_mode = physical_state_injection_mode
+
+        self.physical_state_feature_mode = physical_state_feature_mode
+
+        self.use_physical_response_features = bool(use_physical_response_features)
+
+        self.physical_feature_fusion_mode = physical_feature_fusion_mode
+
+        self.physical_feature_hidden_dim = int(physical_feature_hidden_dim)
+
+        self.use_control_response_decoder = bool(use_control_response_decoder)
+
+        self.control_response_aux_weight = max(0.0, float(control_response_aux_weight))
+
+        self._control_response_probe = None
+
+        self.use_physical_consistency_head = bool(use_physical_consistency_head)
+
+        self.physical_consistency_aux_weight = max(
+            0.0, float(physical_consistency_aux_weight)
+        )
+
+        self.physical_consistency_kl_weight = max(
+            0.0, float(physical_consistency_kl_weight)
+        )
+
+        self._physical_consistency_prediction = None
+
+        self._physical_consistency_mean = None
+
+        self._physical_consistency_logvar = None
+
+        self.use_control_conditioned_graph = bool(use_control_conditioned_graph)
+
+        self._condition_graph_routing = None
+
+        self._feature_attention_weights = None
+
+        self.use_variational_reconstruction = bool(use_variational_reconstruction)
+
+        self.variational_reconstruction_kl_weight = max(
+            0.0, float(variational_reconstruction_kl_weight)
+        )
+
+        self._reconstruction_vae_mean = None
+
+        self._reconstruction_vae_logvar = None
+
+        if self.physical_state_injection_mode not in {"direct", "direct_preserve_rng", "gated_residual"}:
+
+            raise ValueError(
+
+                f"Unsupported physical_state_injection_mode: {self.physical_state_injection_mode}"
+
+            )
+
+        if self.physical_state_feature_mode not in {"full", "controls_only"}:
+
+            raise ValueError(
+
+                f"Unsupported physical_state_feature_mode: {self.physical_state_feature_mode}"
+
+            )
+
+        if self.physical_feature_fusion_mode not in {
+
+            "shared_residual", "shared_film", "feature_gat_residual", "feature_gat_attention_bias",
+
+        }:
+
+            raise ValueError(
+
+                f"Unsupported physical_feature_fusion_mode: {self.physical_feature_fusion_mode}"
+
+            )
+
         self.use_regime_transformer_residual = (
 
             self.use_regime_condition
@@ -208,6 +336,12 @@ class Enhanced_MTADGAT(nn.Module):
 
 
         if self.use_regime_condition:
+
+            # Keep construction of the optional C3 branch from changing the
+            # initialization and RandomSampler trajectory of the MTAD-GAT
+            # backbone.  The branch still receives deterministic parameters;
+            # only its RNG consumption is isolated from the shared path.
+            regime_rng_state = torch.get_rng_state()
 
             if regime_encoder_type == "statistics":
 
@@ -265,6 +399,8 @@ class Enhanced_MTADGAT(nn.Module):
 
                 raise ValueError(f"Unsupported regime_condition_mode: {regime_condition_mode}")
 
+            torch.set_rng_state(regime_rng_state)
+
 
         # 根据配置选择卷积模块
         if multi_scale_mode in ['basic', 'progressive']:
@@ -294,6 +430,18 @@ class Enhanced_MTADGAT(nn.Module):
 
         )
 
+        if self.use_control_conditioned_graph:
+            # The bias experts start at zero, making the initial graph exactly
+            # the MTAD-GAT graph; training must earn condition-specific edges.
+            graph_rng_state = torch.get_rng_state()
+            self.condition_graph = ControlConditionedGraphBias(
+                n_features,
+                emb_dim=condition_graph_emb_dim,
+                expert_count=condition_graph_experts,
+                control_indices=condition_graph_control_indices,
+            )
+            torch.set_rng_state(graph_rng_state)
+
 
         # 非简化模式下启用时间注意力层
         if not feature_att_trans:
@@ -308,15 +456,15 @@ class Enhanced_MTADGAT(nn.Module):
 
             if self.use_physical_state_encoding:
 
-                self.physical_state_encoder = PhysicalStateEncoding(
+                self.physical_state_encoder = self._build_physical_state_encoder(
 
-                    d_model,
-
-                    hidden_dim=physical_state_hidden_dim,
-
-                    config=physical_state_config,
+                    d_model, physical_state_hidden_dim, physical_state_config, self.physical_state_feature_mode,
 
                 )
+
+                if self.physical_state_injection_mode == "gated_residual":
+
+                    self.physical_state_gate = nn.Parameter(torch.zeros(1))
 
             nhead = find_largest_valid_nhead(d_model)
 
@@ -349,19 +497,21 @@ class Enhanced_MTADGAT(nn.Module):
 
             if use_transformer:
 
+                transformer_rng_state = torch.get_rng_state()
+
                 self.pos_encoder = PositionalEncoding(d_model, dropout)
 
                 if self.use_physical_state_encoding:
 
-                    self.physical_state_encoder = PhysicalStateEncoding(
+                    self.physical_state_encoder = self._build_physical_state_encoder(
 
-                        d_model,
-
-                        hidden_dim=physical_state_hidden_dim,
-
-                        config=physical_state_config,
+                        d_model, physical_state_hidden_dim, physical_state_config, self.physical_state_feature_mode,
 
                     )
+
+                    if self.physical_state_injection_mode == "gated_residual":
+
+                        self.physical_state_gate = nn.Parameter(torch.zeros(1))
 
                 nhead = find_largest_valid_nhead(d_model)
 
@@ -387,12 +537,234 @@ class Enhanced_MTADGAT(nn.Module):
 
                 self.trans_proj = nn.Linear(d_model, gru_hid_dim)
 
+                # C3 starts as the shared GRU backbone and learns whether the
+                # long-range Transformer context is useful.  Zeroing only the
+                # output projection preserves gradients into the projection on
+                # the first step; the encoder begins receiving gradients once
+                # that projection departs from zero.
+                nn.init.zeros_(self.trans_proj.weight)
+                nn.init.zeros_(self.trans_proj.bias)
+
+                torch.set_rng_state(transformer_rng_state)
+
 
         self.forecasting_model = Forecasting_Model(gru_hid_dim, forecast_hid_dim, out_dim, forecast_n_layers, dropout)
 
-        self.recon_model = ReconstructionModel(window_size, gru_hid_dim, recon_hid_dim, out_dim, recon_n_layers,
+        if self.use_variational_reconstruction:
+            self.recon_model = VariationalReconstructionModel(
+                window_size, gru_hid_dim, recon_hid_dim, out_dim, recon_n_layers,
+                dropout, variational_reconstruction_latent_dim,
+            )
+        else:
+            self.recon_model = ReconstructionModel(
+                window_size, gru_hid_dim, recon_hid_dim, out_dim, recon_n_layers, dropout
+            )
 
-                                               dropout)
+        if self.use_physical_response_features:
+
+            # Keep the original C3 training trajectory comparable.  The train
+            # DataLoader's RandomSampler draws its seed when iteration starts,
+            # so constructing an extra module here must not advance the global
+            # CPU RNG used by that sampler.
+            rng_state = torch.get_rng_state()
+
+            fusion_dim = 2 * n_features if feature_att_trans else 3 * n_features
+
+            try:
+
+                if self.physical_feature_fusion_mode == "shared_film":
+
+                    physical_output_dim = 2 * fusion_dim
+
+                    zero_output = True
+
+                elif self.physical_feature_fusion_mode == "feature_gat_attention_bias":
+
+                    self.physical_feature_attention_bias = PhysicalFeatureAttentionBias(
+
+                        n_features,
+
+                        hidden_dim=self.physical_feature_hidden_dim,
+
+                        config=self.physical_state_config,
+
+                    )
+
+                    physical_output_dim = None
+
+                    zero_output = False
+
+                elif self.physical_feature_fusion_mode == "feature_gat_residual":
+
+                    physical_output_dim = n_features
+
+                    zero_output = False
+
+                    self.physical_feature_gate = nn.Parameter(torch.zeros(1))
+
+                else:
+
+                    physical_output_dim = fusion_dim
+
+                    zero_output = False
+
+                    self.physical_feature_gate = nn.Parameter(torch.zeros(1))
+
+                if physical_output_dim is not None:
+
+                    self.physical_response_feature_encoder = PhysicalResponseFeatureEncoding(
+
+                        physical_output_dim,
+
+                        hidden_dim=self.physical_feature_hidden_dim,
+
+                        config=self.physical_state_config,
+
+                        zero_output=zero_output,
+
+                    )
+
+            finally:
+
+                torch.set_rng_state(rng_state)
+
+        if self.use_control_response_decoder:
+
+            rng_state = torch.get_rng_state()
+
+            try:
+
+                if self.target_dims is None and out_dim == n_features:
+
+                    response_dims = [0, 3, 4, 5, 6] if n_features == 7 else list(range(out_dim))
+
+                    self.control_response_target_dims = response_dims
+
+                else:
+
+                    response_dims = list(range(out_dim))
+
+                    self.control_response_target_dims = (
+                        list(self.target_dims) if self.target_dims is not None else response_dims
+                    )
+
+                self.control_response_decoder = ControlResponseDecoderConditioner(
+                    out_dim,
+                    hidden_dim=control_response_hidden_dim,
+                    config=self.physical_state_config,
+                    response_dims=response_dims,
+                )
+
+            finally:
+
+                torch.set_rng_state(rng_state)
+
+        if self.use_physical_consistency_head:
+
+            configured_response_dims = (self.physical_state_config or {}).get(
+                "consistency_response_dims"
+            )
+            if configured_response_dims is not None:
+                response_dims = [
+                    int(index) for index in configured_response_dims
+                    if 0 <= int(index) < out_dim
+                ]
+                if not response_dims:
+                    raise ValueError("C4 consistency_response_dims contains no modeled response channel")
+            else:
+                response_dims = [0, 3, 4, 5, 6] if n_features == 7 else list(range(out_dim))
+
+            self.physical_consistency_target_dims = response_dims
+
+            rng_state = torch.get_rng_state()
+
+            self.physical_consistency_head = ControlConditionedResponseVAE(
+
+                n_features,
+
+                response_dims,
+
+                hidden_dim=physical_consistency_hidden_dim,
+
+                latent_dim=physical_consistency_latent_dim,
+
+                config=self.physical_state_config,
+
+            )
+
+            torch.set_rng_state(rng_state)
+
+
+    def _build_physical_state_encoder(self, d_model, hidden_dim, config, feature_mode):
+
+        if self.physical_state_injection_mode == "direct":
+
+            return PhysicalStateEncoding(
+                d_model, hidden_dim=hidden_dim, config=config, feature_mode=feature_mode,
+            )
+
+        # A zero gate is only a valid C3-equivalent starting point if adding
+        # this dormant branch does not also alter the random initialization of
+        # the shared Transformer/GRU path.
+        rng_state = torch.get_rng_state()
+
+        encoder = PhysicalStateEncoding(
+            d_model, hidden_dim=hidden_dim, config=config, feature_mode=feature_mode,
+        )
+
+        torch.set_rng_state(rng_state)
+
+        return encoder
+
+
+    def _inject_physical_state(self, representation, state_input):
+
+        physical_state = self.physical_state_encoder(state_input)
+
+        if self.physical_state_injection_mode == "gated_residual":
+
+            # Starts as the exact C3 representation.  The scalar can then
+            # admit (or suppress) the physical residual from data, without
+            # changing the GRU branch or the C3 conditioning location.
+            return representation + torch.tanh(self.physical_state_gate) * physical_state
+
+        return representation + physical_state
+
+
+    def _fuse_physical_feature_gat(self, h_feat, state_input):
+
+        if not self.use_physical_response_features:
+
+            return h_feat
+
+        if self.physical_feature_fusion_mode != "feature_gat_residual":
+
+            return h_feat
+
+        physical = self.physical_response_feature_encoder(state_input)
+
+        return h_feat + torch.tanh(self.physical_feature_gate) * physical
+
+
+    def _fuse_physical_shared(self, h_cat, state_input):
+
+        if not self.use_physical_response_features:
+
+            return h_cat
+
+        if self.physical_feature_fusion_mode in {"feature_gat_residual", "feature_gat_attention_bias"}:
+
+            return h_cat
+
+        physical = self.physical_response_feature_encoder(state_input)
+
+        if self.physical_feature_fusion_mode == "shared_film":
+
+            gamma, beta = physical.chunk(2, dim=2)
+
+            return h_cat * (1.0 + 0.1 * torch.tanh(gamma)) + 0.1 * beta
+
+        return h_cat + torch.tanh(self.physical_feature_gate) * physical
 
 
     def forward(self, x):
@@ -433,11 +805,36 @@ class Enhanced_MTADGAT(nn.Module):
         x = self.conv(x)
 
 
-        h_feat = self.feature_gat(x)
+        physical_attention_bias = None
+
+        if (
+
+            self.use_physical_response_features
+
+            and self.physical_feature_fusion_mode == "feature_gat_attention_bias"
+
+        ):
+
+            physical_attention_bias = self.physical_feature_attention_bias(state_input)
+
+        if self.use_control_conditioned_graph:
+            graph_bias, self._condition_graph_routing = self.condition_graph(
+                state_input, return_routing=True
+            )
+            physical_attention_bias = (
+                graph_bias if physical_attention_bias is None else physical_attention_bias + graph_bias
+            )
+
+
+        h_feat = self.feature_gat(x, attention_bias=physical_attention_bias)
+
+        self._feature_attention_weights = self.feature_gat.last_attention
 
         if self.use_regime_condition and self.regime_condition_mode == "feature_gat":
 
             h_feat = self._apply_condition(h_feat, regime_embedding, self.feat_conditioner)
+
+        h_feat = self._fuse_physical_feature_gat(h_feat, state_input)
 
 
         # 特征注意力融合
@@ -449,11 +846,13 @@ class Enhanced_MTADGAT(nn.Module):
 
                 h_cat = self._apply_condition(h_cat, regime_embedding, self.fusion_conditioner)
 
+            h_cat = self._fuse_physical_shared(h_cat, state_input)
+
 
             # 应用 Transformer
             if self.use_physical_state_encoding:
 
-                h_cat = h_cat + self.physical_state_encoder(state_input)
+                h_cat = self._inject_physical_state(h_cat, state_input)
 
             h_cat = self.pos_encoder(h_cat)
 
@@ -472,11 +871,13 @@ class Enhanced_MTADGAT(nn.Module):
             if self.use_regime_condition and self.regime_condition_mode == "fusion":
                 h_cat = self._apply_condition(h_cat, regime_embedding, self.fusion_conditioner)
 
+            h_cat = self._fuse_physical_shared(h_cat, state_input)
+
             _, h_gru = self.gru(h_cat)
             h_end = h_gru
             if self.use_transformer:
                 if self.use_physical_state_encoding:
-                    h_cat = h_cat + self.physical_state_encoder(state_input)
+                    h_cat = self._inject_physical_state(h_cat, state_input)
                 h_cat = self.pos_encoder(h_cat)  # 加入位置编码
 
                 trans_out = self.transformer_encoder(h_cat)
@@ -499,7 +900,28 @@ class Enhanced_MTADGAT(nn.Module):
 
         predictions = self.forecasting_model(h_end)
 
-        recons = self.recon_model(h_end)
+        if self.use_variational_reconstruction:
+            recons, self._reconstruction_vae_mean, self._reconstruction_vae_logvar = self.recon_model(h_end)
+        else:
+            recons = self.recon_model(h_end)
+
+        if self.use_control_response_decoder:
+
+            forecast_correction, reconstruction_correction, self._control_response_probe = (
+                self.control_response_decoder(state_input)
+            )
+
+            predictions = predictions + forecast_correction
+
+            recons = recons + reconstruction_correction
+
+        if self.use_physical_consistency_head:
+
+            (
+                self._physical_consistency_prediction,
+                self._physical_consistency_mean,
+                self._physical_consistency_logvar,
+            ) = self.physical_consistency_head(state_input)
 
 
         if self.use_revin:
@@ -518,7 +940,7 @@ class Enhanced_MTADGAT(nn.Module):
 
         if self._regime_aux_prediction is None or self.regime_encoder_type != "temporal":
 
-            return x.new_tensor(0.0)
+            return self.control_response_auxiliary_loss(x)
 
         current_index = self.regime_current_index
 
@@ -574,7 +996,56 @@ class Enhanced_MTADGAT(nn.Module):
 
         ).detach()
 
-        return torch.nn.functional.smooth_l1_loss(self._regime_aux_prediction, targets)
+        return (
+            torch.nn.functional.smooth_l1_loss(self._regime_aux_prediction, targets)
+            + self.control_response_auxiliary_loss(x)
+        )
+
+
+    def control_response_auxiliary_loss(self, x):
+
+        loss = x.new_tensor(0.0)
+
+        if (
+            self.use_variational_reconstruction
+            and self._reconstruction_vae_mean is not None
+            and self.variational_reconstruction_kl_weight > 0.0
+        ):
+            mean = self._reconstruction_vae_mean
+            logvar = self._reconstruction_vae_logvar
+            kl_loss = -0.5 * torch.mean(1.0 + logvar - mean.square() - logvar.exp())
+            loss = loss + self.variational_reconstruction_kl_weight * kl_loss
+
+        if self._control_response_probe is not None and self.control_response_aux_weight > 0.0:
+
+            targets = x[:, :, self.control_response_target_dims]
+
+            loss = loss + self.control_response_aux_weight * torch.nn.functional.smooth_l1_loss(
+                self._control_response_probe, targets.detach()
+            )
+
+        if (
+            self._physical_consistency_prediction is not None
+            and self.physical_consistency_aux_weight > 0.0
+        ):
+
+            targets = x[:, :, self.physical_consistency_target_dims]
+
+            response_loss = torch.nn.functional.smooth_l1_loss(
+                self._physical_consistency_prediction, targets.detach()
+            )
+
+            mean = self._physical_consistency_mean
+
+            logvar = self._physical_consistency_logvar
+
+            kl_loss = -0.5 * torch.mean(1.0 + logvar - mean.square() - logvar.exp())
+
+            loss = loss + self.physical_consistency_aux_weight * (
+                response_loss + self.physical_consistency_kl_weight * kl_loss
+            )
+
+        return loss
 
 
     def encode_regime(self, x):
@@ -606,7 +1077,11 @@ class Enhanced_MTADGAT(nn.Module):
 
         beta = beta.unsqueeze(1)
 
-        return hidden_state * (1.0 + gamma) + beta
+        # Condition the backbone conservatively: the operating regime should
+        # adapt MTAD-GAT features, not replace their scale or offset.  The
+        # bounded 10% modulation also makes the learned C3 increment robust to
+        # small development folds.
+        return hidden_state * (1.0 + 0.1 * gamma) + 0.1 * beta
 
 
 def find_largest_valid_nhead(d_model, max_nhead=8):

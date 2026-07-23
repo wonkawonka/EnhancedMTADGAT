@@ -284,6 +284,33 @@ class TemporalRegimeEncoder(nn.Module):
         return embedding
 
 
+class ControlConditionedGraphBias(nn.Module):
+    """Route a small set of graph experts using control trajectories only.
+
+    This is deliberately different from GATv2: GATv2 changes pair attention
+    according to node features, whereas this module explicitly maps the
+    exogenous operating condition (current/SOC) to a graph prior.
+    """
+
+    def __init__(self, n_features, emb_dim=32, expert_count=3, control_indices=None):
+        super().__init__()
+        self.condition_encoder = TemporalRegimeEncoder(
+            n_features, emb_dim=emb_dim, control_indices=control_indices
+        )
+        self.router = nn.Linear(emb_dim, max(1, int(expert_count)))
+        self.expert_bias = nn.Parameter(
+            torch.zeros(max(1, int(expert_count)), n_features, n_features)
+        )
+
+    def forward(self, x, return_routing=False):
+        condition = self.condition_encoder(x)
+        routing = torch.softmax(self.router(condition), dim=-1)
+        bias = torch.einsum("be,eij->bij", routing, self.expert_bias)
+        if return_routing:
+            return bias, routing
+        return bias
+
+
 class FiLMConditioner(nn.Module):
 
     """根据动态状态嵌入生成按特征调制的仿射参数。"""
@@ -296,6 +323,13 @@ class FiLMConditioner(nn.Module):
         self.proj = nn.Linear(emb_dim, target_dim * 2)
 
         self.target_dim = target_dim
+
+        # Operating-condition conditioning is an enhancement of the shared
+        # MTAD-GAT representation, so begin from the exact identity mapping.
+        # This avoids injecting an arbitrary regime-dependent distortion before
+        # the conditioner has learned anything from data.
+        nn.init.zeros_(self.proj.weight)
+        nn.init.zeros_(self.proj.bias)
 
 
     def forward(self, regime_embedding):
@@ -319,6 +353,12 @@ class RegimeResidualGate(nn.Module):
         super(RegimeResidualGate, self).__init__()
 
         self.proj = nn.Linear(emb_dim, target_dim)
+
+        # Start with a neutral, operating-independent 0.5 gate.  Combined with
+        # the zero-initialized Transformer output projection this preserves the
+        # MTAD-GAT prediction exactly, then allows a dynamic gate to emerge.
+        nn.init.zeros_(self.proj.weight)
+        nn.init.zeros_(self.proj.bias)
 
 
     def forward(self, regime_embedding):
@@ -573,7 +613,7 @@ class FeatureAttentionLayer(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
 
-    def forward(self, x):
+    def forward(self, x, attention_bias=None):
 
         # x 形状为 (b, n, k)：b 为批大小，n 为窗口大小，k 为特征数
 
@@ -617,6 +657,20 @@ class FeatureAttentionLayer(nn.Module):
 
             e += self.bias
 
+        if attention_bias is not None:
+
+            if attention_bias.shape != e.shape:
+
+                raise ValueError(
+
+                    f"Feature attention bias shape {tuple(attention_bias.shape)} "
+
+                    f"does not match logits {tuple(e.shape)}"
+
+                )
+
+            e = e + attention_bias.to(dtype=e.dtype)
+
 
         if self.attention_sparse:
 
@@ -635,6 +689,8 @@ class FeatureAttentionLayer(nn.Module):
         attention = torch.softmax(e, dim=2)
 
         attention = torch.dropout(attention, self.dropout, train=self.training)
+
+        self.last_attention = attention
 
 
         # 根据注意力权重聚合特征表示
@@ -903,12 +959,338 @@ class PositionalEncoding(nn.Module):
         return x
 
 
+class PhysicalResponseFeatureEncoding(nn.Module):
+
+    """Project dimensionless electrical/thermal response descriptors.
+
+    Input windows may already be Min-Max normalized.  When train-fold scaler
+    statistics are available, channels are first restored to engineering units
+    so voltage/temperature spreads remain physically meaningful.
+    """
+
+    def __init__(self, output_dim, hidden_dim=32, config=None, eps=1e-6, zero_output=False):
+
+        super().__init__()
+
+        self.config = dict(config or {})
+
+        self.eps = float(eps)
+
+        self.current_index = self.config.get("current_index")
+
+        self.voltage_index = self.config.get("voltage_index")
+
+        self.soc_index = self.config.get("soc_index")
+
+        self.voltage_max_index = self.config.get("voltage_max_index")
+
+        self.voltage_min_index = self.config.get("voltage_min_index")
+
+        self.temperature_max_index = self.config.get("temperature_max_index")
+
+        self.temperature_min_index = self.config.get("temperature_min_index")
+
+        data_min = self.config.get("data_min")
+
+        data_scale = self.config.get("data_scale")
+
+        if data_min is not None and data_scale is not None:
+
+            self.register_buffer("data_min", torch.as_tensor(data_min).view(1, 1, -1))
+
+            self.register_buffer("data_scale", torch.as_tensor(data_scale).view(1, 1, -1))
+
+        else:
+
+            self.data_min = None
+
+            self.data_scale = None
+
+        self.proj = nn.Sequential(
+
+            nn.Linear(6, hidden_dim),
+
+            nn.GELU(),
+
+            nn.Linear(hidden_dim, output_dim),
+
+        )
+
+        if zero_output:
+
+            nn.init.zeros_(self.proj[-1].weight)
+
+            nn.init.zeros_(self.proj[-1].bias)
+
+
+    def _raw(self, x):
+
+        if self.data_min is None or self.data_scale is None:
+
+            return x
+
+        return x * self.data_scale.to(dtype=x.dtype) + self.data_min.to(dtype=x.dtype)
+
+
+    def _channel(self, x, index):
+
+        if index is None or index < 0 or index >= x.size(2):
+
+            return x.new_zeros(x.size(0), x.size(1), 1)
+
+        return x[:, :, index:index + 1]
+
+
+    def _signed_scale(self, value):
+
+        centered = value - value.mean(dim=1, keepdim=True)
+
+        scale = centered.abs().mean(dim=1, keepdim=True).clamp_min(self.eps)
+
+        return torch.tanh(centered / scale)
+
+
+    def _rate(self, value):
+
+        delta = torch.diff(value, dim=1, prepend=value[:, :1, :])
+
+        return self._signed_scale(delta)
+
+
+    def _relative_positive(self, value):
+
+        scale = value.abs().mean(dim=1, keepdim=True).clamp_min(self.eps)
+
+        return torch.clamp(value / scale, -5.0, 5.0)
+
+
+    def forward(self, x):
+
+        raw = self._raw(x)
+
+        voltage = self._channel(raw, self.voltage_index)
+
+        current = self._channel(raw, self.current_index)
+
+        soc = self._channel(raw, self.soc_index)
+
+        voltage_spread = self._channel(raw, self.voltage_max_index) - self._channel(
+
+            raw, self.voltage_min_index
+
+        )
+
+        temperature_max = self._channel(raw, self.temperature_max_index)
+
+        temperature_min = self._channel(raw, self.temperature_min_index)
+
+        temperature_mean = 0.5 * (temperature_max + temperature_min)
+
+        temperature_spread = temperature_max - temperature_min
+
+        charge_flow = torch.cumsum(current, dim=1)
+
+        charge_flow = charge_flow / charge_flow.abs().amax(dim=1, keepdim=True).clamp_min(self.eps)
+
+        soc_rate = torch.diff(soc, dim=1, prepend=soc[:, :1, :])
+
+        current_scaled = current / current.abs().mean(dim=1, keepdim=True).clamp_min(self.eps)
+
+        soc_current = self._signed_scale(soc_rate) - torch.tanh(current_scaled)
+
+        descriptors = torch.cat(
+
+            [
+
+                self._rate(voltage),
+
+                self._rate(temperature_mean),
+
+                self._relative_positive(voltage_spread),
+
+                self._relative_positive(temperature_spread),
+
+                charge_flow,
+
+                soc_current,
+
+            ],
+
+            dim=2,
+
+        )
+
+        return self.proj(descriptors)
+
+
+class PhysicalFeatureAttentionBias(nn.Module):
+
+    """Generate a bounded per-window physical bias for Feature-GAT edges."""
+
+
+    def __init__(self, n_features, hidden_dim=32, config=None):
+
+        super().__init__()
+
+        self.n_features = int(n_features)
+
+        self.feature_encoder = PhysicalResponseFeatureEncoding(
+
+            hidden_dim, hidden_dim=hidden_dim, config=config,
+
+        )
+
+        self.bias_head = nn.Linear(3 * hidden_dim, self.n_features * self.n_features)
+
+        # Preserve the exact C3 computation at initialization.
+        nn.init.zeros_(self.bias_head.weight)
+
+        nn.init.zeros_(self.bias_head.bias)
+
+
+    def forward(self, x):
+
+        features = self.feature_encoder(x)
+
+        summary = torch.cat(
+
+            [
+
+                features.mean(dim=1),
+
+                features.std(dim=1, unbiased=False),
+
+                features[:, -1, :],
+
+            ],
+
+            dim=1,
+
+        )
+
+        bias = torch.tanh(self.bias_head(summary))
+
+        return bias.view(x.size(0), self.n_features, self.n_features)
+
+
+class ControlResponseDecoderConditioner(nn.Module):
+    """Causal control-only conditioner for response forecast/reconstruction."""
+
+    def __init__(self, out_dim, hidden_dim=32, config=None, response_dims=None):
+        super().__init__()
+        config = dict(config or {})
+        self.current_index = config.get("current_index")
+        self.soc_index = config.get("soc_index")
+        self.out_dim = int(out_dim)
+        if response_dims is None:
+            response_dims = list(range(self.out_dim))
+        self.response_dims = tuple(int(index) for index in response_dims)
+        selector = torch.zeros(len(self.response_dims), self.out_dim)
+        for source_index, output_index in enumerate(self.response_dims):
+            selector[source_index, output_index] = 1.0
+        self.register_buffer("response_selector", selector)
+        self.encoder = nn.GRU(5, int(hidden_dim), batch_first=True)
+        response_dim = len(self.response_dims)
+        self.forecast_correction = nn.Linear(int(hidden_dim), response_dim)
+        self.reconstruction_correction = nn.Linear(int(hidden_dim), response_dim)
+        self.response_probe = nn.Linear(int(hidden_dim), response_dim)
+        # C3-equivalent decoder predictions at initialization.
+        nn.init.zeros_(self.forecast_correction.weight)
+        nn.init.zeros_(self.forecast_correction.bias)
+        nn.init.zeros_(self.reconstruction_correction.weight)
+        nn.init.zeros_(self.reconstruction_correction.bias)
+
+    @staticmethod
+    def _channel(x, index):
+        if index is None or index < 0 or index >= x.size(2):
+            return x.new_zeros(x.size(0), x.size(1), 1)
+        return x[:, :, index:index + 1]
+
+    def forward(self, x):
+        current = self._channel(x, self.current_index)
+        soc = self._channel(x, self.soc_index)
+        current_delta = torch.diff(current, dim=1, prepend=current[:, :1, :])
+        soc_delta = torch.diff(soc, dim=1, prepend=soc[:, :1, :])
+        controls = torch.cat(
+            [current, soc, current.square(), current_delta, soc_delta], dim=2
+        )
+        hidden, _ = self.encoder(controls)
+        forecast = self.forecast_correction(hidden[:, -1, :]) @ self.response_selector
+        reconstruction = self.reconstruction_correction(hidden) @ self.response_selector
+        return forecast, reconstruction, self.response_probe(hidden)
+
+
+class ControlConditionedResponseVAE(nn.Module):
+    """Independent normal-response model with a DyAD-style information bottleneck.
+
+    The encoder compresses the complete observed window into a small latent
+    state.  The response decoder cannot directly read voltage/temperature
+    trajectories: at every time step it receives only current/SOC-derived
+    controls, while the latent state is supplied once through its initial
+    hidden state.  Its residual is therefore a separate physical-consistency
+    signal instead of an additive correction to the MTAD-GAT output.
+    """
+
+    def __init__(
+        self,
+        n_features,
+        response_dims,
+        hidden_dim=64,
+        latent_dim=16,
+        config=None,
+    ):
+        super().__init__()
+        config = dict(config or {})
+        # C4's controls can differ from the generic physical-state indices.
+        # On BMS, SYS_I is imposed at pack level whereas BMSnI is a cluster
+        # response which must remain scoreable.
+        self.current_index = config.get("consistency_current_index", config.get("current_index"))
+        self.soc_index = config.get("consistency_soc_index", config.get("soc_index"))
+        self.response_dims = tuple(int(index) for index in response_dims)
+        self.state_encoder = nn.GRU(
+            int(n_features), int(hidden_dim), batch_first=True, bidirectional=True
+        )
+        self.mean_head = nn.Linear(2 * int(hidden_dim), int(latent_dim))
+        self.logvar_head = nn.Linear(2 * int(hidden_dim), int(latent_dim))
+        self.latent_to_hidden = nn.Linear(int(latent_dim), int(hidden_dim))
+        self.response_decoder = nn.GRU(5, int(hidden_dim), batch_first=True)
+        self.response_head = nn.Linear(int(hidden_dim), len(self.response_dims))
+
+    @staticmethod
+    def _channel(x, index):
+        if index is None or index < 0 or index >= x.size(2):
+            return x.new_zeros(x.size(0), x.size(1), 1)
+        return x[:, :, index:index + 1]
+
+    def forward(self, x):
+        _, hidden = self.state_encoder(x)
+        state = torch.cat([hidden[-2], hidden[-1]], dim=1)
+        mean = self.mean_head(state)
+        logvar = self.logvar_head(state).clamp(-8.0, 8.0)
+        # Use the posterior mean during both training and inference.  The KL
+        # term still regularizes the bottleneck, while deterministic decoding
+        # prevents this independent head from changing the MTAD-GAT dropout
+        # RNG trajectory on the following batch.
+        latent = mean
+
+        current = self._channel(x, self.current_index)
+        soc = self._channel(x, self.soc_index)
+        current_delta = torch.diff(current, dim=1, prepend=current[:, :1, :])
+        soc_delta = torch.diff(soc, dim=1, prepend=soc[:, :1, :])
+        controls = torch.cat(
+            [current, soc, current.square(), current_delta, soc_delta], dim=2
+        )
+        decoder_hidden = torch.tanh(self.latent_to_hidden(latent)).unsqueeze(0)
+        decoded, _ = self.response_decoder(controls, decoder_hidden)
+        return self.response_head(decoded), mean, logvar
+
+
 class PhysicalStateEncoding(nn.Module):
 
     """将面向电池的状态特征投影到 Transformer 隐空间。"""
 
 
-    def __init__(self, d_model, hidden_dim=32, config=None, eps=1e-6):
+    def __init__(self, d_model, hidden_dim=32, config=None, eps=1e-6, feature_mode="full"):
 
         super(PhysicalStateEncoding, self).__init__()
 
@@ -919,6 +1301,12 @@ class PhysicalStateEncoding(nn.Module):
         self.config = dict(config or {})
 
         self.eps = eps
+
+        self.feature_mode = feature_mode
+
+        if self.feature_mode not in {"full", "controls_only"}:
+
+            raise ValueError(f"Unsupported physical-state feature mode: {self.feature_mode}")
 
 
         self.current_index = self.config.get("current_index")
@@ -934,13 +1322,13 @@ class PhysicalStateEncoding(nn.Module):
         self.soh_index = self.config.get("soh_index")
 
 
-        self.state_dim = 5
+        self.state_dim = 5 if self.feature_mode == "full" else 3
 
         if self.soc_index is not None:
 
             self.state_dim += 1
 
-        if self.soh_index is not None:
+        if self.feature_mode == "full" and self.soh_index is not None:
 
             self.state_dim += 1
 
@@ -968,19 +1356,22 @@ class PhysicalStateEncoding(nn.Module):
 
         charge_flow = self._compute_charge_flow(current)
 
-        voltage_rel = self._compute_relative_position(self._get_channel(x, self.voltage_index))
+        state_parts = [phase, current_norm, charge_flow]
 
-        temperature_rel = self._compute_relative_position(self._get_channel(x, self.temperature_index))
+        if self.feature_mode == "full":
 
+            voltage_rel = self._compute_relative_position(self._get_channel(x, self.voltage_index))
 
-        state_parts = [phase, current_norm, charge_flow, voltage_rel, temperature_rel]
+            temperature_rel = self._compute_relative_position(self._get_channel(x, self.temperature_index))
+
+            state_parts.extend([voltage_rel, temperature_rel])
 
 
         if self.soc_index is not None:
 
             state_parts.append(self._compute_absolute_state(self._get_channel(x, self.soc_index)))
 
-        if self.soh_index is not None:
+        if self.feature_mode == "full" and self.soh_index is not None:
 
             state_parts.append(self._compute_absolute_state(self._get_channel(x, self.soh_index)))
 
@@ -1170,6 +1561,31 @@ class ReconstructionModel(nn.Module):
         out = self.fc(decoder_out)
 
         return out
+
+
+class VariationalReconstructionModel(nn.Module):
+    """Window VAE decoder conditioned on the shared MTAD-GAT state."""
+
+    def __init__(self, window_size, in_dim, hid_dim, out_dim, n_layers, dropout, latent_dim=32):
+        super().__init__()
+        latent_dim = max(2, int(latent_dim))
+        self.window_size = window_size
+        self.to_mean = nn.Linear(in_dim, latent_dim)
+        self.to_logvar = nn.Linear(in_dim, latent_dim)
+        self.decoder = RNNDecoder(latent_dim, hid_dim, n_layers, dropout)
+        self.fc = nn.Linear(hid_dim, out_dim)
+
+    def forward(self, state):
+        mean = self.to_mean(state)
+        logvar = self.to_logvar(state).clamp(-10.0, 8.0)
+        if self.training:
+            latent = mean + torch.randn_like(mean) * torch.exp(0.5 * logvar)
+        else:
+            latent = mean
+        repeated = latent.repeat_interleave(self.window_size, dim=1).view(
+            state.size(0), self.window_size, -1
+        )
+        return self.fc(self.decoder(repeated)), mean, logvar
 
 
 class Forecasting_Model(nn.Module):

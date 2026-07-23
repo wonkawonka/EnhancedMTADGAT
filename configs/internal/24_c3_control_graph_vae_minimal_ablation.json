@@ -1,0 +1,43 @@
+{
+  "plan_name": "24_c3_control_graph_vae_minimal_ablation",
+  "_thesis_role": "C3最小机制消融：分离控制条件动态图与VAE重构头对AP的独立影响，定位组合实验表现下降的来源。",
+  "_protocol": "Brand3 fold0；与计划23完全一致的论文式归一化、车辆切分、带标签校准折Top-p选择、训练轮数和随机种子。",
+  "_metric": "主指标AP；对照为计划23的动态图+VAE组合及相同协议下MTAD-GAT响应通道基线。",
+  "common_args": {
+    "epochs": 10, "bs": 128, "lookback": 127, "battery_windows_per_snippet": 1,
+    "battery_vehicle_top_ratio": 0.05, "battery_split_protocol": "paper_protocol", "battery_fold_seed": 0,
+    "battery_normalization": "paper_channel", "battery_response_only_training": false,
+    "battery_score_channels": "response", "normalize": true, "init_lr": 0.001, "dropout": 0.3,
+    "use_transformer": false, "use_regime_condition": false, "use_revin": false,
+    "score_fusion_mode": "quality_aware", "condition_graph_emb_dim": 32, "condition_graph_experts": 3,
+    "variational_reconstruction_latent_dim": 32, "variational_reconstruction_kl_weight": 0.0001,
+    "use_cuda": true, "require_cuda": true, "num_workers": 4, "predict_num_workers": 4,
+    "persistent_workers": true, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false, "seed": 3407, "dataset": "TSINGHUA_EV", "model_name": "mtad_gat",
+    "battery_brand": 3, "battery_fold": 0
+  },
+  "experiments": [
+    {
+      "name": "battery_c3_control_graph_deterministic_f0",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "仅控制条件动态图；恢复MTAD-GAT确定性重构头。",
+      "args": {
+        "use_control_conditioned_graph": true,
+        "use_variational_reconstruction": false,
+        "regime_aux_lambda": 0.0,
+        "run_id": "c3_control_graph_deterministic_f0"
+      }
+    },
+    {
+      "name": "battery_c3_static_graph_vae_f0",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "仅VAE重构头；恢复原始GATv2关系图。",
+      "args": {
+        "use_control_conditioned_graph": false,
+        "use_variational_reconstruction": true,
+        "regime_aux_lambda": 1.0,
+        "run_id": "c3_static_graph_vae_f0"
+      }
+    }
+  ]
+}

@@ -479,11 +479,19 @@ if __name__ == "__main__":
         )
         threshold = float(np.quantile(calibration_scores, 0.95))
         sample_predictions = (sample_scores >= threshold).astype(np.int64)
+        from sklearn.metrics import auc, precision_recall_curve
+
+        average_precision = float(average_precision_score(sample_labels, sample_scores))
+        precision_curve, recall_curve, _ = precision_recall_curve(sample_labels, sample_scores)
+        trapezoidal_pr_auc = float(auc(recall_curve, precision_curve))
         report = {
             "label_level": "charging_snippet",
             "vehicle_identity_available": False,
             "auroc": float(roc_auc_score(sample_labels, sample_scores)),
-            "auprc": float(average_precision_score(sample_labels, sample_scores)),
+            "pr_auc": average_precision,
+            "pr_auc_trapezoid": trapezoidal_pr_auc,
+            "average_precision": average_precision,
+            "auprc": average_precision,
             "f1_at_calibration_normal_p95": float(f1_score(sample_labels, sample_predictions)),
             "precision_at_calibration_normal_p95": float(
                 precision_score(sample_labels, sample_predictions, zero_division=0)

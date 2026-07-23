@@ -1,0 +1,28 @@
+{
+  "plan_name": "03_dyad_brand3_paper_fivefold_development",
+  "_thesis_role": "与内部开发计划14配套的brand3 DyAD五折对照，不扩展其他品牌。",
+  "_protocol": "Zhang et al. seed=0车辆五折、前200训练片段逐通道归一化、带标签校准阈值与Top-p。",
+  "common_env": {
+    "PYTHONIOENCODING": "utf-8",
+    "MPLCONFIGDIR": "/tmp/matplotlib"
+  },
+  "common_args": {
+    "batch_size": 128,
+    "num_workers": 4,
+    "vehicle_top_ratio": 0.05,
+    "battery_split_protocol": "paper_protocol",
+    "battery_fold_seed": 0,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "dyad_brand3_paper_fivefold_development",
+      "baseline": "DyAD",
+      "cwd": ".",
+      "module": "src.runners.train_nc_external",
+      "flags": ["require_cuda"],
+      "matrix": {"battery_brand": [3], "battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"method": "dyad", "epochs": 0}
+    }
+  ]
+}

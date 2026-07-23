@@ -1,0 +1,79 @@
+{
+  "plan_name": "13_c4_control_response_physics_exploration",
+  "_thesis_role": "第四章开发探索：按 Zhang et al. 的控制—响应动机，在同一 C3 主干中比较响应目标与物理注意力。",
+  "_protocol": "brand3/fold0 开发折；按 Zhang et al. 论文协议，用独立带标签校准折按 AUROC 选择 Top-p，再固定到测试折。保持训练折 MinMax 不变。电流/SOC仅作为输入条件，预测和重构只输出电压/温度响应。三组共享相同随机轨迹。",
+  "common_args": {
+    "epochs": 10,
+    "bs": 128,
+    "lookback": 127,
+    "battery_windows_per_snippet": 1,
+    "battery_vehicle_top_ratio": 0.05,
+    "battery_split_protocol": "paper_protocol",
+    "battery_response_only_training": true,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_revin": false,
+    "regime_emb_dim": 32,
+    "regime_encoder_type": "temporal",
+    "regime_condition_mode": "fusion",
+    "regime_aux_lambda": 0.05,
+    "score_fusion_mode": "quality_aware",
+    "use_physical_state_encoding": false,
+    "use_physical_regularization": false,
+    "use_physical_response_score": false,
+    "physical_feature_hidden_dim": 32,
+    "use_cuda": true,
+    "require_cuda": true,
+    "num_workers": 4,
+    "predict_num_workers": 4,
+    "persistent_workers": true,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "battery_c3_response_targets",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "对照：C3输入全部通道，但训练输出和损失仅覆盖五个响应通道。",
+      "matrix": {"battery_brand": [3], "battery_fold": [0]},
+      "args": {
+        "dataset": "TSINGHUA_EV",
+        "model_name": "mtad_gat_c3",
+        "battery_score_channels": "response",
+        "use_physical_response_features": false,
+        "run_id": "c3_response_targets"
+      }
+    },
+    {
+      "name": "battery_c4_response_targets_shared_film",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "对照：响应目标加已有共享FiLM物理特征。",
+      "matrix": {"battery_brand": [3], "battery_fold": [0]},
+      "args": {
+        "dataset": "TSINGHUA_EV",
+        "model_name": "mtad_gat_c4_physics",
+        "battery_score_channels": "response",
+        "use_physical_response_features": true,
+        "physical_feature_fusion_mode": "shared_film",
+        "run_id": "c4_response_targets_shared_film"
+      }
+    },
+    {
+      "name": "battery_c4_response_targets_physical_gat_bias",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "推荐：响应目标加逐窗口物理Feature-GAT边权偏置。",
+      "matrix": {"battery_brand": [3], "battery_fold": [0]},
+      "args": {
+        "dataset": "TSINGHUA_EV",
+        "model_name": "mtad_gat_c4_physics",
+        "battery_score_channels": "response",
+        "use_physical_response_features": true,
+        "physical_feature_fusion_mode": "feature_gat_attention_bias",
+        "run_id": "c4_response_targets_physical_gat_bias"
+      }
+    }
+  ]
+}

@@ -727,7 +727,7 @@ class Predictor:
 
             return {}
 
-        from sklearn.metrics import average_precision_score, precision_recall_fscore_support, roc_auc_score
+        from sklearn.metrics import auc, average_precision_score, precision_recall_curve, precision_recall_fscore_support, roc_auc_score
 
         labels = np.asarray(true_anomalies, dtype=np.int32)
 
@@ -745,9 +745,18 @@ class Predictor:
 
         )
 
+        average_precision = float(average_precision_score(labels, scores))
+        precision_curve, recall_curve, _ = precision_recall_curve(labels, scores)
+        trapezoidal_pr_auc = float(auc(recall_curve, precision_curve))
+
         result = {
 
-            "auprc": float(average_precision_score(labels, scores)),
+            "pr_auc": average_precision,
+            "pr_auc_trapezoid": trapezoidal_pr_auc,
+
+            "average_precision": average_precision,
+
+            "auprc": average_precision,
 
             "point_precision": float(precision),
 

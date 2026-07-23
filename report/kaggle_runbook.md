@@ -125,7 +125,7 @@ python run.py external \
 | Isolation Forest/GDN/AE/SVDD/LSTM-AD | 五类通用无监督基线的横向比较 |
 | DyAD | 与同数据集原论文专用模型比较 |
 
-主指标是 top-5% 车辆级 AUROC、AUPRC、TPR@FPR=1%/5%，五折报告均值±标准差。同一次推理还保存 top-1%/10%/20%/均值聚合敏感性。验证集 P99 阈值 F1 只作辅助，不能用窗口级 F1 代替。
+车辆级报告统一把 PR-AUC 定义为 Average Precision（`average_precision_score`，并保留 `average_precision`/`auprc` 同值别名）；梯形积分另记为 `pr_auc_trapezoid`，不作为主指标。Zhang et al. 的鲁棒评分使用可调 Top-p 聚合，官方 notebook 在 5%–95% 间搜索，而不是固定 Top-5%；因此严格正常校准主表暂时锁定 Top-5% 以避免测试集调参，论文协议复核只在带标签校准折选择 p。验证集阈值 F1 只作辅助，不能用窗口级 F1 代替。
 
 ## 5. 时间与结果保存
 

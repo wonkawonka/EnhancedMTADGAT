@@ -75,6 +75,120 @@ def get_parser():
         help="Intermediate dimension of physical state encoding before projecting to transformer hidden space",
     )
     parser.add_argument(
+        "--physical_state_injection_mode",
+        type=str,
+        default="direct",
+        choices=["direct", "direct_preserve_rng", "gated_residual"],
+        help="How the projected physical state enters the Transformer input: direct addition, direct addition with matched shared initialization, or a zero-initialized learnable residual gate",
+    )
+    parser.add_argument(
+        "--physical_state_feature_mode",
+        type=str,
+        default="full",
+        choices=["full", "controls_only"],
+        help="Physical-state inputs: full includes response channels; controls_only uses phase/current/charge-flow/SOC only",
+    )
+    parser.add_argument(
+        "--use_physical_response_features",
+        type=str2bool,
+        default=False,
+        help="Fuse derived electrical/thermal response features into the existing C3 backbone",
+    )
+    parser.add_argument(
+        "--physical_feature_fusion_mode",
+        type=str,
+        default="shared_residual",
+        choices=["shared_residual", "shared_film", "feature_gat_residual", "feature_gat_attention_bias"],
+        help="Insertion point/form for response-physics features inside the C3 backbone",
+    )
+    parser.add_argument(
+        "--physical_feature_hidden_dim",
+        type=int,
+        default=32,
+        help="Hidden dimension of the response-physics feature encoder",
+    )
+    parser.add_argument(
+        "--use_control_response_decoder",
+        type=str2bool,
+        default=False,
+        help="Condition response forecast/reconstruction heads on current/SOC histories only",
+    )
+    parser.add_argument(
+        "--control_response_hidden_dim",
+        type=int,
+        default=32,
+        help="Hidden dimension of the causal control-response decoder conditioner",
+    )
+    parser.add_argument(
+        "--control_response_aux_weight",
+        type=float,
+        default=0.0,
+        help="Weight of the control-only response reconstruction auxiliary objective",
+    )
+    parser.add_argument(
+        "--use_condition_residual_calibration",
+        type=str2bool,
+        default=False,
+        help="C3: standardize MTAD-GAT residuals by normal current/SOC operating regimes",
+    )
+    parser.add_argument(
+        "--condition_calibration_clusters",
+        type=int,
+        default=12,
+        help="Number of normal operating-regime prototypes used by C3 residual calibration",
+    )
+    parser.add_argument(
+        "--condition_calibration_method",
+        type=str,
+        default="hard_kmeans",
+        choices=("hard_kmeans", "soft_expert", "neural_heteroscedastic"),
+        help="C3 residual model: discrete prototypes, soft experts, or a continuous heteroscedastic normal-residual model",
+    )
+    parser.add_argument(
+        "--condition_calibration_temperature",
+        type=float,
+        default=1.0,
+        help="Relative bandwidth of C3 soft condition-expert assignments",
+    )
+    parser.add_argument(
+        "--use_condition_slow_state",
+        type=str2bool,
+        default=False,
+        help="Include label-free mileage as a C3 long-horizon operating-state proxy",
+    )
+    parser.add_argument(
+        "--use_control_conditioned_graph",
+        type=str2bool,
+        default=False,
+        help="C3: route feature-graph edge biases from current/SOC trajectories",
+    )
+    parser.add_argument("--condition_graph_emb_dim", type=int, default=32)
+    parser.add_argument("--condition_graph_experts", type=int, default=3)
+    parser.add_argument(
+        "--use_variational_reconstruction",
+        type=str2bool,
+        default=False,
+        help="Replace MTAD-GAT's deterministic reconstruction head with a VAE head",
+    )
+    parser.add_argument("--variational_reconstruction_latent_dim", type=int, default=32)
+    parser.add_argument("--variational_reconstruction_kl_weight", type=float, default=0.0001)
+    parser.add_argument(
+        "--use_physical_consistency_head",
+        type=str2bool,
+        default=False,
+        help="C4: train an independent bottlenecked control-to-response consistency head",
+    )
+    parser.add_argument("--physical_consistency_hidden_dim", type=int, default=64)
+    parser.add_argument("--physical_consistency_latent_dim", type=int, default=16)
+    parser.add_argument("--physical_consistency_aux_weight", type=float, default=0.0)
+    parser.add_argument("--physical_consistency_kl_weight", type=float, default=0.0001)
+    parser.add_argument(
+        "--physical_consistency_score_max_weight",
+        type=float,
+        default=0.35,
+        help="Maximum normal-calibrated weight of the independent C4 score",
+    )
+    parser.add_argument(
         "--use_physical_regularization",
         type=str2bool,
         default=False,
@@ -177,8 +291,27 @@ def get_parser():
         help="Strict normal-only calibration or the labelled protocol in Zhang et al. Supplementary Note 2",
     )
     parser.add_argument("--battery_windows_per_snippet", type=int, default=1, help="Evenly spaced model windows sampled from each charging snippet")
+    parser.add_argument(
+        "--battery_normalization",
+        type=str,
+        default="minmax",
+        choices=["minmax", "paper_channel"],
+        help="Internal battery normalization: train-fold MinMax or Zhang et al. DyAD channel normalization",
+    )
+    parser.add_argument(
+        "--battery_fold_seed",
+        type=int,
+        default=-1,
+        help="Vehicle-fold seed; -1 reuses --seed. Zhang et al.'s released split notebook uses 0.",
+    )
     parser.add_argument("--battery_vehicle_top_ratio", type=float, default=0.05, help="Top charging-snippet fraction averaged into each vehicle anomaly score")
     parser.add_argument("--battery_score_channels", type=str, default="response", choices=["all", "response"], help="Faithful MTAD-GAT all-channel score or battery response-only score")
+    parser.add_argument(
+        "--battery_response_only_training",
+        type=str2bool,
+        default=False,
+        help="Use current/SOC as conditions and optimize only voltage/temperature response outputs",
+    )
     parser.add_argument("--battery_max_index_snippets", type=int, default=0, help="Temporary in-memory index cap for smoke tests; 0 builds/uses the complete brand index")
     parser.add_argument("--battery_max_snippets_per_vehicle", type=int, default=0, help="Per-vehicle cap for smoke tests only; 0 uses every charging snippet")
     parser.add_argument(

@@ -208,19 +208,30 @@ def save_bms_operational_report(output_dir, test_entities, window_size, block_si
 
 
 def save_bms_conditioning_comparison(batch_root):
-    """Compare the paired BMS runs once both per-run reports are available."""
+    """Summarize all completed BMS models using normal-only diagnostics.
+
+    No model is declared a fault detector here: each value is an empirical
+    threshold-exceedance or score-stability statistic on confirmed-normal data.
+    """
     batch_root = Path(batch_root)
     output_root = batch_root / "output"
     run_names = {
+        "baseline": "bms_mtadgat",
+        "c3_feature_gat": "bms_c3_feature_gat",
+        "c4_backbone": "bms_mtadgat_c4_backbone",
+        "c4_physical_consistency": "bms_c4_physical_consistency",
+        # Backward-compatible names for the old plan.
         "unconditioned": "bms_frequency_regulation_unconditioned",
         "conditioned": "bms_frequency_regulation_conditioned",
     }
     reports = {}
     for label, run_name in run_names.items():
         path = output_root / run_name / "bms_operational_summary.json"
-        if not path.is_file():
-            return None
-        reports[label] = json.loads(path.read_text(encoding="utf-8"))
+        if path.is_file():
+            reports[label] = json.loads(path.read_text(encoding="utf-8"))
+
+    if not reports:
+        return None
 
     metric_names = (
         "false_alarm_rate",
@@ -233,24 +244,29 @@ def save_bms_conditioning_comparison(batch_root):
         "score_to_threshold_cv",
     )
     rows = []
+    reference_label = "baseline" if "baseline" in reports else next(iter(reports))
     for metric in metric_names:
-        baseline = reports["unconditioned"].get(metric)
-        conditioned = reports["conditioned"].get(metric)
-        delta = None if baseline is None or conditioned is None else float(conditioned - baseline)
-        relative_change = None
-        if delta is not None and abs(float(baseline)) > 1e-12:
-            relative_change = float(delta / abs(float(baseline)))
-        rows.append({
-            "metric": metric,
-            "unconditioned": baseline,
-            "conditioned": conditioned,
-            "conditioned_minus_unconditioned": delta,
-            "relative_change": relative_change,
-            "preferred_direction": "lower",
-        })
+        reference = reports[reference_label].get(metric)
+        for label, report in reports.items():
+            value = report.get(metric)
+            delta = None if value is None or reference is None else float(value - reference)
+            relative_change = None
+            if delta is not None and abs(float(reference)) > 1e-12:
+                relative_change = float(delta / abs(float(reference)))
+            rows.append({
+                "metric": metric,
+                "model": label,
+                "value": value,
+                "reference_model": reference_label,
+                "reference_value": reference,
+                "minus_reference": delta,
+                "relative_change": relative_change,
+                "preferred_direction": "lower",
+            })
 
     comparison = {
         "data_assumption": "all evaluated BMS windows are normal",
+        "reference_model": reference_label,
         "interpretation": "negative deltas indicate fewer or more stable false alarms",
         "fault_detection_claim_supported": False,
         "metrics": rows,

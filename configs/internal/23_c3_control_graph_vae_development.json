@@ -1,0 +1,27 @@
+{
+  "plan_name": "23_c3_control_graph_vae_development",
+  "_thesis_role": "C3机制验证：控制量轨迹软路由多组特征图先验，替代全工况共享关系图；共享时序主干的确定性重构头替换为VAE重构头。",
+  "_hypothesis": "正常车辆在不同电流/SOC动态工况下具有不同的跨通道关系；动态图降低正常工况混叠，VAE潜变量刻画正常关系模式并限制异常重构泛化。",
+  "_protocol": "Brand3 fold0开发，论文逐通道归一化和独立带标签校准折选Top-p。图路由器只输入电流/SOC，不输入响应量、里程或故障标签。",
+  "_metric": "主指标AP；同时输出同次训练的all-channel和response-channel评分。",
+  "common_args": {
+    "epochs": 10, "bs": 128, "lookback": 127, "battery_windows_per_snippet": 1,
+    "battery_vehicle_top_ratio": 0.05, "battery_split_protocol": "paper_protocol", "battery_fold_seed": 0,
+    "battery_normalization": "paper_channel", "battery_response_only_training": false,
+    "battery_score_channels": "response", "normalize": true, "init_lr": 0.001, "dropout": 0.3,
+    "use_transformer": false, "use_regime_condition": false, "use_revin": false,
+    "score_fusion_mode": "quality_aware", "use_control_conditioned_graph": true,
+    "condition_graph_emb_dim": 32, "condition_graph_experts": 3,
+    "use_variational_reconstruction": true, "variational_reconstruction_latent_dim": 32,
+    "variational_reconstruction_kl_weight": 0.0001, "regime_aux_lambda": 1.0,
+    "use_cuda": true, "require_cuda": true, "num_workers": 4, "predict_num_workers": 4,
+    "persistent_workers": true, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false, "seed": 3407, "dataset": "TSINGHUA_EV", "model_name": "mtad_gat",
+    "battery_brand": 3, "battery_fold": 0
+  },
+  "experiments": [{
+    "name": "battery_c3_control_graph_vae_f0", "runner": "src.runners.train_nc_battery",
+    "comment": "控制条件动态图（3个图专家）+ VAE重构头；不使用里程等数据集特有元数据。",
+    "args": {"run_id": "c3_control_graph_vae_f0"}
+  }]
+}

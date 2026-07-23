@@ -1,0 +1,34 @@
+{
+  "plan_name": "26_c4_independent_physical_consistency_brand3_paper_fivefold_development",
+  "_thesis_role": "开发探索五折确认：C4以独立低维控制—响应一致性残差增强MTAD-GAT，不改变主干表征。",
+  "_protocol": "与单折C4及论文式协议一致：Brand3车辆五折、前200正常训练片段逐通道归一化；正常训练折拟合工况/物理分数尺度，独立带标签校准折选择Top-p，测试折只评估。",
+  "_metric": "主指标AP（Average Precision/PR-AUC），AUROC为次指标；仅计五个响应通道。",
+  "common_args": {
+    "epochs": 10, "bs": 128, "lookback": 127, "battery_windows_per_snippet": 1,
+    "battery_vehicle_top_ratio": 0.05, "battery_split_protocol": "paper_protocol", "battery_fold_seed": 0,
+    "battery_normalization": "paper_channel", "battery_response_only_training": false,
+    "battery_score_channels": "response", "normalize": true, "init_lr": 0.001, "dropout": 0.3,
+    "use_transformer": false, "use_regime_condition": false, "use_revin": false,
+    "score_fusion_mode": "quality_aware", "use_condition_residual_calibration": true,
+    "condition_calibration_clusters": 12, "use_physical_state_encoding": false,
+    "use_physical_regularization": false, "use_physical_response_score": false,
+    "use_physical_response_features": false, "use_control_response_decoder": false,
+    "regime_aux_lambda": 1.0, "use_physical_consistency_head": true,
+    "physical_consistency_hidden_dim": 64, "physical_consistency_latent_dim": 16,
+    "physical_consistency_aux_weight": 1.0, "physical_consistency_kl_weight": 0.0001,
+    "physical_consistency_score_max_weight": 0.35,
+    "use_cuda": true, "require_cuda": true, "num_workers": 4, "predict_num_workers": 4,
+    "persistent_workers": true, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false, "seed": 3407, "dataset": "TSINGHUA_EV", "model_name": "mtad_gat",
+    "battery_brand": 3
+  },
+  "experiments": [
+    {
+      "name": "battery_c4_independent_physical_consistency",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "C4：独立瓶颈控制—响应一致性分支仅在评分端与条件化残差融合；五折确认。",
+      "matrix": {"battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"run_id": "c4_independent_physical_consistency"}
+    }
+  ]
+}

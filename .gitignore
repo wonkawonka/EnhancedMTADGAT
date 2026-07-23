@@ -20,6 +20,8 @@ experiment_runs/
 /runs/
 external_runs/
 kaggle离线output/
+kaggle.json
+.kaggle/
 external_baselines/**/__pycache__/
 external_baselines/**/processed/
 external_baselines/**/checkpoints/

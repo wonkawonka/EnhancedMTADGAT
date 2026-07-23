@@ -1,0 +1,48 @@
+{
+  "plan_name": "09_c4_outer_state_gate_confirmation",
+  "_thesis_role": "开发确认，不进入正式主结果。复核外层 GRU–Transformer 门控下，零初始化门控物理状态残差是否优于对应 C3 外层参照。",
+  "_protocol": "只运行 brand3/fold0 的 C4。参照为已完成的 07_c4_outer_gate_diagnostic/battery_c3_outer_gate_b3_f0；两者使用同一随机种子、外层门控与车辆协议。gated_residual 会保持共享 C3 路径的随机初始化不变。关闭物理正则与物理响应计分。",
+  "common_args": {
+    "epochs": 10,
+    "bs": 128,
+    "lookback": 127,
+    "battery_windows_per_snippet": 1,
+    "battery_vehicle_top_ratio": 0.05,
+    "battery_split_protocol": "strict_normal_validation",
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_revin": false,
+    "regime_emb_dim": 32,
+    "regime_encoder_type": "temporal",
+    "regime_condition_mode": "transformer_residual",
+    "regime_aux_lambda": 0.05,
+    "score_fusion_mode": "quality_aware",
+    "use_cuda": true,
+    "require_cuda": true,
+    "num_workers": 4,
+    "predict_num_workers": 4,
+    "persistent_workers": true,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "battery_c4_outer_gated_state_only",
+      "runner": "src.runners.train_nc_battery",
+      "comment": "外层门控下，仅相对已完成 C3 外层参照加入零初始化门控物理状态残差。",
+      "matrix": {"battery_brand": [3], "battery_fold": [0]},
+      "args": {
+        "dataset": "TSINGHUA_EV",
+        "model_name": "mtad_gat_c4_physics",
+        "battery_score_channels": "response",
+        "physical_state_injection_mode": "gated_residual",
+        "use_physical_regularization": false,
+        "use_physical_response_score": false,
+        "run_id": "c4confirm_battery_outer_gated_state_only"
+      }
+    }
+  ]
+}

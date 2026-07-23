@@ -1,0 +1,30 @@
+{
+  "plan_name": "29_c4_physical_only_f0_development",
+  "_thesis_role": "C4 归因消融：仅保留独立低维控制—响应一致性残差，移除已被 C3 单折否定的条件残差校准。",
+  "_hypothesis": "若物理一致性分支自身有效，则 response_plus_physical_consistency 的 AP 应高于同一权重的 response_channels；若无提升，C4 的 fold0 增益主要来自评分耦合而非可复现的物理信息。",
+  "_protocol": "Brand3 fold0，完全复用 C4 五折的模型、归一化与论文式带标签校准 Top-p 协议；仅关闭 use_condition_residual_calibration。",
+  "_metric": "主指标 AP；同一模型输出 raw response_channels 与物理一致性增强评分，严格配对。",
+  "common_args": {
+    "epochs": 10, "bs": 128, "lookback": 127, "battery_windows_per_snippet": 1,
+    "battery_vehicle_top_ratio": 0.05, "battery_split_protocol": "paper_protocol", "battery_fold_seed": 0,
+    "battery_normalization": "paper_channel", "battery_response_only_training": false,
+    "battery_score_channels": "response", "normalize": true, "init_lr": 0.001, "dropout": 0.3,
+    "use_transformer": false, "use_regime_condition": false, "use_revin": false,
+    "score_fusion_mode": "quality_aware", "use_condition_residual_calibration": false,
+    "use_physical_state_encoding": false, "use_physical_regularization": false,
+    "use_physical_response_score": false, "use_physical_response_features": false,
+    "use_control_response_decoder": false, "regime_aux_lambda": 1.0,
+    "use_physical_consistency_head": true, "physical_consistency_hidden_dim": 64,
+    "physical_consistency_latent_dim": 16, "physical_consistency_aux_weight": 1.0,
+    "physical_consistency_kl_weight": 0.0001, "physical_consistency_score_max_weight": 0.35,
+    "use_cuda": true, "require_cuda": true, "num_workers": 4, "predict_num_workers": 4,
+    "persistent_workers": true, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false, "seed": 3407, "dataset": "TSINGHUA_EV", "model_name": "mtad_gat",
+    "battery_brand": 3, "battery_fold": 0
+  },
+  "experiments": [{
+    "name": "battery_c4_physical_only_f0", "runner": "src.runners.train_nc_battery",
+    "comment": "仅验证物理一致性评分的边际贡献。",
+    "args": {"run_id": "c4_physical_only_f0"}
+  }]
+}

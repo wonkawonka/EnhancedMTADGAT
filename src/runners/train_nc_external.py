@@ -17,10 +17,12 @@ from pathlib import Path
 import numpy as np
 import torch
 from sklearn.ensemble import IsolationForest
+from sklearn.metrics import roc_auc_score
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
 from src.data.nc_battery import (
+    PaperChannelNormalizer,
     SnippetRecord,
     aggregate_vehicle_scores,
     build_index,
@@ -29,7 +31,7 @@ from src.data.nc_battery import (
 )
 from src.models.nc_official_baselines import NCDynamicVAE, NCGDN, NCLSTMAutoEncoder
 from src.project_paths import MANUAL_RUNS_ROOT, resolve_dataset_root
-from src.runners.train_nc_battery import _metrics
+from src.runners.train_nc_battery import _metrics, _paper_labelled_snippet_threshold
 
 
 METHODS = ("dyad", "gdn", "auto_encoder", "deepsvdd", "lstm_ad", "isolation_forest")
@@ -41,28 +43,6 @@ METHOD_EPOCHS = {
     "lstm_ad": 20,
     "isolation_forest": 0,
 }
-
-
-class OfficialChannelNormalizer:
-    """DyAD's public-code normalizer estimated from the first 200 snippets."""
-
-    def __init__(self, records):
-        arrays = [load_snippet(record.path)[0] for record in records[:200]]
-        if not arrays:
-            raise ValueError("No normal training snippets available for normalization")
-        stacked = np.stack(arrays)
-        self.mean = np.mean(np.mean(stacked, axis=1), axis=0)
-        self.std = np.mean(np.std(stacked, axis=1), axis=0)
-        self.minimum = np.min(stacked, axis=(0, 1))
-        self.maximum = np.max(stacked, axis=(0, 1))
-        self.scale = np.maximum(np.maximum(1e-4, self.std), 0.1 * (self.maximum - self.minimum))
-        self.sample_count = len(arrays)
-
-    def transform(self, values):
-        return ((values - self.mean) / self.scale).astype(np.float32, copy=False)
-
-    def state_dict(self):
-        return {"mean": self.mean.tolist(), "scale": self.scale.tolist(), "sample_count": self.sample_count}
 
 
 class PositionStandardizer:
@@ -152,7 +132,16 @@ def _gdn_windows(values, window=32, stride=16):
 
 
 def _train_reconstruction(model, loader, device, method, epochs, learning_rate, brand):
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    if method == "dyad":
+        optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-6)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=epochs,
+            eta_min=0.1 * learning_rate,
+        )
+    else:
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        scheduler = None
     mileage_values = np.asarray([record.mileage for record in loader.dataset.records if record.mileage is not None], dtype=float)
     mileage_min = float(np.min(mileage_values)) if mileage_values.size else 0.0
     mileage_scale = float(np.ptp(mileage_values)) if mileage_values.size else 1.0
@@ -200,6 +189,8 @@ def _train_reconstruction(model, loader, device, method, epochs, learning_rate, 
             batches += 1
             step += 1
         print(f"[{method}] epoch={epoch + 1}/{epochs} loss={total / max(1, batches):.6f}")
+        if scheduler is not None:
+            scheduler.step()
 
 
 def _train_svdd(loader, device, epochs, learning_rate):
@@ -321,24 +312,57 @@ def _build_result(
     top_ratio,
     threshold_mode,
 ):
-    calibration_vehicle_scores, calibration_labels, _ = _aggregate_records(
-        calibration_records, calibration_scores, top_ratio
-    )
-    vehicle_scores, labels, cars = _aggregate_records(test_records, test_scores, top_ratio)
+    paper_threshold = None
+    if threshold_mode.startswith("paper_"):
+        paper_threshold = _paper_labelled_snippet_threshold(
+            calibration_scores,
+            [record.label for record in calibration_records],
+        )
     sensitivity = {}
-    for ratio in (0.01, 0.05, 0.10, 0.20, 1.0):
+    ratio_arrays = {}
+    for percent in [1, *range(5, 100, 5), 100]:
+        ratio = percent / 100.0
         calibrated_scores, calibrated_labels, _ = _aggregate_records(
             calibration_records, calibration_scores, ratio
         )
         scores, ratio_labels, _ = _aggregate_records(test_records, test_scores, ratio)
-        key = f"top_{int(ratio * 100)}pct" if ratio < 1 else "mean"
+        key = f"top_{percent}pct" if percent < 100 else "mean"
         sensitivity[key] = _metrics(
             scores,
             ratio_labels,
             calibrated_scores,
             calibrated_labels,
             threshold_mode,
+            paper_threshold,
         )
+        ratio_arrays[percent] = (
+            calibrated_scores,
+            calibrated_labels,
+            scores,
+            ratio_labels,
+        )
+
+    if threshold_mode.startswith("paper_"):
+        selected_percent = max(
+            range(5, 100, 5),
+            key=lambda percent: (
+                roc_auc_score(ratio_arrays[percent][1], ratio_arrays[percent][0]),
+                percent,
+            ),
+        )
+        selection_source = "labelled_calibration_vehicle_auroc"
+    else:
+        selected_percent = int(round(top_ratio * 100))
+        if selected_percent not in ratio_arrays:
+            selected_percent = 5
+        selection_source = "predefined_normal_only_protocol"
+
+    calibration_vehicle_scores, calibration_labels, vehicle_scores, labels = ratio_arrays[
+        selected_percent
+    ]
+    _, _, cars = _aggregate_records(
+        test_records, test_scores, selected_percent / 100.0
+    )
     return {
         "method": method,
         "metrics": _metrics(
@@ -347,8 +371,17 @@ def _build_result(
             calibration_vehicle_scores,
             calibration_labels,
             threshold_mode,
+            paper_threshold,
         ),
         "aggregation_sensitivity": sensitivity,
+        "selected_top_ratio": selected_percent / 100.0,
+        "top_ratio_selection": selection_source,
+        "calibration_auroc_at_selected_top_ratio": float(
+            roc_auc_score(
+                ratio_arrays[selected_percent][1],
+                ratio_arrays[selected_percent][0],
+            )
+        ),
     }, vehicle_scores, labels, cars
 
 
@@ -410,6 +443,7 @@ def parse_args():
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--learning_rate", type=float, default=0.001)
     parser.add_argument("--vehicle_top_ratio", type=float, default=0.05)
+    parser.add_argument("--battery_fold_seed", type=int, default=-1)
     parser.add_argument("--seed", type=int, default=3407)
     parser.add_argument("--max_snippets_per_vehicle", type=int, default=0, help="Smoke-test cap; 0 keeps full data")
     parser.add_argument(
@@ -435,7 +469,7 @@ def main():
     splits = split_vehicle_folds(
         records,
         args.battery_fold,
-        seed=args.seed,
+        seed=args.seed if args.battery_fold_seed < 0 else args.battery_fold_seed,
         protocol=args.battery_split_protocol,
     )
     if args.max_snippets_per_vehicle > 0:
@@ -452,7 +486,7 @@ def main():
 
     normalizer = None
     if args.method == "dyad":
-        normalizer = OfficialChannelNormalizer(splits["train"])
+        normalizer = PaperChannelNormalizer(splits["train"])
     elif args.method in {"auto_encoder", "deepsvdd", "isolation_forest"}:
         normalizer = PositionStandardizer(splits["train"])
 
@@ -508,7 +542,7 @@ def main():
         test_scores,
         args.vehicle_top_ratio,
         (
-            "paper_labelled_f1"
+            "paper_labelled_snippet_rank"
             if args.battery_split_protocol == "paper_protocol"
             else "normal_p99"
         ),
