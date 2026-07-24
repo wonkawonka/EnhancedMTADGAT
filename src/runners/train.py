@@ -582,7 +582,8 @@ if __name__ == "__main__":
         elif is_sequence_container(x_train):
             segmented_train_tensors = _to_tensor_sequence_container(x_train)
             x_train = _get_first_sequence_tensor(segmented_train_tensors)
-            explicit_validation_tensor = _to_tensor_sequence_container(explicit_validation_data)
+            if explicit_validation_data is not None:
+                explicit_validation_tensor = _to_tensor_sequence_container(explicit_validation_data)
         else:
             x_train = torch.from_numpy(x_train).float()
             if explicit_validation_data is not None:
@@ -642,12 +643,13 @@ if __name__ == "__main__":
                 target_dims,
                 window_stride=args.window_stride,
             )
-            validation_dataset = _build_concat_window_dataset(
-                explicit_validation_tensor,
-                window_size,
-                target_dims,
-                window_stride=args.window_stride,
-            )
+            if explicit_validation_tensor is not None:
+                validation_dataset = _build_concat_window_dataset(
+                    explicit_validation_tensor,
+                    window_size,
+                    target_dims,
+                    window_stride=args.window_stride,
+                )
         elif dataset in NASA_SEQUENCE_DATASETS and nasa_train_tensors is not None:
             train_sub_datasets = []
             for battery_tensor in nasa_train_tensors.values():

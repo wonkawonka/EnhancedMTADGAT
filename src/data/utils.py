@@ -323,6 +323,8 @@ def _split_array_by_lengths(values, lengths):
 
 def get_msl_sequence_data(val_ratio=0.1, normalize=True):
     """Load MSL without creating windows across entity boundaries."""
+    if not 0.0 <= float(val_ratio) < 1.0:
+        raise ValueError(f"val_ratio must be in [0, 1), got {val_ratio}")
     dataset = "MSL"
     prefix = str(processed_dataset_path("data"))
     paths = {
@@ -356,14 +358,22 @@ def get_msl_sequence_data(val_ratio=0.1, normalize=True):
     for sequence in raw_train_sequences:
         split_index = int(np.floor(len(sequence) * (1.0 - val_ratio)))
         train_sequences.append(sequence[:split_index])
-        validation_sequences.append(sequence[split_index:])
+        # A zero validation split is used by the external protocol.  Do not
+        # create empty arrays here because sklearn scalers reject zero-row
+        # inputs during normalization.
+        if val_ratio > 0.0 and split_index < len(sequence):
+            validation_sequences.append(sequence[split_index:])
 
     if normalize:
         _, scaler = normalize_data(np.concatenate(train_sequences, axis=0), scaler=None)
         train_sequences = [scaler.transform(sequence).astype(np.float32, copy=False) for sequence in train_sequences]
         validation_sequences = [scaler.transform(sequence).astype(np.float32, copy=False) for sequence in validation_sequences]
         test_sequences = [scaler.transform(sequence).astype(np.float32, copy=False) for sequence in test_sequences]
-    return train_sequences, validation_sequences, test_sequences, test_label_sequences
+    # ``None`` tells the training runner that this protocol has no validation
+    # split.  An empty list is treated as a segmented container and would make
+    # the runner try to construct an empty validation window dataset.
+    validation_data = validation_sequences if validation_sequences else None
+    return train_sequences, validation_data, test_sequences, test_label_sequences
 
 
 def flatten_label_container(label_data):
