@@ -1808,6 +1808,19 @@ class Predictor:
 
         raw_metric_report = self._evaluate_raw_scores(test_anomaly_scores, raw_test_preds, true_anomalies)
 
+        # AP is the ranking metric shared with the Tsinghua protocol.  Print
+        # it explicitly so external-run logs do not expose threshold-F1 only.
+        if raw_metric_report:
+            ap = raw_metric_report["average_precision"]
+            auroc = raw_metric_report.get("auroc")
+            suffix = "" if auroc is None else f", AUROC={auroc:.6f}"
+            print(f"Raw point-level ranking metrics: AP={ap:.6f}{suffix}", flush=True)
+        else:
+            print(
+                "Raw point-level ranking metrics unavailable: no usable binary anomaly labels.",
+                flush=True,
+            )
+
         self._save_standard_reports(
 
             e_eval,

@@ -188,6 +188,10 @@ def stream_subprocess(command, cwd, log_path, extra_env=None):
 
     env = os.environ.copy()
 
+    # Capturing child stdout through a pipe otherwise enables Python's block
+    # buffering and makes active long epochs appear stalled in the terminal.
+    env["PYTHONUNBUFFERED"] = "1"
+
     if extra_env:
 
         env.update(extra_env)
@@ -212,6 +216,8 @@ def stream_subprocess(command, cwd, log_path, extra_env=None):
 
             errors="replace",
 
+            bufsize=1,
+
         )
 
 
@@ -221,13 +227,19 @@ def stream_subprocess(command, cwd, log_path, extra_env=None):
 
             log_file.write(line)
 
+            log_file.flush()
+
             try:
 
-                print(line, end="")
+                print(line, end="", flush=True)
 
             except UnicodeEncodeError:
 
-                print(line.encode("utf-8", errors="replace").decode("utf-8", errors="replace"), end="")
+                print(
+                    line.encode("utf-8", errors="replace").decode("utf-8", errors="replace"),
+                    end="",
+                    flush=True,
+                )
 
 
         return process.wait()

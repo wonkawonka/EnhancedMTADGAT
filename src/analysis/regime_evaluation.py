@@ -60,6 +60,18 @@ def save_nasa_regime_probe(
     max_windows_per_sequence=3000,
 ):
     """Fit a train-battery linear probe and evaluate it on held-out batteries."""
+    base_model = _unwrap_model(model)
+    path = Path(output_dir) / "nasa_regime_probe.json"
+    # Baseline and C4-only models do not expose a regime embedding.  Their
+    # anomaly outputs remain valid; only this C3-specific probe is inapplicable.
+    if not bool(getattr(base_model, "use_regime_condition", False)):
+        report = {
+            "available": False,
+            "reason": "regime conditioning is disabled; NASA regime probe is not applicable",
+        }
+        path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        return report
+
     device = next(model.parameters()).device
     train_x, train_y = _collect_nasa_embeddings(
         model, train_entities, window_size, max_windows_per_sequence, device
@@ -86,7 +98,6 @@ def save_nasa_regime_probe(
             "label_source": "current direction; raw step_type_code excluded from model inputs",
             "evaluation": "weak representation sanity probe across held-out batteries",
         }
-    path = Path(output_dir) / "nasa_regime_probe.json"
     path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     return report
 

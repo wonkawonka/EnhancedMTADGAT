@@ -2,7 +2,7 @@
   "plan_name": "33_external_c3_c4_main_validation",
   "_thesis_role": "外部主验证：C3 的通用多变量条件化补充（MSL）及 C3/C4 的电池控制—响应验证（NASA Random、真实 BMS）。",
   "_protocol": "所有模型在同一数据划分、窗口和归一化下比较。MSL 采用三个固定随机种子；NASA 为 RW1/RW2/RW7 训练、RW8 留出；BMS 仅使用确认正常的测试时段进行运行稳定性诊断。",
-  "_metric": "MSL：AP（主指标）与 AUROC。当前 NASA Random 的 RW8 留出段无可用故障标签，报告跨电池控制—响应误差、分数稳定性与 C3 电流方向表征探针，不输出 AP/AUROC。BMS：经验误报率、每万窗口误报数、跨簇与跨时间块的误报/分数稳定性；明确不输出 AP/AUROC，也不宣称故障检出率。",
+  "_metric": "所有有二元故障标签的任务统一以 Average Precision（AP/PR-AUC）为主排名指标、AUROC 为次指标；MSL 在原始逐点分数上报告 AP/AUROC，不以阈值 F1 或 point-adjusted F1 作为主结果。清华 EV 的 AP 是 charging-snippet 样本级，MSL 的 AP 是逐点级，两者只在各自数据集内比较，不比较绝对数值。当前 NASA Random 的 RW8 留出段无可用故障标签，报告跨电池控制—响应误差、分数稳定性与仅对 C3 启用的电流方向表征探针，不输出 AP/AUROC。BMS：经验误报率、每万窗口误报数、跨簇与跨时间块的误报/分数稳定性；明确不输出 AP/AUROC，也不宣称故障检出率。",
   "_c4_mapping": {
     "NASA_RANDOM_DISCHARGE": "输入顺序 [voltage, current, temperature]；控制=current(1)，响应=voltage(0), temperature(2)。",
     "BMS": "控制=SYS_I(22), BMSnRSOC(3)；响应=BMSnI、簇电压/温度统计、离散度与簇-系统层级差。BMSnI 不作为控制，避免簇局部过流被条件化吸收。",
