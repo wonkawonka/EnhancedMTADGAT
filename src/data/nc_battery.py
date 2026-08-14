@@ -1,9 +1,7 @@
-"""Official Nature Communications EV battery dataset utilities.
+"""清华 EV 电池数据集的读取、索引、车辆划分、归一化和窗口化工具。
 
-The dataset is organised as three manufacturer-specific packages.  Labels are
-defined at vehicle level, while each pickle stores one charging snippet.  This
-module therefore keeps vehicle identity throughout splitting and evaluation;
-it never treats every snippet from a faulty vehicle as a positive example.
+数据按三个品牌分别存放，标签定义在车辆级，而每个 pkl 只保存一个充电片段。
+因此划分和评估全过程都保留车辆身份，不能把故障车辆的每个片段直接当成独立正样本。
 """
 
 from __future__ import annotations
@@ -25,7 +23,6 @@ from torch.utils.data import Dataset
 
 from src.project_paths import processed_dataset_path, resolve_dataset_root
 
-
 FEATURE_NAMES = (
     "pack_voltage",
     "current",
@@ -35,12 +32,19 @@ FEATURE_NAMES = (
     "max_temperature",
     "min_temperature",
 )
+# 七个通道中，电流和 SOC 被视为外部工况/控制量；其余五个通道是
+# 需要由模型预测并用于故障评分的响应量。该划分贯穿 C3 工况编码与 C4 物理评分。
 CONTROL_DIMS = (1, 2)
 RESPONSE_DIMS = (0, 3, 4, 5, 6)
 
-
 @dataclass(frozen=True)
 class SnippetRecord:
+    """一条充电片段的轻量索引。
+
+    原始 pkl 可能很大，因此调度、车辆划分和 DataLoader 初始化只传递本结构；
+    真正的时序数组只在 ``__getitem__`` 取到一个 batch 时才读取。``car`` 与
+    ``label`` 是车辆级字段，不能把它们误解为每个片段独立标注。
+    """
     path: str
     car: str
     label: int
@@ -48,16 +52,14 @@ class SnippetRecord:
     mileage: float | None = None
     charge_segment: str | None = None
 
-
 _INDEX_LABELS: dict[str, int] = {}
-
 
 def _init_index_worker(labels: dict[str, int]) -> None:
     global _INDEX_LABELS
     _INDEX_LABELS = labels
 
-
 def _parse_index_path(path_value: str) -> SnippetRecord:
+    """读取一个 pkl 的元信息，并将其转换成可持久化的索引行。"""
     path = Path(path_value)
     values, metadata = load_snippet(path)
     car = str(metadata.get("car"))
@@ -75,8 +77,13 @@ def _parse_index_path(path_value: str) -> SnippetRecord:
         else str(metadata.get("charge_segment")),
     )
 
-
 def resolve_brand_root(root: str | Path | None, brand: int) -> Path:
+    """定位一个品牌的原始目录，并兼容本地和 Kaggle 的嵌套挂载布局。
+
+    ``root`` 应是三个品牌的共同父目录，而非某个 ``battery_brandN`` 目录。
+    Kaggle 上传时常额外保留一层同名目录，故依次尝试
+    ``.../battery_brandN`` 和 ``.../battery_brandN/battery_brandN``。
+    """
     if brand not in {1, 2, 3}:
         raise ValueError("brand must be 1, 2, or 3")
     base = Path(root) if root else resolve_dataset_root("TSINGHUA-EV", "TSINGHUA_EV")
@@ -90,9 +97,8 @@ def resolve_brand_root(root: str | Path | None, brand: int) -> Path:
     for layout in layouts:
         outer = layout / brand_name
         candidates.extend((outer, outer / brand_name))
-    # Kaggle preserves every directory selected during Dataset upload.  The
-    # official package is therefore commonly mounted as
-    # battery_brandN/battery_brandN/{label,train,test}.
+    # Kaggle 会保留上传数据集时选中的目录层级，所以官方数据常被挂载成
+    # battery_brandN/battery_brandN/{label,train,test} 的双层结构。
     brand_root = next(
         (
             candidate
@@ -110,16 +116,14 @@ def resolve_brand_root(root: str | Path | None, brand: int) -> Path:
         )
     return brand_root
 
-
 def _torch_load(path: Path):
     try:
         return torch.load(path, map_location="cpu", weights_only=False)
-    except TypeError:  # torch < 2.0
+    except TypeError:  # 兼容不支持 weights_only 参数的旧版 PyTorch
         return torch.load(path, map_location="cpu")
 
-
 def _load_payload(path: Path):
-    """Read the official numpy pickle directly, avoiding torch.load per-file overhead."""
+    """兼容两种官方 pkl：zip 容器中的 ``data.pkl`` 与普通 torch/pickle 文件。"""
     try:
         with ZipFile(path) as archive:
             data_member = next(name for name in archive.namelist() if name.endswith("data.pkl"))
@@ -127,8 +131,8 @@ def _load_payload(path: Path):
     except (BadZipFile, StopIteration, pickle.UnpicklingError):
         return _torch_load(path)
 
-
 def load_snippet(path: str | Path) -> tuple[np.ndarray, dict]:
+    """返回单片段的 ``[时间, 7通道]`` float32 数组及其车辆元数据。"""
     payload = _load_payload(Path(path))
     if not isinstance(payload, (tuple, list)) or len(payload) < 2:
         raise ValueError(f"Unexpected battery snippet payload: {path}")
@@ -139,8 +143,8 @@ def load_snippet(path: str | Path) -> tuple[np.ndarray, dict]:
     values = np.nan_to_num(values[:, : len(FEATURE_NAMES)], copy=False)
     return values, metadata
 
-
 def _read_vehicle_labels(brand_root: Path) -> dict[str, int]:
+    """合并品牌目录下的车辆标签 CSV，并检查同一车辆是否出现冲突标签。"""
     label_paths = sorted((brand_root / "label").glob("*_label.csv"))
     if not label_paths:
         raise FileNotFoundError(f"Vehicle label files not found under: {brand_root / 'label'}")
@@ -154,7 +158,6 @@ def _read_vehicle_labels(brand_root: Path) -> dict[str, int]:
                 labels[car] = label
     return labels
 
-
 def build_index(
     root: str | Path | None,
     brand: int,
@@ -163,7 +166,13 @@ def build_index(
     max_snippets: int = 0,
     workers: int = 8,
 ) -> list[SnippetRecord]:
-    """Build/load a compact JSONL index without writing to read-only raw data."""
+    """建立或复用片段索引，而不修改 Kaggle 只读 Input。
+
+    索引文件写到 ``datasets/processed/indices``。复用已有索引时会把旧机器的
+    绝对路径重定向到当前挂载目录；这使同一实验能在本地和 Kaggle 间迁移。
+    新建索引时，三个可能的数据目录 ``data/train/test`` 会被合并，但训练/测试
+    划分随后仍只按车辆标签与协议完成，绝不直接信任目录名作为论文划分。
+    """
     brand_root = resolve_brand_root(root, brand)
     index_dir = processed_dataset_path("TSINGHUA_EV", for_write=True) / "indices"
     index_dir.mkdir(parents=True, exist_ok=True)
@@ -175,9 +184,8 @@ def build_index(
                 payload = json.loads(line)
                 indexed_path = Path(payload["path"])
                 if not indexed_path.is_file():
-                    # Indexes generated before uploading to Kaggle can contain
-                    # absolute paths from the source machine. Preserve the
-                    # data/train/test subfolder and rebase them to this mount.
+                    # 上传 Kaggle 前生成的索引可能带有原机器绝对路径。这里只保留
+                    # data、train 或 test 之后的相对部分，再重定位到当前挂载目录。
                     rebased = brand_root / indexed_path.parent.name / indexed_path.name
                     if not rebased.is_file():
                         raise FileNotFoundError(
@@ -209,25 +217,22 @@ def build_index(
         ) as pool:
             records = list(pool.map(_parse_index_path, map(str, paths), chunksize=256))
 
-    # A capped smoke index must not replace the complete persistent index.
+    # 限量冒烟测试生成的索引不能覆盖完整的持久化索引。
     if max_snippets <= 0:
         with index_path.open("w", encoding="utf-8") as handle:
             for record in records:
                 handle.write(json.dumps(asdict(record), ensure_ascii=False) + "\n")
     return records
 
-
 def prepared_index_path(brand: int) -> Path:
-    """Return the writable preprocessing artifact used by all battery runners."""
+    """返回所有电池实验入口共同使用的可写预处理索引路径。"""
     return (
         processed_dataset_path("TSINGHUA_EV", for_write=True)
         / "indices"
         / f"battery_brand{brand}_snippet_index.jsonl"
     )
 
-
 BATTERY_SPLIT_PROTOCOLS = ("strict_normal_validation", "paper_protocol")
-
 
 def split_vehicle_folds(
     records: Sequence[SnippetRecord],
@@ -237,7 +242,7 @@ def split_vehicle_folds(
     seed: int = 3407,
     protocol: str = "strict_normal_validation",
 ) -> dict[str, list[SnippetRecord]]:
-    """Build vehicle-level folds for the strict or Zhang et al. protocol.
+    """按车辆而非片段构建训练、验证、校准和测试集合。
 
     ``strict_normal_validation`` reserves disjoint normal folds for model
     selection and testing; every faulty vehicle is evaluated in every fold.
@@ -260,8 +265,8 @@ def split_vehicle_folds(
     normal_cars = sorted(car for car, label in labels.items() if label == 0)
     faulty_cars = sorted(car for car, label in labels.items() if label == 1)
     if protocol == "paper_protocol":
-        # The released split notebook sorts vehicle IDs, applies Python's
-        # random.shuffle(seed=0), then slices with integer fifth boundaries.
+        # 公开划分 notebook 先排序车辆编号，再按固定随机种子打乱，最后用整数边界
+        # 切成五折；这里保持同样顺序以复现公开协议。
         rng = random.Random(seed)
         rng.shuffle(normal_cars)
         rng.shuffle(faulty_cars)
@@ -286,8 +291,8 @@ def split_vehicle_folds(
         return [record for record in records if record.car in cars]
 
     if protocol == "paper_protocol":
-        # Zhang et al., Supplementary Note 2: N_{-i} trains the model,
-        # N_{-i} U A_i tunes tau, and N_i U A_{-i} is the test split.
+        # 公开论文补充材料中的协议：N_{-i} 用于训练，N_{-i}∪A_i 用于校准阈值，
+        # N_i∪A_{-i} 作为最终测试集。
         train_normal = set(normal_cars) - test_normal
         calibration_faulty = set(faulty_folds[fold])
         test_faulty = set(faulty_cars) - calibration_faulty
@@ -309,9 +314,12 @@ def split_vehicle_folds(
         "test": select(test_normal | set(faulty_cars)),
     }
 
-
 class StreamingMinMaxScaler:
-    """Per-channel train-only min/max scaler used by all internal models."""
+    """仅用当前折训练车辆拟合的逐通道 Min-Max 归一化器。
+
+    流式更新避免将全部 pkl 同时放入内存；验证、校准、测试只能调用 ``transform``，
+    从而避免使用测试分布信息。
+    """
 
     def __init__(self):
         self.data_min_ = np.full(len(FEATURE_NAMES), np.inf, dtype=np.float64)
@@ -347,9 +355,8 @@ class StreamingMinMaxScaler:
             "feature_names": list(FEATURE_NAMES),
         }
 
-
 class PaperChannelNormalizer:
-    """DyAD public-code channel normalizer fitted on 200 training snippets."""
+    """复现 DyAD 公开实现的通道归一化，仅使用前 200 条训练片段拟合。"""
 
     def __init__(self, records: Sequence[SnippetRecord], sample_count: int = 200):
         arrays = [load_snippet(record.path)[0] for record in records[:sample_count]]
@@ -386,9 +393,13 @@ class PaperChannelNormalizer:
             "feature_names": list(FEATURE_NAMES),
         }
 
-
 class BatterySnippetWindowDataset(Dataset):
-    """Lazy fixed-window view; files are loaded only when a batch requests them."""
+    """把不等长充电片段延迟转换为监督式固定窗口样本。
+
+    一个样本包含 ``lookback`` 个历史点作为输入 ``x``，以及紧随其后的一个点作为
+    预测目标 ``y``。同一片段可按均匀位置产生多个窗口；评估时附带车辆、标签和
+    片段 ID，以便最终汇总回车辆级指标。
+    """
 
     def __init__(
         self,
@@ -430,14 +441,17 @@ class BatterySnippetWindowDataset(Dataset):
         mileage = float("nan") if record.mileage is None else float(record.mileage)
         return x, y, record.car, record.label, f"{path.parent.name}/{path.stem}", mileage
 
-
 def aggregate_vehicle_scores(
     snippet_scores: dict[str, list[float]],
     snippet_cars: dict[str, str],
     vehicle_labels: dict[str, int],
     top_ratio: float,
 ) -> tuple[np.ndarray, np.ndarray, list[str]]:
-    """Aggregate window→snippet by mean, then snippet→vehicle by top-p mean."""
+    """将窗口异常分数两级汇总为论文报告所用的车辆分数。
+
+    先对同一片段的窗口取均值，再取车辆内最高 ``top_ratio`` 比例片段的均值。
+    这能突出故障车辆中最异常的充电过程，同时避免单个异常窗口完全主导结果。
+    """
     if not 0 < top_ratio <= 1:
         raise ValueError("top_ratio must be in (0, 1]")
     by_car: dict[str, list[float]] = {}

@@ -118,7 +118,7 @@ def expand_experiment_seeds(experiments, seeds):
 
 def expand_experiment_matrix(experiments):
 
-    """Expand compact Cartesian experiment matrices (for example brand x fold)."""
+    """根据实验模版展开多个具体实验 (for example brand x fold)."""
 
     expanded = []
 

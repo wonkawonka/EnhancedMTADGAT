@@ -77,13 +77,6 @@ def build_parser():
     full_parser.add_argument("--nasa-battery-id", default="", help="Single NASA entity used in analyze/full.")
     full_parser.add_argument("--nasa-train-batteries", default="", help="Comma separated NASA train entities used in analyze/full.")
     full_parser.add_argument("--nasa-test-batteries", default="", help="Comma separated NASA test entities used in analyze/full.")
-    full_parser.add_argument(
-        "--ch-battery-root",
-        default=str(resolve_dataset_root("CH-BATTERY", "CH-BATTERY")),
-        help="CH-BATTERY root used in analyze/full.",
-    )
-    full_parser.add_argument("--ch-battery-preprocessed-dir", default="", help="Optional CH-BATTERY processed directory used in analyze/full.")
-    full_parser.add_argument("--ch-battery-train-ratio", type=float, default=0.8, help="CH-BATTERY train VIN ratio used in analyze/full.")
     full_parser.add_argument("--seed", type=int, default=3407, help="Random seed used in analyze/full.")
     full_parser.add_argument("--report-output-dir", default="", help="Optional project report output directory.")
 
@@ -188,11 +181,6 @@ def handle_full(args):
             command.extend(["--nasa_train_batteries", args.nasa_train_batteries])
         if args.nasa_test_batteries.strip():
             command.extend(["--nasa_test_batteries", args.nasa_test_batteries])
-        if args.ch_battery_root.strip():
-            command.extend(["--ch_battery_root", args.ch_battery_root])
-        if args.ch_battery_preprocessed_dir.strip():
-            command.extend(["--ch_battery_preprocessed_dir", args.ch_battery_preprocessed_dir])
-        command.extend(["--ch_battery_train_ratio", str(args.ch_battery_train_ratio)])
         command.extend(["--seed", str(args.seed)])
         stages.append(command)
 

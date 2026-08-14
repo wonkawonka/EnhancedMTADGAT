@@ -18,6 +18,7 @@ def parse_args():
         required=True,
         choices=[
             "MSL",
+            "SMAP",
             "NASA_RANDOM_CHARGE",
             "NASA_RANDOM_DISCHARGE",
             "BMS",

@@ -95,6 +95,7 @@ class Solver(object):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         
         
+    @torch.no_grad()
     def vali(self, vali_loader):
         self.model.eval()
         loss_1 = []

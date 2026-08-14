@@ -2,6 +2,8 @@
 
 import os
 import time
+import zipfile
+import xml.etree.ElementTree as ET
 from ast import literal_eval
 from csv import reader
 from os import listdir, makedirs, path
@@ -392,6 +394,127 @@ def load_and_save(category, filename, dataset, dataset_folder, output_folder, ap
         dump(temp, file)
 
 
+def _save_industrial_control_dataset(dataset):
+    """Prepare official SWaT A1A2 / WADI A2 without inspecting attack labels for feature selection."""
+    output_folder = str(processed_dataset_path(dataset, for_write=True))
+    makedirs(output_folder, exist_ok=True)
+    if dataset == "SWAT":
+        root = resolve_dataset_root("SWAT", "SWaT-A1A2") / "raw" / "Physical"
+        def read_swat(file_path, with_labels):
+            namespace = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+            with zipfile.ZipFile(file_path) as archive:
+                shared = []
+                if "xl/sharedStrings.xml" in archive.namelist():
+                    for _, item in ET.iterparse(archive.open("xl/sharedStrings.xml"), events=("end",)):
+                        if item.tag == namespace + "si":
+                            shared.append("".join(item.itertext()))
+                            item.clear()
+                sheet_path = "xl/worksheets/sheet1.xml"
+                row_count = 0
+                for event, item in ET.iterparse(archive.open(sheet_path), events=("start",)):
+                    if item.tag == namespace + "dimension":
+                        row_count = int(item.attrib["ref"].split(":")[-1][1:])
+                        break
+                values = np.empty((row_count - 2, 51), dtype=np.float32)
+                labels = np.zeros(row_count - 2, dtype=np.int32)
+                names = None
+                for _, row in ET.iterparse(archive.open(sheet_path), events=("end",)):
+                    if row.tag != namespace + "row":
+                        continue
+                    row_id = int(row.attrib["r"])
+                    cells = [None] * 53
+                    for cell in row.findall(namespace + "c"):
+                        ref = cell.attrib["r"]
+                        column = 0
+                        for char in ref.rstrip("0123456789"):
+                            column = column * 26 + ord(char) - 64
+                        value_node = cell.find(namespace + "v")
+                        raw = "" if value_node is None else value_node.text
+                        if cell.attrib.get("t") == "s" and raw:
+                            raw = shared[int(raw)]
+                        cells[column - 1] = raw
+                    if row_id == 2:
+                        names = [str(value).strip() for value in cells[1:52]]
+                    elif row_id >= 3:
+                        index = row_id - 3
+                        try:
+                            values[index] = [float(value) if value not in (None, "") else np.nan for value in cells[1:52]]
+                        except ValueError:
+                            values[index] = [np.nan if value in (None, "") else float(str(value).strip()) for value in cells[1:52]]
+                        if with_labels:
+                            labels[index] = int(str(cells[52]).strip().lower() != "normal")
+                    row.clear()
+            return names, values, labels
+        names, train_array, _ = read_swat(root / "SWaT_Dataset_Normal_v1.xlsx", False)
+        test_names, test_array, labels = read_swat(root / "SWaT_Dataset_Attack_v0.xlsx", True)
+        if names != test_names:
+            raise ValueError("SWaT train/test feature names differ")
+        for values in (train_array, test_array):
+            for column in range(values.shape[1]):
+                invalid = ~np.isfinite(values[:, column])
+                if invalid.any():
+                    replacement = np.nanmedian(values[:, column])
+                    values[invalid, column] = 0.0 if not np.isfinite(replacement) else replacement
+        keep = np.ptp(train_array, axis=0) > 0.0
+        train_array = train_array[:, keep]
+        test_array = test_array[:, keep]
+        kept_names = [name for name, include in zip(names, keep) if include]
+        if train_array.shape[1] != 51:
+            raise ValueError(f"SWAT expected 51 non-constant signals, got {train_array.shape[1]}")
+        for suffix, values in (("train", train_array), ("test", test_array), ("test_label", labels)):
+            with open(path.join(output_folder, f"{dataset}_{suffix}.pkl"), "wb") as handle:
+                dump(values, handle)
+        pd.Series(kept_names).to_csv(path.join(output_folder, f"{dataset}_feature_names.csv"), index=False, header=["feature"])
+        print(f"[SWAT] train={train_array.shape}, test={test_array.shape}, anomaly_rate={labels.mean():.6f}")
+        return
+    else:
+        root = resolve_dataset_root("WADI", "WADI-A2") / "raw" / "WADI.A2_19 Nov 2019"
+        train_path, test_path = root / "WADI_14days_new.csv", root / "WADI_attackdataLABLE.csv"
+        names = [str(value).strip() for value in pd.read_csv(test_path, header=None, nrows=1).iloc[0, 3:-1]]
+        train_rows = sum(1 for _ in open(train_path, encoding="utf-8")) - 1
+        test_rows = sum(1 for _ in open(test_path, encoding="utf-8")) - 1
+        mins, maxs = np.full(127, np.inf), np.full(127, -np.inf)
+        for chunk in pd.read_csv(train_path, usecols=range(3, 130), chunksize=50000, low_memory=False):
+            values = chunk.apply(pd.to_numeric, errors="coerce").to_numpy(dtype=np.float32)
+            mins = np.minimum(mins, np.nanmin(values, axis=0)); maxs = np.maximum(maxs, np.nanmax(values, axis=0))
+        keep = np.isfinite(mins) & np.isfinite(maxs) & (maxs > mins)
+        # WADI A2 releases differ in their all-NaN/constant sensor columns.  The
+        # modelling schema is therefore determined exclusively from normal data,
+        # rather than imposing a literature-dependent fixed feature count.
+        feature_dim = int(keep.sum())
+        if feature_dim == 0:
+            raise ValueError("WADI has no finite non-constant signals in normal training data")
+        train_values = np.lib.format.open_memmap(path.join(output_folder, "WADI_train.npy"), mode="w+", dtype=np.float32, shape=(train_rows, feature_dim))
+        test_values = np.lib.format.open_memmap(path.join(output_folder, "WADI_test.npy"), mode="w+", dtype=np.float32, shape=(test_rows, feature_dim))
+        labels = np.zeros(test_rows, dtype=np.int32)
+        offset = 0
+        for chunk in pd.read_csv(train_path, usecols=range(3, 130), chunksize=50000, low_memory=False):
+            values = chunk.apply(pd.to_numeric, errors="coerce").fillna(0.0).to_numpy(dtype=np.float32)[:, keep]
+            train_values[offset:offset + len(values)] = values; offset += len(values)
+        offset = 0
+        for chunk in pd.read_csv(test_path, header=None, skiprows=1, usecols=range(3, 131), chunksize=50000, low_memory=False):
+            values = chunk.iloc[:, :-1].apply(pd.to_numeric, errors="coerce").fillna(0.0).to_numpy(dtype=np.float32)[:, keep]
+            count = len(values); test_values[offset:offset + count] = values
+            labels[offset:offset + count] = (chunk.iloc[:, -1].astype(str).str.strip() == "-1").to_numpy(dtype=np.int32); offset += count
+        np.save(path.join(output_folder, "WADI_test_label.npy"), labels)
+        pd.Series([name for name, include in zip(names, keep) if include]).to_csv(path.join(output_folder, "WADI_feature_names.csv"), index=False, header=["feature"])
+        print(f"[WADI] train={train_values.shape}, test={test_values.shape}, anomaly_rate={labels.mean():.6f}")
+        return
+    train_values = train_frame.apply(pd.to_numeric, errors="coerce").interpolate(limit_direction="both").ffill().bfill().fillna(0.0)
+    test_values = test_frame.apply(pd.to_numeric, errors="coerce").interpolate(limit_direction="both").ffill().bfill().fillna(0.0)
+    keep = train_values.nunique(dropna=False) > 1
+    train_values = train_values.loc[:, keep].astype(np.float32)
+    test_values = test_values.loc[:, train_values.columns].astype(np.float32)
+    expected_dim = 51 if dataset == "SWAT" else 123
+    if train_values.shape[1] != expected_dim:
+        raise ValueError(f"{dataset} expected {expected_dim} non-constant signals, got {train_values.shape[1]}")
+    for suffix, values in (("train", train_values.to_numpy()), ("test", test_values.to_numpy()), ("test_label", labels)):
+        with open(path.join(output_folder, f"{dataset}_{suffix}.pkl"), "wb") as handle:
+            dump(values, handle)
+    pd.Series(train_values.columns).to_csv(path.join(output_folder, f"{dataset}_feature_names.csv"), index=False, header=["feature"])
+    print(f"[{dataset}] train={train_values.shape}, test={test_values.shape}, anomaly_rate={labels.mean():.6f}")
+
+
 def load_data(dataset, apply_sr_cleaning=False):
     """ 来自 OmniAnomaly 的方法（https://github.com/NetManAIOps/OmniAnomaly）。 """
 
@@ -443,7 +566,7 @@ def load_data(dataset, apply_sr_cleaning=False):
                     False,  # 不对测试数据应用清洗
                 )
 
-    elif dataset == "MSL":
+    elif dataset in {"MSL", "SMAP"}:
         dataset_folder = str(resolve_dataset_root("DATA", "data"))
         output_folder = str(processed_dataset_path("data", for_write=True))
         makedirs(output_folder, exist_ok=True)
@@ -451,7 +574,10 @@ def load_data(dataset, apply_sr_cleaning=False):
             csv_reader = reader(file, delimiter=",")
             res = [row for row in csv_reader][1:]
         res = sorted(res, key=lambda k: k[0])
-        data_info = [row for row in res if row[1] == dataset and row[0] != "P-2"]
+        data_info = [
+            row for row in res
+            if row[1] == dataset and not (dataset == "MSL" and row[0] == "P-2")
+        ]
         labels = []
         for row in data_info:
             anomalies = literal_eval(row[2])
@@ -491,6 +617,9 @@ def load_data(dataset, apply_sr_cleaning=False):
 
         for c in ["train", "test"]:
             concatenate_and_save(c)
+
+    elif dataset in {"SWAT", "WADI"}:
+        _save_industrial_control_dataset(dataset)
 
     elif dataset == "NASA_RANDOM_CHARGE":
         dataset_folder = str(resolve_dataset_root("NASA_RANDOM_CHARGE", "NASA_RANDOM_CHARGE"))

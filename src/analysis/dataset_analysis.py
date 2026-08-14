@@ -1010,7 +1010,7 @@ def load_dataset_bundle(dataset: str, **kwargs) -> DatasetBundle:
     dataset_notes = []
 
 
-    if dataset in {"MSL", "CALCE", "CALCE2"}:
+    if dataset in {"MSL", "SMAP", "CALCE", "CALCE2"}:
 
         (train_array, _), (test_array, point_labels) = get_data(dataset, normalize=False)
 

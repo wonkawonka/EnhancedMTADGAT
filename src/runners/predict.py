@@ -86,7 +86,7 @@ if __name__ == "__main__":
 
     if dataset == "SMD":
         model_path = os.path.join(resolve_manual_model_root(dataset, group=args.group), model_id)
-    elif dataset in ['MSL', 'BMS', CH_BATTERY_DATASET_NAME, TSINGHUA_EV_DATASET_NAME, 'NASA_RANDOM_CHARGE', 'NASA_RANDOM_DISCHARGE']:
+    elif dataset in ['MSL', 'SMAP', 'BMS', 'SWAT', 'WADI', CH_BATTERY_DATASET_NAME, TSINGHUA_EV_DATASET_NAME, 'NASA_RANDOM_CHARGE', 'NASA_RANDOM_DISCHARGE']:
         model_path = os.path.join(resolve_manual_model_root(dataset), model_id)
     elif dataset in ['CALCE', 'CALCE2']:
         model_path = os.path.join(resolve_manual_model_root(dataset, universal_model=True), model_id)
@@ -135,8 +135,9 @@ if __name__ == "__main__":
 
     if dataset == "SMD":
         (x_train, _), (x_test, y_test) = get_data(f"machine-{group_index}-{index}", normalize=normalize)
-    elif dataset == "MSL":
-        x_train, explicit_validation_data, x_test, y_test = get_msl_sequence_data(
+    elif dataset in {"MSL", "SMAP"}:
+        x_train, explicit_validation_data, x_test, y_test = get_nasa_telemetry_sequence_data(
+            dataset,
             val_ratio=val_split,
             normalize=normalize,
         )
@@ -150,6 +151,8 @@ if __name__ == "__main__":
         )
     elif dataset == "BMS":
         (x_train, _), (x_test, y_test) = get_bms_cluster_data(normalize=normalize)
+    elif dataset in {"SWAT", "WADI"}:
+        (x_train, _), (x_test, y_test) = get_data(dataset, normalize=normalize)
     elif dataset == CH_BATTERY_DATASET_NAME:
         (x_train, _), (x_test, _), ch_battery_split_meta = get_ch_battery_lfp_discharge_data(
             root=getattr(model_args, "ch_battery_root", args.ch_battery_root),
@@ -286,6 +289,7 @@ if __name__ == "__main__":
     # POT 参数建议
     level_q_dict = {
         "MSL": (0.90, 0.001),
+        "SMAP": (0.90, 0.001),
         "SMD-1": (0.9950, 0.001),
         "SMD-2": (0.9925, 0.001),
         "SMD-3": (0.9999, 0.001),
@@ -294,6 +298,8 @@ if __name__ == "__main__":
         "CALCE": (0.99, 0.001),
         "CALCE2": (0.99, 0.001),
         "BMS": (0.99, 0.001),
+        "SWAT": (0.99, 0.001),
+        "WADI": (0.99, 0.001),
         CH_BATTERY_DATASET_NAME: (0.99, 0.001),
         TSINGHUA_EV_DATASET_NAME: (0.99, 0.001),
     }
@@ -305,7 +311,7 @@ if __name__ == "__main__":
         q = args.q
 
     # Epsilon 参数建议
-    reg_level_dict = {"MSL": 0, "SMD-1": 1, "SMD-2": 1, "SMD-3": 1, "NASA_RANDOM_CHARGE": 0, "NASA_RANDOM_DISCHARGE": 0, "CALCE": 0, "CALCE2": 0, "BMS": 0, CH_BATTERY_DATASET_NAME: 0, TSINGHUA_EV_DATASET_NAME: 0}
+    reg_level_dict = {"MSL": 0, "SMAP": 0, "SMD-1": 1, "SMD-2": 1, "SMD-3": 1, "NASA_RANDOM_CHARGE": 0, "NASA_RANDOM_DISCHARGE": 0, "CALCE": 0, "CALCE2": 0, "BMS": 0, "SWAT": 0, "WADI": 0, CH_BATTERY_DATASET_NAME: 0, TSINGHUA_EV_DATASET_NAME: 0}
     key = "SMD-" + args.group[0] if dataset == "SMD" else dataset
     reg_level = reg_level_dict[key]
 
@@ -333,6 +339,10 @@ if __name__ == "__main__":
         "use_physical_response_score": getattr(args, "use_physical_response_score", False),
         "physical_response_config": resolve_physical_state_config(args),
         "physical_response_max_weight": getattr(args, "physical_response_max_weight", 0.35),
+        "use_relation_change_score": getattr(args, "use_relation_change_score", False),
+        "relation_change_weight": getattr(args, "relation_change_weight", 0.2),
+        "relation_change_fusion_mode": getattr(args, "relation_change_fusion_mode", "linear_legacy"),
+        "relation_change_mode": getattr(args, "relation_change_mode", "consecutive_js"),
         "predict_batch_size": getattr(args, "predict_batch_size", 128),
         "predict_num_workers": getattr(args, "predict_num_workers", 2),
         "predict_pin_memory": getattr(args, "predict_pin_memory", True),
@@ -465,23 +475,46 @@ if __name__ == "__main__":
         )
 
         predictor = Predictor(model, window_size, n_features, dict(prediction_args, save_path=save_path))
-        validation_window_scores = predictor.get_sample_map_scores(tsinghua_validation_tensors)
+        validation_window_scores = predictor.get_sample_map_scores(
+            tsinghua_validation_tensors,
+            calibrate_relation=bool(getattr(model_args, "use_relation_change_score", False)),
+        )
+        validation_value_only_window_scores = dict(predictor.last_sample_value_only_scores)
         calibration_scores, _, _ = aggregate_sample_scores(
             validation_window_scores,
             tsinghua_split_meta["validation_metadata"],
             top_ratio=getattr(model_args, "sample_score_top_ratio", args.sample_score_top_ratio),
         )
+        calibration_value_only_scores, _, _ = aggregate_sample_scores(
+            validation_value_only_window_scores,
+            tsinghua_split_meta["validation_metadata"],
+            top_ratio=getattr(model_args, "sample_score_top_ratio", args.sample_score_top_ratio),
+        )
         test_window_scores = predictor.get_sample_map_scores(tsinghua_test_tensors)
+        test_value_only_window_scores = dict(predictor.last_sample_value_only_scores)
         sample_scores, sample_labels, sample_ids = aggregate_sample_scores(
             test_window_scores,
             y_test,
             top_ratio=getattr(model_args, "sample_score_top_ratio", args.sample_score_top_ratio),
         )
-        threshold = float(np.quantile(calibration_scores, 0.95))
+        value_only_sample_scores, value_only_labels, value_only_ids = aggregate_sample_scores(
+            test_value_only_window_scores,
+            y_test,
+            top_ratio=getattr(model_args, "sample_score_top_ratio", args.sample_score_top_ratio),
+        )
+        if not np.array_equal(sample_labels, value_only_labels) or sample_ids != value_only_ids:
+            raise RuntimeError("Paired Tsinghua value-only scores are not sample-aligned")
+        threshold = float(np.quantile(calibration_scores, 0.99))
+        value_only_threshold = float(np.quantile(calibration_value_only_scores, 0.99))
         sample_predictions = (sample_scores >= threshold).astype(np.int64)
+        value_only_predictions = (value_only_sample_scores >= value_only_threshold).astype(np.int64)
         from sklearn.metrics import auc, precision_recall_curve
 
         average_precision = float(average_precision_score(sample_labels, sample_scores))
+        value_only_average_precision = float(
+            average_precision_score(sample_labels, value_only_sample_scores)
+        )
+        value_only_auroc = float(roc_auc_score(sample_labels, value_only_sample_scores))
         precision_curve, recall_curve, _ = precision_recall_curve(sample_labels, sample_scores)
         trapezoidal_pr_auc = float(auc(recall_curve, precision_curve))
         report = {
@@ -492,29 +525,52 @@ if __name__ == "__main__":
             "pr_auc_trapezoid": trapezoidal_pr_auc,
             "average_precision": average_precision,
             "auprc": average_precision,
-            "f1_at_calibration_normal_p95": float(f1_score(sample_labels, sample_predictions)),
-            "precision_at_calibration_normal_p95": float(
+            "f1_at_calibration_normal_p99": float(f1_score(sample_labels, sample_predictions)),
+            "precision_at_calibration_normal_p99": float(
                 precision_score(sample_labels, sample_predictions, zero_division=0)
             ),
-            "recall_at_calibration_normal_p95": float(recall_score(sample_labels, sample_predictions)),
-            "false_positive_rate_at_calibration_normal_p95": float(np.mean(sample_predictions[sample_labels == 0])),
-            "specificity_at_calibration_normal_p95": float(
+            "recall_at_calibration_normal_p99": float(recall_score(sample_labels, sample_predictions)),
+            "false_positive_rate_at_calibration_normal_p99": float(np.mean(sample_predictions[sample_labels == 0])),
+            "specificity_at_calibration_normal_p99": float(
                 1.0 - np.mean(sample_predictions[sample_labels == 0])
             ),
-            "balanced_accuracy_at_calibration_normal_p95": float(
+            "balanced_accuracy_at_calibration_normal_p99": float(
                 balanced_accuracy_score(sample_labels, sample_predictions)
             ),
-            "threshold_validation_normal_p95": threshold,
+            "threshold_validation_normal_p99": threshold,
             "model_parameters": int(sum(parameter.numel() for parameter in model.parameters())),
             "inference_efficiency": dict(predictor.last_scoring_stats),
             "physical_response_mae_by_term": dict(predictor.last_physical_response_term_summary),
             "score_calibration": predictor.get_calibration_summary(),
         }
+        if getattr(model_args, "use_relation_change_score", False):
+            report.update({
+                "value_only_average_precision": value_only_average_precision,
+                "average_precision_delta_vs_value_only": average_precision - value_only_average_precision,
+                "value_only_auroc": value_only_auroc,
+                "auroc_delta_vs_value_only": report["auroc"] - value_only_auroc,
+                "value_only_f1_at_calibration_normal_p99": float(
+                    f1_score(sample_labels, value_only_predictions)
+                ),
+                "value_only_recall_at_calibration_normal_p99": float(
+                    recall_score(sample_labels, value_only_predictions)
+                ),
+                "value_only_false_positive_rate_at_calibration_normal_p99": float(
+                    np.mean(value_only_predictions[sample_labels == 0])
+                ),
+                "false_positive_rate_delta_vs_value_only": (
+                    report["false_positive_rate_at_calibration_normal_p99"]
+                    - float(np.mean(value_only_predictions[sample_labels == 0]))
+                ),
+                "value_only_threshold_validation_normal_p99": value_only_threshold,
+            })
         pd.DataFrame({
             "sample_id": sample_ids,
             "label": sample_labels,
             "score": sample_scores,
+            "value_only_score": value_only_sample_scores,
             "prediction": sample_predictions,
+            "value_only_prediction": value_only_predictions,
         }).to_csv(os.path.join(save_path, "sample_scores.csv"), index=False)
         with open(os.path.join(save_path, "sample_metrics.json"), "w") as handle:
             json.dump(report, handle, indent=2)

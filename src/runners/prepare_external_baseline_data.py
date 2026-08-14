@@ -23,6 +23,7 @@ from src.project_paths import processed_dataset_path
 DATASET_ROOTS = {
 
     "MSL": processed_dataset_path("data"),
+    "SMAP": processed_dataset_path("data"),
 
     "SMD": processed_dataset_path("ServerMachineDataset"),
 
@@ -42,6 +43,7 @@ DATASET_ROOTS = {
 DEFAULT_SERIES = {
 
     "MSL": "MSL",
+    "SMAP": "SMAP",
 
 }
 
@@ -49,6 +51,7 @@ DEFAULT_SERIES = {
 DEFAULT_TRANAD_PREFIX = {
 
     "MSL": "C-1",
+    "SMAP": "A-1",
 
     "SMD": "machine-1-1",
 
@@ -452,4 +455,3 @@ def main():
 if __name__ == "__main__":
 
     main()
-

@@ -1,6 +1,6 @@
 ﻿﻿## 项目说明
 
-这是一个面向复杂运行状态下电池异常检测的 `MTAD-GAT` 扩展项目。第三章实现连续动态状态条件化模型，第四章在其上增加电-热响应一致性约束。
+这是一个面向多变量时序与电池异常检测的 `MTAD-GAT` 扩展项目。第三章按Recall非劣约束完成了FiLM/关系类误报抑制筛选，但计划64–66均未通过跨折门槛，暂未冻结C3；第四章研究与主干解耦的电-热响应一致性分支。
 
 - 主仓实现集中在 `src/`
 - 内部实验计划放在 `configs/internal/`
@@ -83,7 +83,7 @@ Windows 下将解释器替换为 .venv\Scripts\python.exe。
 .venv/bin/python run.py preflight --tsinghua-ev-root datasets/TSINGHUA_EV
 .venv/bin/python -m src.runners.compare_experiments --plan configs/internal/00_kaggle_smoke.json
 .venv/bin/python -m src.runners.compare_experiments --plan configs/internal/01_ch3_main.json --skip-existing
-.venv/bin/python -m src.runners.compare_experiments --plan configs/internal/06_kaggle_formal.json --resume --skip-existing
+.venv/bin/python -m src.runners.compare_experiments --plan configs/internal/40_final_c3_c4_clean_fivefold.json --resume --skip-existing
 ```
 
 ### 批量运行外部基线
@@ -106,7 +106,7 @@ Windows 下将解释器替换为 .venv\Scripts\python.exe。
 ### 统一入口
 
 ```powershell
-.venv/bin/python run.py internal --plan configs/internal/06_kaggle_formal.json --resume --skip-existing
+.venv/bin/python run.py internal --plan configs/internal/40_final_c3_c4_clean_fivefold.json --resume --skip-existing
 .venv/bin/python run.py analyze --dataset NASA_RANDOM_DISCHARGE --nasa-train-batteries RW1,RW2,RW7 --nasa-test-batteries RW8
 ```
 

@@ -67,6 +67,8 @@ NASA_RANDOM_DATASET_PREFIX = {
 }
 
 NASA_RANDOM_DATASETS = {"NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"}
+NASA_TELEMETRY_DATASETS = {"MSL", "SMAP"}
+INDUSTRIAL_CONTROL_DATASETS = {"SWAT", "WADI"}
 
 
 def normalize_data(data, scaler=None):
@@ -135,6 +137,17 @@ def get_data_dim(dataset):
     """
     if dataset == "MSL":
         return 55
+    elif dataset == "SMAP":
+        return 25
+    elif dataset == "SWAT":
+        return 51
+    elif dataset == "WADI":
+        # The official A2 files contain release-specific constant/all-NaN signals;
+        # preprocessing records the normal-data-derived schema in this .npy file.
+        feature_path = processed_dataset_path("WADI") / "WADI_train.npy"
+        if feature_path.exists():
+            return int(np.load(feature_path, mmap_mode="r").shape[1])
+        return 93
     elif str(dataset).startswith("machine"):
         return 38
     elif dataset in ["NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"]:
@@ -161,8 +174,10 @@ def get_target_dims(dataset):
     :return: index of data dimension that should be modeled (forecasted and reconstructed),
                      returns None if all input dimensions should be modeled
     """
-    if dataset == "MSL":
+    if dataset in NASA_TELEMETRY_DATASETS:
         return [0]
+    elif dataset in INDUSTRIAL_CONTROL_DATASETS:
+        return None
     elif dataset == "SMD":
         return None
     elif dataset in ["NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"]:
@@ -193,7 +208,7 @@ def get_score_dims(dataset, target_dims=None):
     """
     dataset = str(dataset).upper()
 
-    if dataset == "MSL":
+    if dataset in NASA_TELEMETRY_DATASETS:
         response_dims = [0]
     elif dataset in NASA_RANDOM_DATASETS:
         # Current describes the imposed experiment; voltage/temperature respond.
@@ -321,11 +336,13 @@ def _split_array_by_lengths(values, lengths):
     return sequences
 
 
-def get_msl_sequence_data(val_ratio=0.1, normalize=True):
-    """Load MSL without creating windows across entity boundaries."""
+def get_nasa_telemetry_sequence_data(dataset, val_ratio=0.1, normalize=True):
+    """Load MSL/SMAP without creating windows across entity boundaries."""
     if not 0.0 <= float(val_ratio) < 1.0:
         raise ValueError(f"val_ratio must be in [0, 1), got {val_ratio}")
-    dataset = "MSL"
+    dataset = str(dataset).upper()
+    if dataset not in NASA_TELEMETRY_DATASETS:
+        raise ValueError(f"Unsupported NASA telemetry dataset: {dataset}")
     prefix = str(processed_dataset_path("data"))
     paths = {
         "train": os.path.join(prefix, f"{dataset}_train.pkl"),
@@ -374,6 +391,11 @@ def get_msl_sequence_data(val_ratio=0.1, normalize=True):
     # the runner try to construct an empty validation window dataset.
     validation_data = validation_sequences if validation_sequences else None
     return train_sequences, validation_data, test_sequences, test_label_sequences
+
+
+def get_msl_sequence_data(val_ratio=0.1, normalize=True):
+    """Backward-compatible MSL loader using the shared telemetry protocol."""
+    return get_nasa_telemetry_sequence_data("MSL", val_ratio=val_ratio, normalize=normalize)
 
 
 def flatten_label_container(label_data):
@@ -656,7 +678,7 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
     """
     if str(dataset).startswith("machine"):
         prefix = str(processed_dataset_path("ServerMachineDataset"))
-    elif dataset == "MSL":
+    elif dataset in NASA_TELEMETRY_DATASETS:
         prefix = str(processed_dataset_path("data"))
     elif dataset == "NASA_RANDOM_CHARGE":
         prefix = str(processed_dataset_path("NASA_RANDOM_CHARGE"))
@@ -803,6 +825,13 @@ def get_data(dataset, max_train_size=None, max_test_size=None,
                 test_label = np.concatenate(aligned_labels, axis=0)
             else:
                 test_label = None
+    elif dataset == "WADI":
+        train_data = np.load(os.path.join(prefix, "WADI_train.npy"), mmap_mode="r")[train_start:train_end, :]
+        try:
+            test_data = np.load(os.path.join(prefix, "WADI_test.npy"), mmap_mode="r")[test_start:test_end, :]
+            test_label = np.load(os.path.join(prefix, "WADI_test_label.npy"), mmap_mode="r")[test_start:test_end]
+        except FileNotFoundError:
+            test_data, test_label = None, None
     else:
         f = open(os.path.join(prefix, dataset + "_train.pkl"), "rb")
         train_data = pickle.load(f).reshape((-1, x_dim))[train_start:train_end, :]

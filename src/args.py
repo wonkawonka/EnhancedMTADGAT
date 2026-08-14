@@ -35,15 +35,40 @@ def get_parser():
     parser.add_argument("--use_transformer", type=str2bool, default=False,help="Add transformer encoder before GRU")
     parser.add_argument("--attention_sparse", type=str2bool, default=False,help="Whether to use sparse attention matrix")
     parser.add_argument('--attention_top_k', type=int, default=10, help='Top-k connections for feature attention')
+    parser.add_argument(
+        "--gat_output_activation",
+        type=str,
+        default="sigmoid",
+        choices=["sigmoid", "elu", "tanh", "identity"],
+        help="图注意力聚合后的输出激活；sigmoid 保持原始实现，其余选项仅用于结构诊断",
+    )
+    parser.add_argument(
+        "--fusion_projection_dim",
+        type=int,
+        default=0,
+        help="将卷积、特征GAT和时间GAT的3K维拼接线性压缩到指定维度；0表示不压缩",
+    )
     # 简化模型选项：仅使用特征注意力和 Transformer
     parser.add_argument("--feature_att_trans", type=str2bool, default=False,
                         help="仅使用特征注意力和Transformer，跳过时间注意力和GRU")
     # 多尺度卷积选项
     parser.add_argument("--multi_scale_mode", type=str, default="none",
-                        choices=["none", "basic", "progressive"],
-                        help="Multi-scale convolution mode: none=single scale, basic=parallel concat, progressive=progressive fusion")
+                        choices=["none", "basic", "progressive", "residual"],
+                        help="Multi-scale convolution mode: residual keeps the original Conv7 path and adds a zero-gated causal branch")
     parser.add_argument("--multi_scale_dilations", type=str, default="1,2,4",
                         help="List of dilation rates for causal dilated convolution, comma separated, e.g. '1,2,4' (kernel_size fixed to 3)")
+    parser.add_argument(
+        "--use_learnable_sparse_graph",
+        type=str2bool,
+        default=False,
+        help="Regularize the global Feature-GAT edge logits into a learned soft sparse structure",
+    )
+    parser.add_argument(
+        "--sparse_graph_lambda",
+        type=float,
+        default=0.0,
+        help="Weight of the off-diagonal learned-edge density penalty; 0 disables sparse graph learning",
+    )
     # 谱残差清洗选项
     parser.add_argument("--apply_sr_cleaning", type=str2bool, default=False,help="Whether to apply spectral residual anomaly detection and cleaning in preprocessing (fixed for CALCE)")
     # Transformer 层
@@ -79,7 +104,7 @@ def get_parser():
         type=str,
         default="direct",
         choices=["direct", "direct_preserve_rng", "gated_residual"],
-        help="How the projected physical state enters the Transformer input: direct addition, direct addition with matched shared initialization, or a zero-initialized learnable residual gate",
+        help="Legacy ablation only: how physical state enters the shared backbone; not part of formal C4",
     )
     parser.add_argument(
         "--physical_state_feature_mode",
@@ -92,7 +117,7 @@ def get_parser():
         "--use_physical_response_features",
         type=str2bool,
         default=False,
-        help="Fuse derived electrical/thermal response features into the existing C3 backbone",
+        help="Legacy ablation only: fuse derived response features into the shared backbone",
     )
     parser.add_argument(
         "--physical_feature_fusion_mode",
@@ -111,7 +136,7 @@ def get_parser():
         "--use_control_response_decoder",
         type=str2bool,
         default=False,
-        help="Condition response forecast/reconstruction heads on current/SOC histories only",
+        help="Legacy ablation only: condition shared heads on current/SOC histories",
     )
     parser.add_argument(
         "--control_response_hidden_dim",
@@ -129,7 +154,7 @@ def get_parser():
         "--use_condition_residual_calibration",
         type=str2bool,
         default=False,
-        help="C3: standardize MTAD-GAT residuals by normal current/SOC operating regimes",
+        help="C3: calibrate frozen-backbone residuals by normal current/SOC conditions",
     )
     parser.add_argument(
         "--condition_calibration_clusters",
@@ -140,9 +165,9 @@ def get_parser():
     parser.add_argument(
         "--condition_calibration_method",
         type=str,
-        default="hard_kmeans",
+        default="neural_heteroscedastic",
         choices=("hard_kmeans", "soft_expert", "neural_heteroscedastic"),
-        help="C3 residual model: discrete prototypes, soft experts, or a continuous heteroscedastic normal-residual model",
+        help="C3 residual model: continuous heteroscedastic calibration (formal), or legacy prototype ablations",
     )
     parser.add_argument(
         "--condition_calibration_temperature",
@@ -164,6 +189,28 @@ def get_parser():
     )
     parser.add_argument("--condition_graph_emb_dim", type=int, default=32)
     parser.add_argument("--condition_graph_experts", type=int, default=3)
+    parser.add_argument(
+        "--condition_graph_router_mode",
+        type=str,
+        default="learned",
+        choices=["learned", "control_quadrant"],
+        help="Learn a free condition router or use a fixed soft current/SOC quadrant router",
+    )
+    parser.add_argument(
+        "--condition_graph_router_temperature",
+        type=float,
+        default=1.0,
+        help="Soft-quadrant temperature for the fixed current/SOC condition router",
+    )
+    parser.add_argument(
+        "--use_condition_routed_adapter",
+        type=str2bool,
+        default=False,
+        help="C3: route low-rank hidden-state adapters using current/SOC conditions",
+    )
+    parser.add_argument("--condition_adapter_rank", type=int, default=16)
+    parser.add_argument("--condition_adapter_experts", type=int, default=4)
+    parser.add_argument("--condition_adapter_temperature", type=float, default=1.0)
     parser.add_argument(
         "--use_variational_reconstruction",
         type=str2bool,
@@ -227,6 +274,50 @@ def get_parser():
     parser.add_argument("--use_physical_response_score", type=str2bool, default=False, help="Fuse electrical/thermal response residuals into anomaly score")
     parser.add_argument("--physical_response_max_weight", type=float, default=0.35, help="Maximum adaptive physical-response score weight")
     parser.add_argument(
+        "--use_relation_change_score",
+        type=str2bool,
+        default=False,
+        help="Fuse label-free Feature-GAT relation-change evidence into the anomaly score",
+    )
+    parser.add_argument(
+        "--relation_change_weight",
+        type=float,
+        default=0.2,
+        help="Fixed bounded weight for the normal-calibrated relation-change score",
+    )
+    parser.add_argument(
+        "--relation_change_fusion_mode",
+        type=str,
+        default="linear_legacy",
+        choices=["linear_legacy", "residual_gated"],
+        help="Fusion rule; residual_gated requires both elevated value residual and bounded relation change",
+    )
+    parser.add_argument(
+        "--relation_change_mode",
+        type=str,
+        default="consecutive_js",
+        choices=["consecutive_js", "normal_transition_residual"],
+        help="Relation evidence: consecutive JS change, or a normal-fitted first-order attention transition residual",
+    )
+    parser.add_argument(
+        "--use_relation_prototype_suppression",
+        type=str2bool,
+        default=False,
+        help="Suppress high value residuals only when the Feature-GAT relation transition matches a normal-validation prototype",
+    )
+    parser.add_argument(
+        "--relation_prototype_clusters",
+        type=int,
+        default=4,
+        help="Number of normal relation-transition prototypes fitted without fault labels",
+    )
+    parser.add_argument(
+        "--relation_prototype_max_suppression",
+        type=float,
+        default=0.15,
+        help="Maximum multiplicative score suppression for a close normal relation prototype",
+    )
+    parser.add_argument(
         "--physical_response_terms",
         type=str,
         default="voltage_rate,temperature_rate,charge_flow,voltage_spread,temperature_spread,soc_current_coupling",
@@ -236,8 +327,29 @@ def get_parser():
         "--regime_condition_mode",
         type=str,
         default="fusion",
-        choices=["transformer_residual", "feature_gat", "temporal_gat", "fusion"],
-        help="动态状态条件化位置：fusion为关系融合表示上的FiLM条件化，其他选项用于消融/兼容",
+        choices=[
+            "none", "transformer_residual", "feature_gat", "feature_gat_response",
+            "temporal_gat", "fusion", "head",
+        ],
+        help="动态状态条件化位置；feature_gat_response仅调制响应节点，head在GRU隐状态调制",
+    )
+    parser.add_argument(
+        "--regime_film_scale",
+        type=float,
+        default=0.1,
+        help="FiLM最大相对调制幅度；正式候选使用不大于0.1的有界残差调制",
+    )
+    parser.add_argument(
+        "--normal_tail_lambda",
+        type=float,
+        default=0.0,
+        help="Weight of normal-window CVaR excess used to directly reduce the high residual tail",
+    )
+    parser.add_argument(
+        "--normal_tail_fraction",
+        type=float,
+        default=0.1,
+        help="Highest-loss fraction of each normal training batch used by the CVaR excess",
     )
     parser.add_argument(
         "--regime_stat_features",
@@ -253,6 +365,9 @@ def get_parser():
         choices=[
             'SMD',
             'MSL',
+            'SMAP',
+            'SWAT',
+            'WADI',
             'NASA_RANDOM_CHARGE',
             'NASA_RANDOM_DISCHARGE',
             'CALCE',
@@ -305,6 +420,19 @@ def get_parser():
         help="Vehicle-fold seed; -1 reuses --seed. Zhang et al.'s released split notebook uses 0.",
     )
     parser.add_argument("--battery_vehicle_top_ratio", type=float, default=0.05, help="Top charging-snippet fraction averaged into each vehicle anomaly score")
+    parser.add_argument(
+        "--battery_evaluation_checkpoint",
+        type=str,
+        default="",
+        help="Optional frozen model.pt used to evaluate a new scoring rule without retraining",
+    )
+    parser.add_argument(
+        "--battery_vehicle_top_ratio_mode",
+        type=str,
+        default="fixed",
+        choices=["fixed", "labelled_calibration"],
+        help="Use the configured fixed vehicle Top-p ratio for formal results; labelled calibration is retained only for historical sensitivity analysis",
+    )
     parser.add_argument("--battery_score_channels", type=str, default="response", choices=["all", "response"], help="Faithful MTAD-GAT all-channel score or battery response-only score")
     parser.add_argument(
         "--battery_response_only_training",
@@ -312,8 +440,44 @@ def get_parser():
         default=False,
         help="Use current/SOC as conditions and optimize only voltage/temperature response outputs",
     )
+    parser.add_argument(
+        "--backbone_feature_indices",
+        type=str,
+        default="",
+        help="Optional comma-separated raw input indices retained by the MTAD-GAT backbone; excluded channels remain available only to condition branches.",
+    )
+    parser.add_argument(
+        "--regime_condition_indices",
+        type=str,
+        default="",
+        help="Optional comma-separated raw input indices read by the FiLM condition encoder; empty uses dataset-specific control channels.",
+    )
+    parser.add_argument(
+        "--regime_condition_shuffle",
+        type=str2bool,
+        default=False,
+        help="Development-only negative control: cyclically mismatch selected FiLM condition channels across samples in each batch while preserving their marginal distribution.",
+    )
+    parser.add_argument(
+        "--regime_group_dro_lambda",
+        type=float,
+        default=0.0,
+        help="Weight of worst-regime excess-risk training; 0 disables the C3 condition-robust objective",
+    )
+    parser.add_argument(
+        "--regime_group_dro_temperature",
+        type=float,
+        default=0.05,
+        help="Smooth-maximum temperature for C3 worst-regime risk",
+    )
     parser.add_argument("--battery_max_index_snippets", type=int, default=0, help="Temporary in-memory index cap for smoke tests; 0 builds/uses the complete brand index")
     parser.add_argument("--battery_max_snippets_per_vehicle", type=int, default=0, help="Per-vehicle cap for smoke tests only; 0 uses every charging snippet")
+    parser.add_argument(
+        "--deterministic",
+        type=str2bool,
+        default=True,
+        help="Enable deterministic CUDA algorithms and seeded DataLoader generators for reproducible formal experiments",
+    )
     parser.add_argument(
         "--ch_battery_preprocessed_dir",
         type=str,
@@ -347,7 +511,7 @@ def get_parser():
         "--model_name",
         type=str,
         default="mtad_gat",
-        help="Model name: mtad_gat baseline, mtad_gat_c3_regime chapter 3, mtad_gat_c4_physics chapter 4.",
+        help="Model name: mtad_gat baseline; mtad_gat_c3 = response-target decoupling plus control-response adapter; mtad_gat_c3_regime = legacy FiLM ablation; mtad_gat_c4_physics = independent physics branch.",
     )
     # 卷积参数
     parser.add_argument("--kernel_size", type=int, default=7)

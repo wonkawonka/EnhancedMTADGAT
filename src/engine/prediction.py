@@ -92,6 +92,38 @@ class Predictor:
 
         self.physical_response_max_weight = float(pred_args.get("physical_response_max_weight", 0.35))
 
+        self.use_relation_change_score = bool(pred_args.get("use_relation_change_score", False))
+
+        self.relation_change_weight = float(np.clip(
+            pred_args.get("relation_change_weight", 0.2), 0.0, 0.5
+        ))
+
+        self.relation_change_fusion_mode = str(
+            pred_args.get("relation_change_fusion_mode", "linear_legacy")
+        )
+
+        self.relation_change_mode = str(
+            pred_args.get("relation_change_mode", "consecutive_js")
+        )
+
+        if self.relation_change_fusion_mode not in {"linear_legacy", "residual_gated"}:
+
+            raise ValueError(f"Unsupported relation-change fusion mode: {self.relation_change_fusion_mode}")
+
+        if self.relation_change_mode not in {"consecutive_js", "normal_transition_residual"}:
+
+            raise ValueError(f"Unsupported relation-change mode: {self.relation_change_mode}")
+
+        self._relation_change_calibration = None
+
+        self._relation_transition_params = None
+
+        self._last_relation_attention_segments = None
+
+        self.last_sample_value_only_scores = {}
+
+        self.last_sample_relation_raw = {}
+
         self._physical_fusion_calibration = None
 
         self.last_physical_response_term_summary = {}
@@ -364,7 +396,242 @@ class Predictor:
 
             summary["calibration_source"] = "normal_validation_or_training_reference"
 
+        if self._relation_change_calibration is not None:
+
+            summary["relation_change"] = {
+
+                **{key: float(value) for key, value in self._relation_change_calibration.items()},
+
+                "weight": float(self.relation_change_weight),
+
+                "distance": self.relation_change_mode,
+
+                "fusion_mode": self.relation_change_fusion_mode,
+
+                "calibration_source": "normal_calibration_reference",
+
+            }
+
         return summary
+
+
+    @staticmethod
+
+    def _relation_change_from_attention(attention, previous_attention=None):
+
+        """Return per-window JS change of row-normalized Feature-GAT relations."""
+
+        eps = 1e-7
+
+        attention = attention.float().clamp_min(eps)
+
+        if previous_attention is None:
+
+            first = attention[:1]
+
+        else:
+
+            first = previous_attention.unsqueeze(0).float().clamp_min(eps)
+
+        prior = torch.cat((first, attention[:-1]), dim=0)
+
+        mixture = 0.5 * (attention + prior)
+
+        divergence = 0.5 * (
+
+            attention * (attention.log() - mixture.log())
+
+            + prior * (prior.log() - mixture.log())
+
+        )
+
+        return divergence.mean(dim=(1, 2)), attention[-1].detach()
+
+
+    def _fit_relation_transition_model(self):
+
+        """Fit A[t+1] = mean + alpha * (A[t] - mean) on normal attention windows."""
+
+        segments = self._last_relation_attention_segments
+
+        if not segments:
+
+            raise RuntimeError("Normal attention windows are required before fitting relation transitions")
+
+        usable = [segment.float() for segment in segments if len(segment) >= 2]
+
+        if not usable:
+
+            raise RuntimeError("At least two normal attention windows are required per relation segment")
+
+        all_attention = torch.cat(usable, dim=0)
+
+        mean_attention = all_attention.mean(dim=0)
+
+        numerator = all_attention.new_tensor(0.0)
+
+        denominator = all_attention.new_tensor(0.0)
+
+        for segment in usable:
+
+            previous = segment[:-1] - mean_attention
+
+            current = segment[1:] - mean_attention
+
+            numerator += (previous * current).sum()
+
+            denominator += previous.square().sum()
+
+        alpha = (numerator / denominator.clamp_min(1e-12)).clamp(0.0, 1.0)
+
+        self._relation_transition_params = {
+
+            "mean_attention": mean_attention.detach().cpu(),
+
+            "alpha": float(alpha.detach().cpu()),
+
+        }
+
+
+    def _relation_transition_residual_from_attention(self, attention):
+
+        """Per-window residual under a normal-fitted first-order attention transition."""
+
+        if self._relation_transition_params is None:
+
+            # Only used provisionally while extracting the normal fitting sequence.
+            mean_attention = attention.mean(dim=0)
+
+            alpha = 1.0
+
+        else:
+
+            mean_attention = self._relation_transition_params["mean_attention"].to(attention.device)
+
+            alpha = self._relation_transition_params["alpha"]
+
+        previous = torch.cat((attention[:1], attention[:-1]), dim=0)
+
+        predicted = mean_attention.unsqueeze(0) + alpha * (previous - mean_attention.unsqueeze(0))
+
+        residual = (attention - predicted).square().mean(dim=(1, 2))
+
+        if len(residual) > 1:
+
+            residual[0] = residual[1]
+
+        return residual
+
+
+    def _relation_raw_from_segments(self, segments):
+
+        raw_parts = []
+
+        for segment in segments:
+
+            if self.relation_change_mode == "normal_transition_residual":
+
+                raw = self._relation_transition_residual_from_attention(segment)
+
+            else:
+
+                raw, _ = self._relation_change_from_attention(segment)
+
+            raw = raw.numpy().astype(np.float32)
+
+            if len(raw) > 1 and raw[0] == 0.0:
+
+                raw[0] = raw[1]
+
+            raw_parts.append(raw)
+
+        return np.concatenate(raw_parts)
+
+
+    def _fit_relation_change_calibration(self, train_df):
+
+        values = train_df["Relation_Change_Raw"].to_numpy(dtype=np.float32)
+
+        center = float(np.median(values))
+
+        mad = float(np.median(np.abs(values - center)))
+
+        model_values = train_df["A_Score_Global"].to_numpy(dtype=np.float32)
+
+        model_center = float(np.median(model_values))
+
+        model_mad = float(np.median(np.abs(model_values - model_center)))
+
+        self._relation_change_calibration = {
+
+            "center": center,
+
+            "scale": max(1.4826 * mad, 1e-7),
+
+            "model_center": model_center,
+
+            "model_scale": max(1.4826 * model_mad, 1e-7),
+
+            "model_p95": float(np.percentile(model_values, 95)),
+
+        }
+
+
+    def _apply_relation_change_fusion(self, score_df):
+
+        calibration = self._relation_change_calibration
+
+        if calibration is None:
+
+            raise RuntimeError("Relation-change calibration must be fitted on normal training data")
+
+        raw = score_df["Relation_Change_Raw"].to_numpy(dtype=np.float32)
+
+        excess = np.maximum(0.0, (raw - calibration["center"]) / calibration["scale"])
+
+        model_score = score_df["A_Score_Global"].to_numpy(dtype=np.float32)
+
+        weight = self.relation_change_weight
+
+        if self.relation_change_fusion_mode == "residual_gated":
+
+            bounded_excess = np.minimum(excess, 3.0)
+
+            gate_logit = np.clip(
+
+                (model_score - calibration["model_p95"]) / calibration["model_scale"],
+
+                -20.0, 20.0,
+
+            )
+
+            value_gate = 1.0 / (1.0 + np.exp(-gate_logit))
+
+            relation_increment = (
+
+                weight * calibration["model_scale"] * bounded_excess * value_gate
+
+            )
+
+            aligned = model_score + relation_increment
+
+            fused = aligned
+
+        else:
+
+            aligned = calibration["model_center"] + calibration["model_scale"] * excess
+
+            fused = (1.0 - weight) * model_score + weight * aligned
+
+        score_df["A_Score_Value_Only"] = model_score
+
+        score_df["Relation_Change_Score"] = aligned.astype(np.float32)
+
+        score_df["Relation_Change_Weight"] = float(weight)
+
+        score_df["A_Score_Global"] = fused.astype(np.float32)
+
+        return score_df
 
 
     @staticmethod
@@ -1168,6 +1435,14 @@ class Predictor:
 
         recons = []
 
+        consistency_errors = []
+
+        relation_changes = []
+
+        relation_attention_parts = []
+
+        previous_attention = None
+
         with torch.no_grad():
 
             for x, y in tqdm(loader):
@@ -1181,12 +1456,45 @@ class Predictor:
 
                     y_hat, _ = self.model(x)
 
+                    # C4 的独立控制—响应头对应当前输入窗口 x；随后的 recon_x
+                    # 前向会覆盖该缓存，因此必须在这里立即取出其窗口级残差。
+                    base_model = self.model.module if hasattr(self.model, "module") else self.model
+                    consistency_prediction = getattr(
+                        base_model, "_physical_consistency_prediction", None
+                    )
+                    if consistency_prediction is not None:
+                        response_dims = base_model.physical_consistency_target_dims
+                        consistency_target = x[:, :, response_dims]
+                        consistency_errors.append(
+                            torch.mean(
+                                torch.abs(consistency_target - consistency_prediction), dim=(1, 2)
+                            ).detach().cpu().numpy()
+                        )
+
 
                     # 用真实下一步 y 拼接重构窗口
 
                     recon_x = torch.cat((x[:, 1:, :], y), dim=1)
 
                     _, window_recon = self.model(recon_x)
+
+                if self.use_relation_change_score:
+
+                    attention = getattr(self.model, "_feature_attention_weights", None)
+
+                    if attention is None:
+
+                        raise RuntimeError("Relation-change scoring requires Feature-GAT attention")
+
+                    change, previous_attention = self._relation_change_from_attention(
+
+                        attention.detach(), previous_attention
+
+                    )
+
+                    relation_changes.append(change.cpu().numpy())
+
+                    relation_attention_parts.append(attention.detach().cpu())
 
 
                 preds.append(y_hat.detach().cpu().numpy())
@@ -1274,6 +1582,21 @@ class Predictor:
 
         df = pd.DataFrame(df_dict)
 
+        if consistency_errors:
+            df["Physical_Consistency_Score"] = np.concatenate(consistency_errors).astype(np.float32)
+
+        if self.use_relation_change_score:
+
+            relation_change = np.concatenate(relation_changes).astype(np.float32)
+
+            if len(relation_change) > 1 and relation_change[0] == 0.0:
+
+                relation_change[0] = relation_change[1]
+
+            df["Relation_Change_Raw"] = relation_change
+
+            self._last_relation_attention_segments = [torch.cat(relation_attention_parts, dim=0)]
+
         df['Pred_Error_Global'] = self._aggregate_output_scores(pred_errors)
 
         df['Recon_Error_Global'] = self._aggregate_output_scores(recon_errors)
@@ -1305,7 +1628,7 @@ class Predictor:
         return df
 
 
-    def get_sample_map_scores(self, values_map):
+    def get_sample_map_scores(self, values_map, *, calibrate_relation=False):
 
         """Score many equal-role snippets in one DataLoader and split scores by sample."""
 
@@ -1377,6 +1700,8 @@ class Predictor:
 
         reconstructions = []
 
+        attention_parts = []
+
         if device == "cuda":
             torch.cuda.synchronize()
             torch.cuda.reset_peak_memory_stats()
@@ -1401,6 +1726,16 @@ class Predictor:
                 predictions.append(y_hat.detach().cpu().numpy())
 
                 reconstructions.append(window_recon[:, -1, :].detach().cpu().numpy())
+
+                if self.use_relation_change_score:
+
+                    attention = getattr(self.model, "_feature_attention_weights", None)
+
+                    if attention is None:
+
+                        raise RuntimeError("Relation-change scoring requires Feature-GAT attention")
+
+                    attention_parts.append(attention.detach().cpu())
 
         if device == "cuda":
             torch.cuda.synchronize()
@@ -1447,7 +1782,59 @@ class Predictor:
 
             global_scores, _ = self._fuse_physical_response(global_scores, physical_scores)
 
+        value_only_scores = np.asarray(global_scores, dtype=np.float32).copy()
+
+        relation_change = None
+
+        if self.use_relation_change_score:
+
+            all_attention = torch.cat(attention_parts, dim=0)
+
+            attention_segments = []
+
+            attention_offset = 0
+
+            for count in counts:
+
+                segment_attention = all_attention[attention_offset:attention_offset + count]
+
+                attention_segments.append(segment_attention)
+
+                attention_offset += count
+
+            self._last_relation_attention_segments = attention_segments
+
+            relation_change = self._relation_raw_from_segments(attention_segments)
+
+            score_df = pd.DataFrame({
+
+                "A_Score_Global": value_only_scores,
+
+                "Relation_Change_Raw": relation_change,
+
+            })
+
+            if calibrate_relation:
+
+                self._fit_relation_change_calibration(score_df)
+
+            if self._relation_change_calibration is None:
+
+                raise RuntimeError(
+
+                    "Sample-map relation scoring requires a normal calibration call first"
+
+                )
+
+            score_df = self._apply_relation_change_fusion(score_df)
+
+            global_scores = score_df["A_Score_Global"].to_numpy(dtype=np.float32)
+
         result = {}
+
+        value_only_result = {}
+
+        relation_raw_result = {}
 
         offset = 0
 
@@ -1455,7 +1842,17 @@ class Predictor:
 
             result[sample_id] = global_scores[offset:offset + count]
 
+            value_only_result[sample_id] = value_only_scores[offset:offset + count]
+
+            if relation_change is not None:
+
+                relation_raw_result[sample_id] = relation_change[offset:offset + count]
+
             offset += count
+
+        self.last_sample_value_only_scores = value_only_result
+
+        self.last_sample_relation_raw = relation_raw_result
 
         return result
 
@@ -1466,19 +1863,31 @@ class Predictor:
 
             score_dfs = []
 
+            attention_segments = []
+
             for _, entity_values in values.items():
 
                 score_dfs.append(self.get_score_for_sequences(entity_values))
 
+                if self.use_relation_change_score and self._last_relation_attention_segments:
+
+                    attention_segments.extend(self._last_relation_attention_segments)
+
             if not score_dfs:
 
                 raise ValueError("No sequence data provided for scoring")
+
+            if self.use_relation_change_score:
+
+                self._last_relation_attention_segments = attention_segments
 
             return pd.concat(score_dfs, axis=0, ignore_index=True)
 
         if is_sequence_container(values):
 
             score_dfs = []
+
+            attention_segments = []
 
             global_start_index = 0
 
@@ -1489,6 +1898,10 @@ class Predictor:
                     continue
 
                 segment_score_df = self.get_score(seq_values)
+
+                if self.use_relation_change_score and self._last_relation_attention_segments:
+
+                    attention_segments.extend(self._last_relation_attention_segments)
 
                 segment_score_df = self._add_segment_metadata(
 
@@ -1509,6 +1922,10 @@ class Predictor:
             if not score_dfs:
 
                 raise ValueError("No valid sequence is longer than the window size")
+
+            if self.use_relation_change_score:
+
+                self._last_relation_attention_segments = attention_segments
 
             return pd.concat(score_dfs, axis=0, ignore_index=True)
 
@@ -1546,7 +1963,9 @@ class Predictor:
 
                 if len(seq_labels) > self.window_size:
 
-                    aligned_parts.append(seq_labels[self.window_size:])
+                    aligned_parts.append(
+                        seq_labels[self.window_size::self.window_stride]
+                    )
 
             true_anomalies = np.concatenate(aligned_parts, axis=0) if aligned_parts else None
 
@@ -1637,7 +2056,23 @@ class Predictor:
 
                 train_pred_df = self.get_score_for_sequences(train)
 
+            if self.use_relation_change_score and self.relation_change_mode == "normal_transition_residual":
+
+                self._fit_relation_transition_model()
+
+                train_pred_df["Relation_Change_Raw"] = self._relation_raw_from_segments(
+                    self._last_relation_attention_segments
+                )
+
             test_pred_df = self.get_score_for_sequences(test)
+
+            if self.use_relation_change_score:
+
+                self._fit_relation_change_calibration(train_pred_df)
+
+                train_pred_df = self._apply_relation_change_fusion(train_pred_df)
+
+                test_pred_df = self._apply_relation_change_fusion(test_pred_df)
 
 
             train_anomaly_scores = train_pred_df['A_Score_Global'].values

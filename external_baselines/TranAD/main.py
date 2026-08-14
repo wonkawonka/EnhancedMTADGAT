@@ -21,6 +21,7 @@ from torch.utils.data import Dataset, DataLoader, TensorDataset
 import torch.nn as nn
 from time import time
 from pprint import pprint
+from sklearn.metrics import average_precision_score, roc_auc_score
 # from beepy import beep
 
 
@@ -145,7 +146,11 @@ def load_model(modelname, dims):
 	model = model_class(dims).float()
 	optimizer = torch.optim.AdamW(model.parameters() , lr=model.lr, weight_decay=1e-5)
 	scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 5, 0.9)
-	fname = f'checkpoints/{args.model}_{args.dataset}/model.ckpt'
+	fname = (
+		os.path.join(args.output_dir, 'checkpoints', 'model.ckpt')
+		if args.output_dir
+		else f'checkpoints/{args.model}_{args.dataset}/model.ckpt'
+	)
 	if os.path.exists(fname) and (not args.retrain or args.test):
 		print(f"{color.GREEN}Loading pre-trained model: {model.name}{color.ENDC}")
 		checkpoint = torch.load(fname)
@@ -337,7 +342,10 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 	elif 'TranAD' in model.name:
 		l = nn.MSELoss(reduction = 'none')
 		data_x = data.float() if torch.is_tensor(data) else torch.FloatTensor(data); dataset = TensorDataset(data_x, data_x)
-		bs = model.batch if training else len(data)
+		# 测试集不能作为一个超大 batch 一次送入 Transformer。MSL 有七万余个
+		# 窗口，原实现会在测试阶段耗尽显存/内存并被系统杀死。训练和推理统一
+		# 使用模型批大小，推理结果再按原顺序拼接，不改变样本或异常分数。
+		bs = model.batch
 		dataloader = DataLoader(dataset, batch_size = bs)
 		n = epoch + 1; w_size = model.n_window
 		l1s, l2s = [], []
@@ -358,13 +366,16 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 			tqdm.write(f'Epoch {epoch},\tL1 = {np.mean(l1s)}')
 			return np.mean(l1s), optimizer.param_groups[0]['lr']
 		else:
+			losses, predictions = [], []
 			for d, _ in dataloader:
+				local_bs = d.shape[0]
 				window = d.permute(1, 0, 2)
-				elem = window[-1, :, :].view(1, bs, feats)
+				elem = window[-1, :, :].view(1, local_bs, feats)
 				z = model(window, elem)
 				if isinstance(z, tuple): z = z[1]
-			loss = l(z, elem)[0]
-			return loss.detach().numpy(), z.detach().numpy()[0]
+				losses.append(l(z, elem)[0].detach().cpu())
+				predictions.append(z[0].detach().cpu())
+			return torch.cat(losses).numpy(), torch.cat(predictions).numpy()
 	else:
 		y_pred = model(data)
 		loss = l(y_pred, data)
@@ -413,16 +424,13 @@ if __name__ == '__main__':
 	print(f'{color.HEADER}Testing {args.model} on {args.dataset}{color.ENDC}')
 	loss, y_pred = backprop(0, model, testD, testO, optimizer, scheduler, training=False)
 
-	### Plot curves
-	if not args.test:
+	### Plot curves. Standardized thesis runs skip the original 55-channel PDF,
+	### which is very large and is not used by the common AP/AUROC protocol.
+	if not args.test and not args.output_dir:
 		if 'TranAD' in model.name: testO = torch.roll(testO, 1, 0) 
-		if args.output_dir:
-			plotter(f'{args.model}_{args.dataset}', testO, y_pred, loss, labels, save_dir=args.output_dir)
-		else:
-			plotter(f'{args.model}_{args.dataset}', testO, y_pred, loss, labels)
+		plotter(f'{args.model}_{args.dataset}', testO, y_pred, loss, labels)
 
 	### Scores
-	df = pd.DataFrame()
 	lossT, _ = backprop(0, model, trainD, trainO, optimizer, scheduler, training=False)
 	if lossT.ndim == 1:
 		lossT = lossT.reshape(-1, 1)
@@ -432,14 +440,44 @@ if __name__ == '__main__':
 		labels = labels.reshape(-1, 1)
 	if labels.shape[1] == 1 and loss.shape[1] > 1:
 		labels = np.repeat(labels, loss.shape[1], axis=1)
+	lossTfinal, lossFinal = np.mean(lossT, axis=1), np.mean(loss, axis=1)
+	labelsFinal = (np.sum(labels, axis=1) >= 1).astype(np.int64)
+
+	# The thesis protocol uses raw point-level ranking metrics. Avoid the original
+	# per-channel POT loop (55 expensive threshold fits on MSL); it applies point
+	# adjustment and is neither needed nor comparable with the internal AP table.
+	if args.output_dir:
+		threshold = float(np.quantile(lossTfinal, 0.99))
+		predFinal = (lossFinal >= threshold).astype(np.int64)
+		result = {
+			'average_precision': float(average_precision_score(labelsFinal, lossFinal)),
+			'auprc': float(average_precision_score(labelsFinal, lossFinal)),
+			'auroc': float(roc_auc_score(labelsFinal, lossFinal)),
+			'threshold': threshold,
+			'point_adjustment': False,
+			'threshold_source': 'normal_train_p99',
+		}
+		pprint(result)
+		save_standardized_output(
+			output_dir=args.output_dir,
+			metrics=result,
+			thresholds={'global_threshold': threshold},
+			train_scores=lossTfinal,
+			test_scores=lossFinal,
+			test_labels=labelsFinal,
+			test_preds=predFinal,
+			config=vars(args),
+			train_losses=train_losses if not args.test else None,
+		)
+		raise SystemExit(0)
+
+	df = pd.DataFrame()
 	for i in range(loss.shape[1]):
 		lt, l, ls = lossT[:, i], loss[:, i], labels[:, i]
 		result, pred = pot_eval(lt, l, ls); preds.append(pred)
 		df = pd.concat([df, pd.DataFrame([result])], ignore_index=True)
 	# preds = np.concatenate([i.reshape(-1, 1) + 0 for i in preds], axis=1)
 	# pd.DataFrame(preds, columns=[str(i) for i in range(10)]).to_csv('labels.csv')
-	lossTfinal, lossFinal = np.mean(lossT, axis=1), np.mean(loss, axis=1)
-	labelsFinal = (np.sum(labels, axis=1) >= 1) + 0
 	result, _ = pot_eval(lossTfinal, lossFinal, labelsFinal)
 	result.update(hit_att(loss, labels))
 	result.update(ndcg(loss, labels))
