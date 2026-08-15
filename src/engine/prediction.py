@@ -1441,6 +1441,10 @@ class Predictor:
 
         relation_attention_parts = []
 
+        c3_joint_scores = []
+        c3_value_residuals = []
+        c3_relation_residuals = []
+
         previous_attention = None
 
         with torch.no_grad():
@@ -1472,11 +1476,22 @@ class Predictor:
                         )
 
 
-                    # 用真实下一步 y 拼接重构窗口
-
-                    recon_x = torch.cat((x[:, 1:, :], y), dim=1)
-
-                    _, window_recon = self.model(recon_x)
+                    if getattr(base_model, "use_c3_joint_relation", False):
+                        c3_components = base_model.c3_joint_components(x, y, y_hat)
+                        window_recon = c3_components["shifted_reconstruction"]
+                        c3_joint_scores.append(
+                            c3_components["joint_score"].detach().cpu().numpy()
+                        )
+                        c3_value_residuals.append(
+                            c3_components["value_residual"].detach().cpu().numpy()
+                        )
+                        c3_relation_residuals.append(
+                            c3_components["relation_residual"].detach().cpu().numpy()
+                        )
+                    else:
+                        # 用真实下一步 y 拼接重构窗口
+                        recon_x = torch.cat((x[:, 1:, :], y), dim=1)
+                        _, window_recon = self.model(recon_x)
 
                 if self.use_relation_change_score:
 
@@ -1613,6 +1628,12 @@ class Predictor:
             df['Physical_Response_Score'] = physical_scores
 
             df['Physical_Response_Weight'] = physical_weight
+
+        if c3_joint_scores:
+            global_scores = np.concatenate(c3_joint_scores).astype(np.float32)
+            df["C3_Value_Residual"] = np.concatenate(c3_value_residuals).astype(np.float32)
+            df["C3_Relation_Residual"] = np.concatenate(c3_relation_residuals).astype(np.float32)
+            df["C3_Joint_NLL"] = global_scores
 
         df['A_Score_Global'] = global_scores
 

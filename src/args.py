@@ -83,8 +83,8 @@ def get_parser():
         "--regime_encoder_type",
         type=str,
         default="temporal",
-        choices=["temporal", "statistics"],
-        help="Temporal learned encoder for the proposed model; statistics is retained only for ablation",
+        choices=["restricted", "temporal", "statistics"],
+        help="restricted uses marginal descriptors only; temporal/statistics are retained for ablation",
     )
     parser.add_argument("--regime_aux_lambda", type=float, default=0.05, help="Self-supervised dynamic descriptor loss weight")
     parser.add_argument(
@@ -566,6 +566,11 @@ def get_parser():
         help="Score fusion mode: fixed=standard pred+gamma*recon, quality_aware=quality-aware fusion",
     )
     parser.add_argument("--use_event_consistency", type=str2bool, default=False, help="Whether to enable dual-threshold event-level anomaly detection with persistence constraints")
+    parser.add_argument("--use_c3_joint_relation", type=str2bool, default=False, help="Enable model-internal Feature-GAT transition residual and joint residual score")
+    parser.add_argument("--c3_relation_rank", type=int, default=4, help="Compatibility parameter for the Feature-GAT transition head")
+    parser.add_argument("--c3_joint_hidden_dim", type=int, default=32, help="Compatibility parameter for the bivariate residual density head")
+    parser.add_argument("--c3_relation_loss_weight", type=float, default=0.1, help="Training weight for Feature-GAT transition prediction")
+    parser.add_argument("--c3_joint_nll_weight", type=float, default=0.01, help="Training weight for the internal joint residual likelihood")
     parser.add_argument("--event_low_ratio", type=float, default=0.5, help="Interpolation ratio between training score median and high threshold; smaller values are stricter")
     parser.add_argument("--event_min_length", type=int, default=3, help="Minimum persistence length to retain an anomaly event")
     parser.add_argument("--level", type=float, default=None,help="Initial threshold for POT method")

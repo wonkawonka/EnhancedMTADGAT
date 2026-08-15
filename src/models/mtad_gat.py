@@ -3,6 +3,7 @@
 import torch
 
 import torch.nn as nn
+import torch.nn.functional as F
 
 from src.models.modules import (
     ConvLayer,
@@ -25,10 +26,65 @@ from src.models.modules import (
     RevIN,
     WindowRegimeEncoder,
     TemporalRegimeEncoder,
+    RestrictedStateEncoder,
     FiLMConditioner,
     RegimeResidualGate,
 
 )
+
+
+class FeatureRelationTransitionHead(nn.Module):
+    """仅依据当前 Feature-GAT 图预测下一窗口的正常变量关系图。"""
+
+    def __init__(self, n_features, rank=4):
+        super().__init__()
+        self.n_features = int(n_features)
+        self.rank = max(1, int(rank))  # 保留配置兼容性；转移本身不读取状态。
+        self.persistence_logit = nn.Parameter(torch.zeros(()))
+        self.edge_bias = nn.Parameter(torch.zeros(self.n_features, self.n_features))
+
+    def forward(self, attention):
+        persistence = torch.sigmoid(self.persistence_logit)
+        logits = persistence * torch.log(attention.clamp_min(1e-7)) + self.edge_bias
+        return torch.softmax(logits, dim=-1)
+
+
+class JointResidualDensityHead(nn.Module):
+    """在训练正常窗口上学习数值/关系残差的无条件二维联合高斯。"""
+
+    def __init__(self, hidden_dim=32):
+        super().__init__()
+        self.mean = nn.Parameter(torch.zeros(2))
+        self.log_diag = nn.Parameter(torch.zeros(2))
+        self.off_diag = nn.Parameter(torch.zeros(()))
+
+    def forward(self, batch_size, dtype, device):
+        mean = self.mean.to(dtype=dtype, device=device).unsqueeze(0).expand(batch_size, -1)
+        log_diag = self.log_diag.clamp(-5.0, 3.0).to(dtype=dtype, device=device)
+        off_diag = self.off_diag.clamp(-5.0, 5.0).to(dtype=dtype, device=device)
+        scale_tril = torch.zeros(
+            batch_size, 2, 2, dtype=dtype, device=device
+        )
+        scale_tril[:, 0, 0] = torch.exp(log_diag[0]) + 1e-4
+        scale_tril[:, 1, 0] = off_diag
+        scale_tril[:, 1, 1] = torch.exp(log_diag[1]) + 1e-4
+        return mean, scale_tril
+
+    def negative_log_likelihood(self, residuals):
+        mean, scale_tril = self(
+            residuals.size(0), residuals.dtype, residuals.device
+        )
+        # CUDA 的 triangular solve 在部分 PyTorch 版本不支持 half；二维评分
+        # 始终使用 float32 也可避免协方差求解的数值放大。
+        mean = mean.float()
+        scale_tril = scale_tril.float()
+        delta = residuals.float() - mean
+        solved = torch.linalg.solve_triangular(
+            scale_tril, delta.unsqueeze(-1), upper=False
+        ).squeeze(-1)
+        mahalanobis = solved.square().sum(dim=-1)
+        log_det = torch.log(torch.diagonal(scale_tril, dim1=-2, dim2=-1)).sum(dim=-1)
+        return 0.5 * mahalanobis + log_det
 
 class Enhanced_MTADGAT(nn.Module):
     """增强型 MTAD-GAT：以预测误差和重构误差共同检测异常。
@@ -94,6 +150,7 @@ class Enhanced_MTADGAT(nn.Module):
             regime_condition_mode="feature_gat",
             regime_stat_features=None,
             regime_encoder_type="temporal",
+            regime_channel_pooling=False,
             regime_control_indices=None,
             regime_current_index=None,
             regime_soc_index=None,
@@ -131,6 +188,12 @@ class Enhanced_MTADGAT(nn.Module):
             backbone_feature_indices=None,
             condition_source_n_features=None,
             backbone_control_indices=None,
+            use_c3_joint_relation=False,
+            c3_relation_rank=4,
+            c3_joint_hidden_dim=32,
+            c3_relation_loss_weight=0.1,
+            c3_joint_nll_weight=0.01,
+            c3_value_gamma=1.0,
     ):
         super(Enhanced_MTADGAT, self).__init__()
         # 记录基础骨干和输出范围开关。
@@ -149,12 +212,14 @@ class Enhanced_MTADGAT(nn.Module):
         self.use_regime_condition = use_regime_condition
         self.regime_condition_mode = regime_condition_mode
         self.regime_encoder_type = regime_encoder_type
+        self.regime_channel_pooling = bool(regime_channel_pooling)
         self.regime_current_index = regime_current_index
         self.regime_soc_index = regime_soc_index
         self.regime_film_scale = max(0.0, min(float(regime_film_scale), 1.0))
         # 仅用于工况语义验证的负对照：保持条件边际分布，但破坏其与当前响应窗口的配对。
         self.regime_condition_shuffle = bool(regime_condition_shuffle)
         self._regime_aux_prediction = None
+        self._regime_aux_target = None
         # 记录 C4 物理状态和物理响应特征分支配置。
         self.physical_state_config = dict(physical_state_config or {}) if physical_state_config is not None else None
         self.use_physical_state_encoding = use_physical_state_encoding and (feature_att_trans or use_transformer)
@@ -184,6 +249,13 @@ class Enhanced_MTADGAT(nn.Module):
         self.use_condition_routed_adapter = bool(use_condition_routed_adapter)
         self._condition_adapter_routing = None
         self._feature_attention_weights = None
+        self._feature_attention_probabilities = None
+        self._temporal_attention_weights = None
+        self._regime_embedding = None
+        self.use_c3_joint_relation = bool(use_c3_joint_relation)
+        self.c3_relation_loss_weight = max(0.0, float(c3_relation_loss_weight))
+        self.c3_joint_nll_weight = max(0.0, float(c3_joint_nll_weight))
+        self.c3_value_gamma = max(0.0, float(c3_value_gamma))
         self.use_variational_reconstruction = bool(use_variational_reconstruction)
         self.variational_reconstruction_kl_weight = max(
             0.0, float(variational_reconstruction_kl_weight)
@@ -233,6 +305,13 @@ class Enhanced_MTADGAT(nn.Module):
                     emb_dim=regime_emb_dim,
                     control_indices=regime_control_indices,
                 )
+            elif regime_encoder_type == "restricted":
+                self.regime_encoder = RestrictedStateEncoder(
+                    self.condition_source_n_features,
+                    emb_dim=regime_emb_dim,
+                    control_indices=regime_control_indices,
+                    pooled_channels=self.regime_channel_pooling,
+                )
             else:
                 raise ValueError(f"Unsupported regime_encoder_type: {regime_encoder_type}")
             if regime_condition_mode == "none":
@@ -259,6 +338,15 @@ class Enhanced_MTADGAT(nn.Module):
             else:
                 raise ValueError(f"Unsupported regime_condition_mode: {regime_condition_mode}")
             torch.set_rng_state(regime_rng_state)
+        if self.use_c3_joint_relation:
+            c3_rng_state = torch.get_rng_state()
+            self.c3_relation_head = FeatureRelationTransitionHead(
+                n_features, rank=c3_relation_rank
+            )
+            self.c3_joint_score_head = JointResidualDensityHead(
+                hidden_dim=c3_joint_hidden_dim
+            )
+            torch.set_rng_state(c3_rng_state)
         # 主干第一步：卷积提取短时局部动态；多尺度模式使用多种膨胀率扩大感受野。
         if multi_scale_mode == 'residual':
             self.conv = ResidualMultiScaleConvLayer(
@@ -518,6 +606,8 @@ class Enhanced_MTADGAT(nn.Module):
         if self.use_revin:
             x, revin_stats = self.revin(x, mode="norm")
         regime_embedding = None
+        self._regime_aux_prediction = None
+        self._regime_aux_target = None
         if self.use_regime_condition:
             condition_input = state_input
             if self.regime_condition_shuffle and state_input.size(0) > 1:
@@ -526,7 +616,13 @@ class Enhanced_MTADGAT(nn.Module):
                 if control_indices is not None and control_indices.numel() > 0:
                     controls = torch.index_select(state_input, dim=2, index=control_indices)
                     condition_input[:, :, control_indices] = torch.roll(controls, shifts=1, dims=0)
-            if self.regime_encoder_type == "temporal":
+            if self.regime_encoder_type == "restricted":
+                (
+                    regime_embedding,
+                    self._regime_aux_prediction,
+                    self._regime_aux_target,
+                ) = self.regime_encoder(condition_input, return_auxiliary=True)
+            elif self.regime_encoder_type == "temporal":
                 regime_embedding, self._regime_aux_prediction = self.regime_encoder(
                     condition_input,
                     return_auxiliary=True,
@@ -534,6 +630,7 @@ class Enhanced_MTADGAT(nn.Module):
             else:
                 regime_embedding = self.regime_encoder(condition_input)
                 self._regime_aux_prediction = None
+        self._regime_embedding = regime_embedding
         # 1) 局部卷积；2) 通道关系 GAT；3)（标准路径中）时间关系 GAT。
         x = self.conv(x)
         physical_attention_bias = None
@@ -552,6 +649,7 @@ class Enhanced_MTADGAT(nn.Module):
         # C4 或条件图可以提供注意力偏置，但不会替代数据驱动的图注意力。
         h_feat = self.feature_gat(x, attention_bias=physical_attention_bias)
         self._feature_attention_weights = self.feature_gat.last_attention
+        self._feature_attention_probabilities = self.feature_gat.last_attention_raw
         if self.use_regime_condition and self.regime_condition_mode in {
             "feature_gat", "feature_gat_response"
         }:
@@ -582,6 +680,7 @@ class Enhanced_MTADGAT(nn.Module):
         else:
             # 标准模型：GRU 负责主要状态传播，Transformer 仅提供长程残差上下文。
             h_temp = self.temporal_gat(x)
+            self._temporal_attention_weights = self.temporal_gat.last_attention
             if self.use_regime_condition and self.regime_condition_mode == "temporal_gat":
                 h_temp = self._apply_condition(h_temp, regime_embedding, self.temp_conditioner)
             h_cat = torch.cat([x, h_feat, h_temp], dim=2)  # 形状：(b, n, 3k)
@@ -634,8 +733,70 @@ class Enhanced_MTADGAT(nn.Module):
             predictions = self.revin(predictions, mode="denorm", stats=revin_stats, target_dims=self.target_dims)
             recons = self.revin(recons, mode="denorm", stats=revin_stats, target_dims=self.target_dims)
         return predictions, recons
+
+    def _c3_value_residual(self, x, y, predictions, shifted_recons):
+        """与正式评分一致地形成下一点预测+重构数值残差。"""
+        y_target = y.squeeze(1)
+        if self.target_dims is not None:
+            y_target = y_target[:, self.target_dims]
+        if predictions.ndim == 3:
+            predictions = predictions.squeeze(1)
+        prediction_error = torch.abs(y_target - predictions).mean(dim=1)
+        reconstruction_error = torch.abs(
+            y_target - shifted_recons[:, -1, :]
+        ).mean(dim=1)
+        return prediction_error + self.c3_value_gamma * reconstruction_error
+
+    def c3_joint_components(self, x, y, predictions):
+        """返回关系预测损失和模型内部二维联合异常分数。
+
+        第二次前向只构造真实下一窗口的关系图与重构值；不会复用历史 checkpoint
+        或离线校准器。关系转移和联合密度都不读取状态嵌入。
+        """
+        if not self.use_c3_joint_relation:
+            raise RuntimeError("C3 joint relation head is disabled")
+        current_attention = self._feature_attention_probabilities
+        if current_attention is None:
+            raise RuntimeError("Run the main model forward before C3 joint scoring")
+        current_attention = current_attention.detach()
+        shifted_x = torch.cat((x[:, 1:, :], y), dim=1)
+        with torch.no_grad():
+            _, shifted_recons = self(shifted_x)
+            next_attention = self._feature_attention_probabilities.detach()
+        predicted_attention = self.c3_relation_head(current_attention)
+        relation_residual = F.mse_loss(
+            predicted_attention, next_attention, reduction="none"
+        ).mean(dim=(1, 2))
+        value_residual = self._c3_value_residual(
+            x, y, predictions, shifted_recons
+        )
+        residual_vector = torch.log1p(
+            torch.stack((value_residual, relation_residual), dim=1).clamp_min(0.0)
+        )
+        joint_nll = self.c3_joint_score_head.negative_log_likelihood(
+            residual_vector.detach()
+        )
+        return {
+            "relation_loss": relation_residual.mean(),
+            "joint_nll_loss": joint_nll.mean(),
+            "joint_score": joint_nll,
+            "value_residual": value_residual,
+            "relation_residual": relation_residual,
+            "shifted_reconstruction": shifted_recons,
+        }
     def regime_auxiliary_loss(self, x):
         """用窗口工况描述量自监督 C3 embedding，防止其退化为无语义的自由向量。"""
+        if (
+            self.regime_encoder_type == "restricted"
+            and self._regime_aux_prediction is not None
+            and self._regime_aux_target is not None
+        ):
+            return (
+                torch.nn.functional.smooth_l1_loss(
+                    self._regime_aux_prediction, self._regime_aux_target
+                )
+                + self.control_response_auxiliary_loss(x)
+            )
         if self._regime_aux_prediction is None or self.regime_encoder_type != "temporal":
             return self.control_response_auxiliary_loss(x)
         current_index = self.regime_current_index
@@ -705,7 +866,7 @@ class Enhanced_MTADGAT(nn.Module):
         """仅导出 C3 工况 embedding，供分析/可视化而不执行完整预测。"""
         if not self.use_regime_condition:
             raise RuntimeError("Regime conditioning is disabled for this model")
-        if self.regime_encoder_type == "temporal":
+        if self.regime_encoder_type in {"temporal", "restricted"}:
             return self.regime_encoder(x)
         if self.use_revin:
             x, _ = self.revin(x, mode="norm")

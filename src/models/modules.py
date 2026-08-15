@@ -156,6 +156,98 @@ class TemporalRegimeEncoder(nn.Module):
         return embedding
 
 
+class RestrictedStateEncoder(nn.Module):
+    """用边际窗口描述量构造低维状态，不编码任意通道对关系。
+
+    电池数据保留电流/SOC 的有序语义；匿名遥测数据对每个非目标上下文通道
+    使用同一个 MLP，再以 mean/max 做置换不变池化。两种模式都只读取每个通道
+    自身的均值、标准差、首尾变化和平均绝对一阶差分。
+    """
+
+    def __init__(
+        self,
+        n_features,
+        emb_dim=8,
+        hidden_dim=24,
+        control_indices=None,
+        pooled_channels=False,
+    ):
+        super().__init__()
+        valid_indices = [
+            int(index) for index in (control_indices or range(n_features))
+            if 0 <= int(index) < n_features
+        ]
+        if not valid_indices:
+            valid_indices = list(range(n_features))
+        self.register_buffer(
+            "control_indices", torch.tensor(valid_indices, dtype=torch.long)
+        )
+        self.pooled_channels = bool(pooled_channels)
+        self.descriptor_dim = 4
+        hidden_dim = max(int(hidden_dim), int(emb_dim))
+        if self.pooled_channels:
+            self.channel_encoder = nn.Sequential(
+                nn.Linear(self.descriptor_dim, hidden_dim),
+                nn.GELU(),
+            )
+            encoder_input_dim = 2 * hidden_dim
+            auxiliary_dim = 2 * self.descriptor_dim
+        else:
+            encoder_input_dim = len(valid_indices) * self.descriptor_dim
+            auxiliary_dim = encoder_input_dim
+        self.embedding_head = nn.Sequential(
+            nn.Linear(encoder_input_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, emb_dim),
+        )
+        self.auxiliary_head = nn.Linear(emb_dim, auxiliary_dim)
+
+    @staticmethod
+    def _marginal_descriptors(channels):
+        delta = channels[:, -1, :] - channels[:, 0, :]
+        if channels.size(1) > 1:
+            mean_abs_diff = (channels[:, 1:, :] - channels[:, :-1, :]).abs().mean(dim=1)
+        else:
+            mean_abs_diff = torch.zeros_like(delta)
+        return torch.stack(
+            (
+                channels.mean(dim=1),
+                channels.std(dim=1, unbiased=False),
+                delta,
+                mean_abs_diff,
+            ),
+            dim=-1,
+        )
+
+    def descriptor_target(self, x):
+        channels = torch.index_select(x, dim=2, index=self.control_indices)
+        descriptors = self._marginal_descriptors(channels)
+        if self.pooled_channels:
+            return torch.cat(
+                (descriptors.mean(dim=1), descriptors.amax(dim=1)), dim=1
+            )
+        return descriptors.flatten(start_dim=1)
+
+    def forward(self, x, return_auxiliary=False):
+        channels = torch.index_select(x, dim=2, index=self.control_indices)
+        descriptors = self._marginal_descriptors(channels)
+        if self.pooled_channels:
+            channel_hidden = self.channel_encoder(descriptors)
+            encoder_input = torch.cat(
+                (channel_hidden.mean(dim=1), channel_hidden.amax(dim=1)), dim=1
+            )
+            target = torch.cat(
+                (descriptors.mean(dim=1), descriptors.amax(dim=1)), dim=1
+            )
+        else:
+            encoder_input = descriptors.flatten(start_dim=1)
+            target = encoder_input
+        embedding = self.embedding_head(encoder_input)
+        if return_auxiliary:
+            return embedding, self.auxiliary_head(embedding), target.detach()
+        return embedding
+
+
 class ControlConditionedGraphBias(nn.Module):
     """仅根据控制量轨迹，在少量图结构专家之间进行软路由。
     它与 GATv2 的作用不同：GATv2 根据节点特征改变成对注意力，本模块则把电流、
@@ -535,6 +627,9 @@ class FeatureAttentionLayer(nn.Module):
             e = sparse_e
         # 注意力权重，在特征维度上做归一化指数计算
         attention = torch.softmax(e, dim=2)
+        # C3 的关系转移目标必须是确定的行概率图。若使用 dropout 后的权重，
+        # 同一个正常窗口也会因随机丢边产生伪关系残差。
+        self.last_attention_raw = attention
         attention = torch.dropout(attention, self.dropout, train=self.training)
         self.last_attention = attention
         # 根据注意力权重聚合特征表示
@@ -661,6 +756,9 @@ class TemporalAttentionLayer(nn.Module):
         # 注意力权重
         attention = torch.softmax(e, dim=2)
         attention = torch.dropout(attention, self.dropout, train=self.training)
+        # 仅缓存当前批次，供无标签关系异常评分使用；不参与前向计算，
+        # 因而不会改变已有 checkpoint 的参数或数值输出。
+        self.last_attention = attention
         h = self._activate_output(torch.matmul(attention, x))  # 形状：(b, n, k)
         return h
 

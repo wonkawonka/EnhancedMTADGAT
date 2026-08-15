@@ -10,7 +10,7 @@ __pycache__/
 datasets/**/processed/
 datasets/**/processed/**
 datasets/CH-BATTERY/
-/datasets/TSINGHUA_EV/
+datasets/CH-BatteryGen
 /external_baselines/BatteryFaultNC/official/
 /datasets/BMS/
 .ipynb_checkpoints/
@@ -32,3 +32,4 @@ external_baselines/TranAD/data/
 external_baselines/TranAD/results/
 external_baselines/OmniAnomaly/ServerMachineDataset/
 .whl
+notebooks/

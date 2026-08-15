@@ -1,6 +1,7 @@
 """将原始数据预处理为项目所需的训练和测试产物。"""
 
 import os
+import re
 import time
 import zipfile
 import xml.etree.ElementTree as ET
@@ -413,7 +414,16 @@ def _save_industrial_control_dataset(dataset):
                 row_count = 0
                 for event, item in ET.iterparse(archive.open(sheet_path), events=("start",)):
                     if item.tag == namespace + "dimension":
-                        row_count = int(item.attrib["ref"].split(":")[-1][1:])
+                        # SWaT A1A2 的不同发布包既可能写成 "A1:BA495002"，
+                        # 也可能只写末端单元格 "A495002"。不能假定冒号或固定
+                        # 列宽，统一取 dimension 引用中的末尾行号。
+                        dimension_ref = str(item.attrib.get("ref", ""))
+                        row_matches = re.findall(r"\d+", dimension_ref)
+                        if not row_matches:
+                            raise ValueError(
+                                f"Unable to read SWaT worksheet dimension: {dimension_ref!r}"
+                            )
+                        row_count = int(row_matches[-1])
                         break
                 values = np.empty((row_count - 2, 51), dtype=np.float32)
                 labels = np.zeros(row_count - 2, dtype=np.int32)

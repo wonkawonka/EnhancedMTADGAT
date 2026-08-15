@@ -40,6 +40,7 @@ def get_model_family_defaults(model_name):
         "physical_consistency_aux_weight": 0.0,
         "use_condition_residual_calibration": False,
         "regime_group_dro_lambda": 0.0,
+        "use_c3_joint_relation": False,
         "use_learnable_sparse_graph": False,
         "sparse_graph_lambda": 0.0,
     }
@@ -215,7 +216,10 @@ def resolve_regime_config(args, n_features):
             "soc_index": BMS_FEATURE_NAMES.index("BMSnRSOC"),
         }
     if dataset == "TSINGHUA_EV":
-        return {"control_indices": [1, 2], "current_index": 1, "soc_index": 2}
+        return {
+            "control_indices": [1, 2], "current_index": 1, "soc_index": 2,
+            "pooled_channels": False,
+        }
     if dataset in {"NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"}:
         # 数据加载器已移除原始 step_type_code；模型看到的顺序是“电压、电流、温度”，
         # 其中只有电流用于描述工况。
@@ -223,8 +227,18 @@ def resolve_regime_config(args, n_features):
     if dataset in {"MSL", "SMAP"} and n_features > 1:
         # NASA遥测的通道 0 是预测和检测目标，其余匿名通道只提供潜在上下文，
         # 不能解释成电池物理状态。
-        return {"control_indices": list(range(1, n_features)), "current_index": None, "soc_index": None}
-    return {"control_indices": list(range(n_features)), "current_index": None, "soc_index": None}
+        return {
+            "control_indices": list(range(1, n_features)),
+            "current_index": None,
+            "soc_index": None,
+            "pooled_channels": True,
+        }
+    return {
+        "control_indices": list(range(n_features)),
+        "current_index": None,
+        "soc_index": None,
+        "pooled_channels": False,
+    }
 
 def build_model(args, n_features, window_size, out_dim, target_dims=None):
     """将已解析的实验参数实例化为实际 PyTorch 模型。
@@ -310,6 +324,7 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
                 if stat.strip()
             ],
             regime_encoder_type=getattr(args, "regime_encoder_type", "temporal"),
+            regime_channel_pooling=regime_config.get("pooled_channels", False),
             regime_control_indices=regime_config["control_indices"],
             regime_current_index=regime_config["current_index"],
             regime_soc_index=regime_config["soc_index"],
@@ -355,6 +370,12 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
             backbone_feature_indices=backbone_feature_indices,
             condition_source_n_features=n_features,
             backbone_control_indices=backbone_control_indices,
+            use_c3_joint_relation=getattr(args, "use_c3_joint_relation", False),
+            c3_relation_rank=getattr(args, "c3_relation_rank", 4),
+            c3_joint_hidden_dim=getattr(args, "c3_joint_hidden_dim", 32),
+            c3_relation_loss_weight=getattr(args, "c3_relation_loss_weight", 0.1),
+            c3_joint_nll_weight=getattr(args, "c3_joint_nll_weight", 0.01),
+            c3_value_gamma=getattr(args, "gamma", 1.0),
         )
     supported = ", ".join(get_available_model_names())
     raise ValueError(

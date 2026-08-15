@@ -136,6 +136,8 @@ class Trainer:
             "train_regime_group_dro": [],
             "train_sparse_graph": [],
             "train_normal_tail": [],
+            "train_c3_relation": [],
+            "train_c3_joint_nll": [],
             "val_total": [],
             "val_forecast": [],
             "val_recon": [],
@@ -308,6 +310,8 @@ class Trainer:
             regime_group_dro_b_losses = []
             sparse_graph_b_losses = []
             normal_tail_b_losses = []
+            c3_relation_b_losses = []
+            c3_joint_nll_b_losses = []
             reg_scale = self._get_reg_scale(epoch)
             should_stop = False
             for x, y in train_loader:
@@ -344,6 +348,13 @@ class Trainer:
                         sparse_graph_loss = base_model.feature_gat.sparse_graph_regularization()
                     else:
                         sparse_graph_loss = x.new_tensor(0.0)
+                    if getattr(base_model, "use_c3_joint_relation", False):
+                        c3_components = base_model.c3_joint_components(x, y, preds)
+                        c3_relation_loss = c3_components["relation_loss"]
+                        c3_joint_nll_loss = c3_components["joint_nll_loss"]
+                    else:
+                        c3_relation_loss = x.new_tensor(0.0)
+                        c3_joint_nll_loss = x.new_tensor(0.0)
                     loss = (
                         forecast_loss
                         + recon_loss
@@ -353,6 +364,8 @@ class Trainer:
                         + self.regime_group_dro_lambda * regime_group_dro_loss
                         + self.sparse_graph_lambda * sparse_graph_loss
                         + self.normal_tail_lambda * normal_tail_loss
+                        + base_model.c3_relation_loss_weight * c3_relation_loss
+                        + base_model.c3_joint_nll_weight * c3_joint_nll_loss
                     )
                 self.scaler.scale(loss).backward()
                 self.scaler.step(self.optimizer)
@@ -365,6 +378,8 @@ class Trainer:
                 regime_group_dro_b_losses.append(regime_group_dro_loss.item())
                 sparse_graph_b_losses.append(sparse_graph_loss.item())
                 normal_tail_b_losses.append(normal_tail_loss.item())
+                c3_relation_b_losses.append(c3_relation_loss.item())
+                c3_joint_nll_b_losses.append(c3_joint_nll_loss.item())
             forecast_b_losses = np.array(forecast_b_losses)
             recon_b_losses = np.array(recon_b_losses)
             phys_alg_b_losses = np.array(phys_alg_b_losses)
@@ -373,6 +388,8 @@ class Trainer:
             regime_group_dro_b_losses = np.array(regime_group_dro_b_losses)
             sparse_graph_b_losses = np.array(sparse_graph_b_losses)
             normal_tail_b_losses = np.array(normal_tail_b_losses)
+            c3_relation_b_losses = np.array(c3_relation_b_losses)
+            c3_joint_nll_b_losses = np.array(c3_joint_nll_b_losses)
             forecast_epoch_loss = np.sqrt((forecast_b_losses ** 2).mean())
             recon_epoch_loss = np.sqrt((recon_b_losses ** 2).mean())
             phys_alg_epoch_loss = np.sqrt((phys_alg_b_losses ** 2).mean()) if len(phys_alg_b_losses) else 0.0
@@ -390,6 +407,8 @@ class Trainer:
                 np.sqrt((normal_tail_b_losses ** 2).mean())
                 if len(normal_tail_b_losses) else 0.0
             )
+            c3_relation_epoch_loss = float(c3_relation_b_losses.mean())
+            c3_joint_nll_epoch_loss = float(c3_joint_nll_b_losses.mean())
             total_epoch_loss = (
                 forecast_epoch_loss
                 + recon_epoch_loss
@@ -399,6 +418,8 @@ class Trainer:
                 + self.regime_group_dro_lambda * regime_group_dro_epoch_loss
                 + self.sparse_graph_lambda * sparse_graph_epoch_loss
                 + self.normal_tail_lambda * normal_tail_epoch_loss
+                + base_model.c3_relation_loss_weight * c3_relation_epoch_loss
+                + base_model.c3_joint_nll_weight * c3_joint_nll_epoch_loss
             )
             self.losses["train_forecast"].append(forecast_epoch_loss)
             self.losses["train_recon"].append(recon_epoch_loss)
@@ -408,6 +429,8 @@ class Trainer:
             self.losses["train_regime_group_dro"].append(regime_group_dro_epoch_loss)
             self.losses["train_sparse_graph"].append(sparse_graph_epoch_loss)
             self.losses["train_normal_tail"].append(normal_tail_epoch_loss)
+            self.losses["train_c3_relation"].append(c3_relation_epoch_loss)
+            self.losses["train_c3_joint_nll"].append(c3_joint_nll_epoch_loss)
             self.losses["train_total"].append(total_epoch_loss)
             # 保存最佳模型
             forecast_val_loss, recon_val_loss, total_val_loss = "NA", "NA", "NA"
@@ -453,6 +476,8 @@ class Trainer:
                     f"regime_group_dro = {regime_group_dro_epoch_loss:.5f}, "
                     f"sparse_graph = {sparse_graph_epoch_loss:.5f}, "
                     f"normal_tail = {normal_tail_epoch_loss:.5f}, "
+                    f"c3_relation = {c3_relation_epoch_loss:.5f}, "
+                    f"c3_joint_nll = {c3_joint_nll_epoch_loss:.5f}, "
                     f"total_loss = {total_epoch_loss:.5f}"
                 )
                 if val_loader is not None:
@@ -491,6 +516,8 @@ class Trainer:
         phys_smooth_losses = []
         regime_aux_losses = []
         normal_tail_losses = []
+        c3_relation_losses = []
+        c3_joint_nll_losses = []
         reg_scale = self._get_reg_scale(self.start_epoch - 1 if epoch is None else epoch)
         with torch.no_grad():
             for x, y in data_loader:
@@ -519,24 +546,37 @@ class Trainer:
                     normal_tail_loss = self._compute_normal_tail_excess(
                         y_target, preds, x_target, recons
                     )
+                    if getattr(base_model, "use_c3_joint_relation", False):
+                        c3_components = base_model.c3_joint_components(x, y, preds)
+                        c3_relation_loss = c3_components["relation_loss"]
+                        c3_joint_nll_loss = c3_components["joint_nll_loss"]
+                    else:
+                        c3_relation_loss = x.new_tensor(0.0)
+                        c3_joint_nll_loss = x.new_tensor(0.0)
                 forecast_losses.append(forecast_loss.item())
                 recon_losses.append(recon_loss.item())
                 phys_alg_losses.append(phys_alg_loss.item())
                 phys_smooth_losses.append(phys_smooth_loss.item())
                 regime_aux_losses.append(regime_aux_loss.item())
                 normal_tail_losses.append(normal_tail_loss.item())
+                c3_relation_losses.append(c3_relation_loss.item())
+                c3_joint_nll_losses.append(c3_joint_nll_loss.item())
         forecast_losses = np.array(forecast_losses)
         recon_losses = np.array(recon_losses)
         phys_alg_losses = np.array(phys_alg_losses)
         phys_smooth_losses = np.array(phys_smooth_losses)
         regime_aux_losses = np.array(regime_aux_losses)
         normal_tail_losses = np.array(normal_tail_losses)
+        c3_relation_losses = np.array(c3_relation_losses)
+        c3_joint_nll_losses = np.array(c3_joint_nll_losses)
         forecast_loss = np.sqrt((forecast_losses ** 2).mean())
         recon_loss = np.sqrt((recon_losses ** 2).mean())
         phys_alg_loss = np.sqrt((phys_alg_losses ** 2).mean()) if len(phys_alg_losses) else 0.0
         phys_smooth_loss = np.sqrt((phys_smooth_losses ** 2).mean()) if len(phys_smooth_losses) else 0.0
         regime_aux_loss = np.sqrt((regime_aux_losses ** 2).mean()) if len(regime_aux_losses) else 0.0
         normal_tail_loss = np.sqrt((normal_tail_losses ** 2).mean()) if len(normal_tail_losses) else 0.0
+        c3_relation_loss = float(c3_relation_losses.mean()) if len(c3_relation_losses) else 0.0
+        c3_joint_nll_loss = float(c3_joint_nll_losses.mean()) if len(c3_joint_nll_losses) else 0.0
         total_loss = (
             forecast_loss
             + recon_loss
@@ -544,6 +584,8 @@ class Trainer:
             + reg_scale * self.physical_smooth_lambda * phys_smooth_loss
             + self.regime_aux_lambda * regime_aux_loss
             + self.normal_tail_lambda * normal_tail_loss
+            + base_model.c3_relation_loss_weight * c3_relation_loss
+            + base_model.c3_joint_nll_weight * c3_joint_nll_loss
         )
         return forecast_loss, recon_loss, total_loss, phys_alg_loss, phys_smooth_loss, regime_aux_loss
 

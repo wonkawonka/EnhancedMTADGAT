@@ -162,6 +162,7 @@ def _collect_errors(
     pred_parts, recon_parts, pred_signed_parts, recon_signed_parts = [], [], [], []
     physical_parts, consistency_parts, condition_parts, relation_parts = [], [], [], []
     relation_embedding_parts, relation_current_parts, relation_next_parts = [], [], []
+    c3_joint_parts, c3_value_parts, c3_relation_parts = [], [], []
     cars, labels, snippets = [], [], []
     for batch in loader:
         if len(batch) == 6:
@@ -173,6 +174,11 @@ def _collect_errors(
         y = y.to(device, non_blocking=True)
         preds, recons = model(x)
         base_model = model.module if hasattr(model, "module") else model
+        if getattr(base_model, "use_c3_joint_relation", False):
+            c3_components = base_model.c3_joint_components(x, y, preds)
+            c3_joint_parts.append(c3_components["joint_score"].cpu().numpy())
+            c3_value_parts.append(c3_components["value_residual"].cpu().numpy())
+            c3_relation_parts.append(c3_components["relation_residual"].cpu().numpy())
         consistency_prediction = getattr(base_model, "_physical_consistency_prediction", None)
         if consistency_prediction is None:
             captured_consistency = None
@@ -249,7 +255,7 @@ def _collect_errors(
         cars.extend(str(value) for value in batch_cars)
         labels.extend(int(value) for value in batch_labels)
         snippets.extend(str(value) for value in batch_snippets)
-    return {
+    output = {
         "pred": np.concatenate(pred_parts),
         "recon": np.concatenate(recon_parts),
         "pred_signed": np.concatenate(pred_signed_parts),
@@ -281,6 +287,11 @@ def _collect_errors(
         "labels": labels,
         "snippets": snippets,
     }
+    if c3_joint_parts:
+        output["c3_joint_score"] = np.concatenate(c3_joint_parts).astype(np.float32)
+        output["c3_value_residual"] = np.concatenate(c3_value_parts).astype(np.float32)
+        output["c3_relation_residual"] = np.concatenate(c3_relation_parts).astype(np.float32)
+    return output
 
 
 def _fit_relation_transition_model(errors):
@@ -586,6 +597,8 @@ def _save_condition_residual_calibration(calibration, output_dir):
 
 def _window_scores(errors, pred_weights, recon_weights, dims):
     """将每窗口的预测/重构误差按验证集确定的分支权重合成为基础异常分数。"""
+    if "c3_joint_score" in errors:
+        return np.asarray(errors["c3_joint_score"], dtype=np.float32)
     combined = errors["pred"][:, dims] * pred_weights[dims]
     combined += errors["recon"][:, dims] * recon_weights[dims]
     return np.mean(combined, axis=1)
