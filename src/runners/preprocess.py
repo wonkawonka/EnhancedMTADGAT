@@ -469,8 +469,11 @@ def _save_industrial_control_dataset(dataset):
         train_array = train_array[:, keep]
         test_array = test_array[:, keep]
         kept_names = [name for name, include in zip(names, keep) if include]
-        if train_array.shape[1] != 51:
-            raise ValueError(f"SWAT expected 51 non-constant signals, got {train_array.shape[1]}")
+        # SWaT releases differ in which channels are constant over the normal
+        # segment. Persist the schema derived from the mounted release instead
+        # of enforcing the commonly quoted raw width of 51.
+        if train_array.shape[1] == 0:
+            raise ValueError("SWAT has no non-constant signals in normal training data")
         for suffix, values in (("train", train_array), ("test", test_array), ("test_label", labels)):
             with open(path.join(output_folder, f"{dataset}_{suffix}.pkl"), "wb") as handle:
                 dump(values, handle)

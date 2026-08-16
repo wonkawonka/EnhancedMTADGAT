@@ -1,0 +1,54 @@
+{
+  "plan_name": "89_swat_wadi_frozen_c3_restricted_film",
+  "_thesis_role": "在 SWaT/WADI 上外部验证当前冻结的 C3 候选：受约束状态编码、融合表示 FiLM 与状态语义辅助约束。",
+  "_protocol": "仅用官方正常训练段训练。每个数据集比较 baseline、无辅助 restricted FiLM、真实配对 restricted FiLM、打乱配对 restricted FiLM；不启用已否决的关系联合评分或 Transformer。主指标为原始逐点 AUROC，并同时报告 AP 与低 FPR 召回。",
+  "common_args": {
+    "epochs": 10,
+    "bs": 64,
+    "lookback": 100,
+    "window_stride": 10,
+    "val_split": 0.1,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "model_name": "mtad_gat",
+    "regime_emb_dim": 8,
+    "regime_encoder_type": "restricted",
+    "regime_condition_mode": "fusion",
+    "regime_film_scale": 0.1,
+    "score_fusion_mode": "fixed",
+    "use_physical_consistency_head": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 0,
+    "predict_num_workers": 0,
+    "persistent_workers": false,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "baseline",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {"use_regime_condition": false, "regime_aux_lambda": 0.0, "run_id": "industrial_frozen_baseline"}
+    },
+    {
+      "name": "film_no_aux",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {"use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.0, "run_id": "industrial_frozen_film_no_aux"}
+    },
+    {
+      "name": "film_true",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {"use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.05, "run_id": "industrial_frozen_film_true"}
+    },
+    {
+      "name": "film_shuffled",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {"use_regime_condition": true, "regime_condition_shuffle": true, "regime_aux_lambda": 0.05, "run_id": "industrial_frozen_film_shuffled"}
+    }
+  ]
+}

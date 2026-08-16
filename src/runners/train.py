@@ -212,23 +212,11 @@ def build_trainer(model, optimizer, args, window_size, n_features, target_dims, 
         args.print_every,
         args.log_tensorboard,
         args_summary,
-        use_physical_regularization=getattr(args, "use_physical_regularization", False),
-        physical_reg_config=resolve_physical_state_config(args),
-        physical_reg_warmup_ratio=getattr(args, "physical_reg_warmup_ratio", 0.2),
-        physical_alg_lambda=getattr(args, "physical_alg_lambda", 0.1),
-        physical_smooth_lambda=getattr(args, "physical_smooth_lambda", 0.01),
-        physical_transition_threshold=getattr(args, "physical_transition_threshold", 0.05),
-        physical_transition_relax=getattr(args, "physical_transition_relax", 0.1),
         num_workers=getattr(args, "num_workers", 4),
         persistent_workers=getattr(args, "persistent_workers", True),
         prefetch_factor=getattr(args, "prefetch_factor", 2),
         window_stride=getattr(args, "window_stride", 1),
         regime_aux_lambda=getattr(args, "regime_aux_lambda", 0.0),
-        regime_group_dro_lambda=getattr(args, "regime_group_dro_lambda", 0.0),
-        regime_group_dro_temperature=getattr(args, "regime_group_dro_temperature", 0.05),
-        sparse_graph_lambda=getattr(args, "sparse_graph_lambda", 0.0),
-        normal_tail_lambda=getattr(args, "normal_tail_lambda", 0.0),
-        normal_tail_fraction=getattr(args, "normal_tail_fraction", 0.1),
         early_stopping_patience=getattr(args, "early_stopping_patience", 0),
         early_stopping_min_delta=getattr(args, "early_stopping_min_delta", 1e-4),
     )
@@ -918,6 +906,8 @@ if __name__ == "__main__":
             "CALCE": (0.95, 0.01),   # 为CALCE调整参数以适应无监督设置
             "CALCE2": (0.90, 0.01),   # 为CALCE2调整参数以适应无监督设置
             "BMS": (0.99, 0.001),      # BMS数据集参数
+            "SWAT": (0.99, 0.001),
+            "WADI": (0.99, 0.001),
             CH_BATTERY_DATASET_NAME: (0.99, 0.001),
             TSINGHUA_EV_DATASET_NAME: (0.99, 0.001),
         }
@@ -939,6 +929,8 @@ if __name__ == "__main__":
             "NASA_RANDOM_DISCHARGE": 0,
             "CALCE": 0,
             "BMS": 0,
+            "SWAT": 0,
+            "WADI": 0,
             CH_BATTERY_DATASET_NAME: 0,
             TSINGHUA_EV_DATASET_NAME: 0,
         }
@@ -1274,10 +1266,7 @@ if __name__ == "__main__":
                 prediction_args,
             )
 
-            if is_sequence_container(y_test):
-                label = y_test
-            else:
-                label = y_test[window_size:] if y_test is not None else None
+            label = y_test
             calibration_reference = explicit_validation_tensor if explicit_validation_tensor is not None else x_train
             test_reference = segmented_test_tensors if segmented_test_tensors is not None else x_test
             predictor.predict_anomalies(calibration_reference, test_reference, label)

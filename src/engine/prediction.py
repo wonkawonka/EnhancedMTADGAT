@@ -2014,6 +2014,14 @@ class Predictor:
 
             return true_anomalies[self.window_size:]
 
+        # Raw point labels need the same lookback and stride selection as the
+        # SlidingWindowDataset used to produce anomaly scores.
+        aligned = true_anomalies[self.window_size::self.window_stride]
+
+        if len(aligned) == expected_length:
+
+            return aligned
+
 
         raise ValueError(
 

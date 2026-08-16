@@ -1,0 +1,19 @@
+{
+  "id": "daisychen2/swat-wadi-frozen-c3-restricted-film",
+  "title": "SWaT WADI Frozen C3 Restricted FiLM",
+  "code_file": "kaggle_75_swat_wadi_film_relation_auroc.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "machine_shape": "NvidiaTeslaT4",
+  "enable_internet": true,
+  "dataset_sources": [
+    "daisychen2/enhanced-mtadgat-frozen-source-20260816-v2",
+    "daisychen2/swat-a1a2",
+    "daisychen2/wadi-a2"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}

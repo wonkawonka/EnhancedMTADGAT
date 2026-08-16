@@ -169,8 +169,14 @@ def processed_dataset_path(
 ) -> Path:
     """Resolve processed data for reading; preprocessing writes stay project-local."""
     name = local_name or dataset_name
+    project_processed = DATASETS_ROOT / name / "processed"
     if for_write:
-        return DATASETS_ROOT / name / "processed"
+        return project_processed
+    # Raw Kaggle inputs are read-only and may be selected through a
+    # dataset-specific MTAD_GAT_*_ROOT.  Prefer a preprocessing result already
+    # produced in the writable datasets root before considering mounted input.
+    if project_processed.is_dir():
+        return project_processed
     root = resolve_dataset_root(dataset_name, name)
     return root if root.name == "processed" else root / "processed"
 

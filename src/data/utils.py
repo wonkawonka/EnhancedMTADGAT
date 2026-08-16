@@ -140,6 +140,10 @@ def get_data_dim(dataset):
     elif dataset == "SMAP":
         return 25
     elif dataset == "SWAT":
+        feature_path = processed_dataset_path("SWAT") / "SWAT_train.pkl"
+        if feature_path.exists():
+            with feature_path.open("rb") as handle:
+                return int(np.asarray(pickle.load(handle)).shape[1])
         return 51
     elif dataset == "WADI":
         # The official A2 files contain release-specific constant/all-NaN signals;

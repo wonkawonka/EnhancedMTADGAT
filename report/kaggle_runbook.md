@@ -87,19 +87,19 @@ python run.py internal --plan configs/internal/00_kaggle_smoke.json
 
 ```bash
 python run.py internal \
-  --plan configs/internal/06_kaggle_formal.json \
+  --plan configs/internal/40_final_c3_c4_clean_fivefold.json \
   --resume --skip-existing
 ```
 
 矩阵名称为 `模型_b品牌_f折`。建议按品牌和折分会话，例如：
 
 ```bash
-python run.py internal --plan configs/internal/06_kaggle_formal.json \
-  --only battery_mtadgat_all_b3_f0,battery_c3_b3_f0,battery_c4_b3_f0 \
+python run.py internal --plan configs/internal/40_final_c3_c4_clean_fivefold.json \
+  --only baseline_mtad_gat_b3_f0,c3_four_regime_modules_b3_f0,c4_independent_physics_b3_f0 \
   --resume --skip-existing
 ```
 
-主结果共有 3 个模型 × 3 个品牌 × 5 折 = 45 次；brand3 三组需要重新训练的核心消融再增加15次，共60次。MTAD-GAT 的 all/response 计分和 C4 的有/无物理计分均由同一次推理报告，不重复训练。先完成三个主模型全部五折，再跑消融。
+主结果共有 3 个模型 × 3 个品牌 × 5 折 = 45 次。三个模型是原骨干、C3 四工况模块和 C4 独立物理分支；C3/C4 并列，不做叠加。C4 的有/无物理一致性评分由同一次推理报告，不重复训练。
 
 原论文外部对照单独运行：
 
@@ -119,9 +119,9 @@ python run.py external \
 | --- | --- |
 | MTAD-GAT-all vs response | 性能变化来自模型，还是仅来自去掉控制通道计分 |
 | MTAD-GAT-response vs C3 | 电流/SOC工况条件化是否改善车辆故障排序 |
-| C3 vs C4 | 物理状态、响应损失和物理计分是否继续增益 |
-| C3 vs no-condition/no-aux | 条件化与辅助任务是否各自有效 |
-| C4 vs state-only/no-score | 物理训练约束与推理分数各自贡献 |
+| MTAD-GAT-response vs C4 | 独立物理一致性分支是否增益 |
+| C3历史反例（计划45/46） | FiLM/辅助任务与条件残差校准为何未通过；不在Kaggle重跑 |
+| C4 response-only vs response+consistency | 独立物理分数的推理贡献 |
 | Isolation Forest/GDN/AE/SVDD/LSTM-AD | 五类通用无监督基线的横向比较 |
 | DyAD | 与同数据集原论文专用模型比较 |
 
@@ -136,8 +136,8 @@ python run.py external \
 `logs/`、`output/`、`run_registry.json` 及所有实验产物：
 
 ```text
-runs/internal/06_kaggle_formal/
-runs/internal/06_kaggle_formal.zip
+runs/internal/40_final_c3_c4_clean_fivefold/
+runs/internal/40_final_c3_c4_clean_fivefold.zip
 runs/external/01_nc_battery_official/
 runs/external/01_nc_battery_official.zip
 ```

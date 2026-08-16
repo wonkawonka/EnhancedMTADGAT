@@ -10,11 +10,19 @@
     },
     "git.ignoreLimitWarning": true,
     "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/index": true,
+        "**/.venv/**": true,
+        "**/.python312-runtime/**": true,
         "**/datasets/**": true,
         "**/runs/**": true,
+        "**/checkpoints/**": true,
+        "**/node_modules/**": true,
         "**/__pycache__/**": true,
         "**/.ipynb_checkpoints/**": true
     },
+    "git.terminalAuthentication": true,
+    "git.sshCommand": "ssh -i /home/chenmj/.ssh/id_ed25519_github",
     "search.exclude": {
         "**/datasets/**": true,
         "**/runs/**": true,

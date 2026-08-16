@@ -106,6 +106,7 @@ if __name__ == "__main__":
     model_args_path = f"{model_path}/config.txt"
     with open(model_args_path, "r") as f:
         model_args.__dict__ = json.load(f)
+    # 对已保存配置重新应用冻结结构锁：保留 C3/C4 正式开关，禁用历史分支。
     resolve_model_args(model_args)
     if getattr(model_args, "require_cuda", False) and not torch.cuda.is_available():
         raise RuntimeError("This model run requires CUDA, but CUDA is unavailable for prediction.")
@@ -576,7 +577,10 @@ if __name__ == "__main__":
             json.dump(report, handle, indent=2)
         print(f"[{dataset}] snippet-level metrics: {report}")
     else:
-        label = y_test if is_sequence_container(y_test) else (y_test[window_size:] if y_test is not None else None)
+        # Predictor owns window/stride alignment.  Passing labels already
+        # sliced by lookback only works for stride=1 and breaks frozen runs
+        # evaluated with a larger window stride.
+        label = y_test
         predictor = Predictor(model, window_size, n_features, prediction_args, summary_file_name=summary_file_name)
         calibration_reference = explicit_validation_tensor if explicit_validation_tensor is not None else x_train
         test_reference = segmented_test_tensors if segmented_test_tensors is not None else x_test
