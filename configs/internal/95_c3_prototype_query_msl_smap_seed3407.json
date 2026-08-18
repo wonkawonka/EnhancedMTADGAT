@@ -1,0 +1,84 @@
+{
+  "plan_name": "95_c3_prototype_query_msl_smap_seed3407",
+  "_thesis_role": "验证候选 C3：统计 Token、原型 Query 交叉注意力、Top-2 连续工况状态及路由防坍缩损失。与 85/90 号计划的 baseline 和 restricted C3 同协议比较。",
+  "_protocol": "MSL/SMAP，单 seed 3407，10 epochs；比较无防坍缩损失、完整候选和状态打乱负对照。候选 C3 对所有数据集统一使用完整窗口的全部通道，不做数据集特定筛选。",
+  "seeds": [3407],
+  "common_args": {
+    "epochs": 10,
+    "bs": 128,
+    "lookback": 100,
+    "window_stride": 1,
+    "val_split": 0.1,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "model_name": "mtad_gat",
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "sparse_graph_lambda": 0.0,
+    "use_c3_joint_relation": false,
+    "regime_emb_dim": 8,
+    "regime_encoder_type": "prototype_query",
+    "regime_query_dim": 32,
+    "regime_num_prototypes": 6,
+    "regime_query_heads": 4,
+    "regime_top_k": 2,
+    "regime_temperature": 0.5,
+    "regime_condition_mode": "fusion",
+    "regime_film_scale": 0.1,
+    "regime_group_dro_lambda": 0.0,
+    "regime_aux_lambda": 0.05,
+    "score_fusion_mode": "fixed",
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_physical_consistency_head": false,
+    "use_physical_state_encoding": false,
+    "use_physical_regularization": false,
+    "use_physical_response_score": false,
+    "use_control_response_decoder": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false
+  },
+  "experiments": [
+    {
+      "name": "prototype_no_collapse_loss",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {
+        "use_regime_condition": true,
+        "regime_condition_shuffle": false,
+        "regime_prototype_lambda": 0.0,
+        "run_id": "c3pq_no_collapse_loss"
+      }
+    },
+    {
+      "name": "prototype_full",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {
+        "use_regime_condition": true,
+        "regime_condition_shuffle": false,
+        "regime_prototype_lambda": 0.01,
+        "run_id": "c3pq_full"
+      }
+    },
+    {
+      "name": "prototype_shuffled",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {
+        "use_regime_condition": true,
+        "regime_condition_shuffle": true,
+        "regime_prototype_lambda": 0.01,
+        "run_id": "c3pq_shuffled"
+      }
+    }
+  ]
+}

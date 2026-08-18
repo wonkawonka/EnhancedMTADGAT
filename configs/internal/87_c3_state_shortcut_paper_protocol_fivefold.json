@@ -1,0 +1,73 @@
+{
+  "plan_name": "87_c3_state_shortcut_paper_protocol_fivefold",
+  "_thesis_role": "在清华 Brand3 论文协议五折中重新训练 baseline、真实状态 FiLM、打乱状态 FiLM，确认 fold1 增益是否稳定。",
+  "_protocol": "全部从头训练；状态仅进入融合 FiLM；关系联合头关闭；固定 Top-5%；seed3407，车辆折 seed0。",
+  "common_args": {
+    "dataset": "TSINGHUA_EV",
+    "battery_brand": 3,
+    "battery_fold_seed": 0,
+    "battery_split_protocol": "paper_protocol",
+    "battery_normalization": "paper_channel",
+    "battery_windows_per_snippet": 1,
+    "battery_vehicle_top_ratio": 0.05,
+    "battery_vehicle_top_ratio_mode": "fixed",
+    "battery_response_only_training": false,
+    "battery_score_channels": "response",
+    "epochs": 10,
+    "bs": 64,
+    "lookback": 127,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "model_name": "mtad_gat",
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "use_c3_joint_relation": false,
+    "regime_emb_dim": 8,
+    "regime_encoder_type": "restricted",
+    "regime_condition_mode": "fusion",
+    "regime_film_scale": 0.1,
+    "regime_group_dro_lambda": 0.0,
+    "score_fusion_mode": "fixed",
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_physical_consistency_head": false,
+    "use_physical_state_encoding": false,
+    "use_physical_regularization": false,
+    "use_physical_response_score": false,
+    "use_control_response_decoder": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "baseline",
+      "runner": "src.runners.train_nc_battery",
+      "matrix": {"battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"use_regime_condition": false, "regime_aux_lambda": 0.0, "run_id": "c3_shortcut_paper_baseline"}
+    },
+    {
+      "name": "film_true",
+      "runner": "src.runners.train_nc_battery",
+      "matrix": {"battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.05, "run_id": "c3_shortcut_paper_film_true"}
+    },
+    {
+      "name": "film_shuffled",
+      "runner": "src.runners.train_nc_battery",
+      "matrix": {"battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"use_regime_condition": true, "regime_condition_shuffle": true, "regime_aux_lambda": 0.05, "run_id": "c3_shortcut_paper_film_shuffled"}
+    }
+  ]
+}

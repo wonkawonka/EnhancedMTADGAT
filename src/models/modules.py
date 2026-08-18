@@ -99,6 +99,169 @@ class RestrictedStateEncoder(nn.Module):
         return embedding
 
 
+class PrototypeQueryRegimeEncoder(nn.Module):
+    """用统计 Token 和可学习 Query 构造连续工况状态。
+
+    稠密路由概率只用于可微的防坍缩正则；Top-k 稀疏权重用于实际的
+    原型聚合。这样未进入 Top-k 的原型仍能通过路由正则获得梯度。
+    """
+
+    def __init__(
+        self,
+        n_features,
+        emb_dim=8,
+        model_dim=32,
+        num_prototypes=6,
+        num_heads=4,
+        top_k=2,
+        temperature=0.5,
+        control_indices=None,
+    ):
+        super().__init__()
+        valid_indices = [
+            int(index) for index in (control_indices or range(n_features))
+            if 0 <= int(index) < n_features
+        ]
+        if not valid_indices:
+            valid_indices = list(range(n_features))
+        model_dim = int(model_dim)
+        num_prototypes = int(num_prototypes)
+        num_heads = int(num_heads)
+        if model_dim <= 0 or num_prototypes <= 1:
+            raise ValueError("Prototype-query C3 requires model_dim > 0 and K > 1")
+        if model_dim % num_heads != 0:
+            raise ValueError("regime_query_dim must be divisible by regime_query_heads")
+        if num_prototypes > model_dim:
+            raise ValueError("Orthogonal prototype initialization requires K <= model_dim")
+
+        self.register_buffer(
+            "control_indices", torch.tensor(valid_indices, dtype=torch.long)
+        )
+        self.descriptor_dim = 4
+        self.model_dim = model_dim
+        self.num_prototypes = num_prototypes
+        self.top_k = max(1, min(int(top_k), num_prototypes))
+        self.temperature = max(float(temperature), 1e-4)
+        self.auxiliary_dim = len(valid_indices) * self.descriptor_dim
+
+        self.channel_encoder = nn.Sequential(
+            nn.Linear(self.descriptor_dim, model_dim),
+            nn.GELU(),
+            nn.LayerNorm(model_dim),
+        )
+        self.channel_embeddings = nn.Parameter(
+            torch.empty(len(valid_indices), model_dim)
+        )
+        nn.init.normal_(self.channel_embeddings, mean=0.0, std=0.02)
+
+        self.prototypes = nn.Parameter(torch.empty(num_prototypes, model_dim))
+        nn.init.orthogonal_(self.prototypes)
+        self.cross_attention = nn.MultiheadAttention(
+            model_dim, num_heads, batch_first=True
+        )
+        self.prototype_norm = nn.LayerNorm(model_dim)
+        self.global_projection = nn.Linear(model_dim, model_dim)
+        self.route_global = nn.Linear(model_dim, model_dim, bias=False)
+        self.route_prototype = nn.Linear(model_dim, model_dim, bias=False)
+        self.residual_projection = nn.Linear(model_dim, model_dim)
+
+        state_input_dim = 3 * model_dim + num_prototypes
+        state_hidden_dim = max(2 * model_dim, int(emb_dim) * 2)
+        self.embedding_head = nn.Sequential(
+            nn.Linear(state_input_dim, state_hidden_dim),
+            nn.GELU(),
+            nn.Linear(state_hidden_dim, int(emb_dim)),
+        )
+        self.auxiliary_head = nn.Linear(int(emb_dim), self.auxiliary_dim)
+
+        self.last_routing_probabilities = None
+        self.last_sparse_routing = None
+        self.last_cross_attention = None
+
+    @staticmethod
+    def _marginal_descriptors(channels):
+        return RestrictedStateEncoder._marginal_descriptors(channels)
+
+    def descriptor_target(self, x):
+        channels = torch.index_select(x, dim=2, index=self.control_indices)
+        return self._marginal_descriptors(channels).flatten(start_dim=1)
+
+    def forward(self, x, return_auxiliary=False):
+        channels = torch.index_select(x, dim=2, index=self.control_indices)
+        descriptors = self._marginal_descriptors(channels)
+        tokens = self.channel_encoder(descriptors)
+        tokens = tokens + self.channel_embeddings.unsqueeze(0)
+
+        queries = self.prototypes.unsqueeze(0).expand(x.size(0), -1, -1)
+        prototype_outputs, attention = self.cross_attention(
+            queries, tokens, tokens, need_weights=True, average_attn_weights=False
+        )
+        prototype_outputs = self.prototype_norm(prototype_outputs + queries)
+        global_state = self.global_projection(tokens.mean(dim=1))
+
+        route_global = F.normalize(self.route_global(global_state), dim=-1)
+        route_prototypes = F.normalize(
+            self.route_prototype(prototype_outputs), dim=-1
+        )
+        logits = torch.einsum("bd,bkd->bk", route_global, route_prototypes)
+        routing = torch.softmax(logits / self.temperature, dim=-1)
+
+        top_values, top_indices = torch.topk(routing, self.top_k, dim=-1)
+        sparse_routing = torch.zeros_like(routing).scatter(
+            1, top_indices, top_values
+        )
+        sparse_routing = sparse_routing / sparse_routing.sum(
+            dim=-1, keepdim=True
+        ).clamp_min(1e-8)
+
+        prototype_state = torch.einsum(
+            "bk,bkd->bd", sparse_routing, prototype_outputs
+        )
+        continuous_residual = self.residual_projection(global_state) - prototype_state
+        state_input = torch.cat(
+            (global_state, prototype_state, continuous_residual, sparse_routing),
+            dim=-1,
+        )
+        embedding = self.embedding_head(state_input)
+
+        self.last_routing_probabilities = routing
+        self.last_sparse_routing = sparse_routing
+        self.last_cross_attention = attention
+
+        if return_auxiliary:
+            target = descriptors.flatten(start_dim=1)
+            return embedding, self.auxiliary_head(embedding), target.detach()
+        return embedding
+
+    def routing_collapse_loss(self):
+        """Confidence plus global-usage entropy, evaluated before Top-k."""
+        routing = self.last_routing_probabilities
+        if routing is None:
+            return self.prototypes.new_tensor(0.0)
+        eps = torch.finfo(routing.dtype).eps
+        log_k = math.log(self.num_prototypes)
+        probabilities = routing.clamp_min(eps)
+        confidence = -(
+            probabilities * probabilities.log()
+        ).sum(dim=-1).mean() / log_k
+        mean_probability = routing.mean(dim=0).clamp_min(eps)
+        usage = 1.0 + (
+            mean_probability * mean_probability.log()
+        ).sum() / log_k
+        return confidence + usage
+
+    def routing_diagnostics(self):
+        if self.last_routing_probabilities is None:
+            return None
+        with torch.no_grad():
+            routing = self.last_routing_probabilities
+            sparse = self.last_sparse_routing
+            return {
+                "routing_mass": routing.mean(dim=0).detach().cpu(),
+                "topk_hit_rate": (sparse > 0).float().mean(dim=0).detach().cpu(),
+            }
+
+
 class FiLMConditioner(nn.Module):
     """根据动态状态嵌入生成按特征调制的仿射参数。"""
 
@@ -399,11 +562,12 @@ class TemporalAttentionLayer(nn.Module):
 
 
 class ControlConditionedResponseVAE(nn.Module):
-    """带信息瓶颈的独立正常控制—响应模型。
-    编码器把完整观测窗口压缩为低维潜在状态。响应解码器不能直接读取电压或温度
-    轨迹；它在每个时间步只接收由电流和 SOC 构造的控制量，潜在状态只通过初始隐
-    状态注入一次。因此该分支的残差是独立物理一致性信号，而不是对 MTAD-GAT
-    输出的直接修正。
+    """带信息瓶颈的响应感知条件动态自编码器。
+
+    冻结 C4 默认由单向状态编码器读取完整观测窗口，控制条件解码器逐时刻只读取
+    电流/SOC 及其派生量。这样潜变量可以估计车辆个体状态，但预测路径并非
+    control-only，残差应解释为条件流形重建误差。``control_only`` 和双向状态
+    GRU 都只保留为显式消融。
     """
 
     def __init__(
@@ -421,11 +585,26 @@ class ControlConditionedResponseVAE(nn.Module):
         self.current_index = config.get("consistency_current_index", config.get("current_index"))
         self.soc_index = config.get("consistency_soc_index", config.get("soc_index"))
         self.response_dims = tuple(int(index) for index in response_dims)
-        self.state_encoder = nn.GRU(
-            int(n_features), int(hidden_dim), batch_first=True, bidirectional=True
+        self.encoder_input = str(
+            config.get("consistency_encoder_input", "full_window")
+        ).strip().lower()
+        if self.encoder_input not in {"full_window", "control_only"}:
+            raise ValueError(
+                "consistency_encoder_input must be 'full_window' or 'control_only'"
+            )
+        self.encoder_bidirectional = bool(
+            config.get("consistency_encoder_bidirectional", False)
         )
-        self.mean_head = nn.Linear(2 * int(hidden_dim), int(latent_dim))
-        self.logvar_head = nn.Linear(2 * int(hidden_dim), int(latent_dim))
+        encoder_features = int(n_features) if self.encoder_input == "full_window" else 2
+        self.state_encoder = nn.GRU(
+            encoder_features,
+            int(hidden_dim),
+            batch_first=True,
+            bidirectional=self.encoder_bidirectional,
+        )
+        state_features = int(hidden_dim) * (2 if self.encoder_bidirectional else 1)
+        self.mean_head = nn.Linear(state_features, int(latent_dim))
+        self.logvar_head = nn.Linear(state_features, int(latent_dim))
         self.latent_to_hidden = nn.Linear(int(latent_dim), int(hidden_dim))
         self.response_decoder = nn.GRU(5, int(hidden_dim), batch_first=True)
         self.response_head = nn.Linear(int(hidden_dim), len(self.response_dims))
@@ -437,15 +616,21 @@ class ControlConditionedResponseVAE(nn.Module):
         return x[:, :, index:index + 1]
 
     def forward(self, x):
-        _, hidden = self.state_encoder(x)
-        state = torch.cat([hidden[-2], hidden[-1]], dim=1)
+        current = self._channel(x, self.current_index)
+        soc = self._channel(x, self.soc_index)
+        control_sequence = torch.cat([current, soc], dim=2)
+        encoder_sequence = x if self.encoder_input == "full_window" else control_sequence
+        _, hidden = self.state_encoder(encoder_sequence)
+        state = (
+            torch.cat([hidden[-2], hidden[-1]], dim=1)
+            if self.encoder_bidirectional
+            else hidden[-1]
+        )
         mean = self.mean_head(state)
         logvar = self.logvar_head(state).clamp(-8.0, 8.0)
         # 训练和推理都使用后验均值。KL 项仍约束信息瓶颈，而确定性解码可避免该独立
         # 分支改变后续批次中 MTAD-GAT 随机失活所使用的随机数轨迹。
         latent = mean
-        current = self._channel(x, self.current_index)
-        soc = self._channel(x, self.soc_index)
         current_delta = torch.diff(current, dim=1, prepend=current[:, :1, :])
         soc_delta = torch.diff(soc, dim=1, prepend=soc[:, :1, :])
         controls = torch.cat(

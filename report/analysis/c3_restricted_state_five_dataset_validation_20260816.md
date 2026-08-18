@@ -2,7 +2,7 @@
 
 日期：2026-08-16  
 数据集：MSL、SMAP、清华 EV Brand3 fold1、SWaT、WADI  
-实验性质：seed 3407、10 epochs、架构筛选；不是论文正式多 seed / 多折最终结果。
+实验性质：MSL/SMAP 为 seed 3407、3408、3409 的三 seed 验证；清华 Brand3 为 fold1 快速验证；SWaT/WADI 为 seed 3407、10 epochs 架构筛选。
 
 ## 1. 统一结论
 
@@ -12,7 +12,7 @@
 
 1. `film_true` 在 MSL、SMAP、清华 Brand3 fold1 的 AP 和 AUROC 均超过各自 baseline。
 2. 清华上的状态语义证据最明显：`film_true` 相对 baseline 的 AP/AUROC 分别提高 `+0.204406/+0.142857`，也明显超过 shuffled 对照。
-3. MSL、SMAP 的增益方向一致但幅度较小，真实状态相对 shuffled 的优势也较小，只能视为弱支持。
+3. MSL 的真实状态 FiLM 在三个 seed 中均优于 shuffled；SMAP 的真实状态 FiLM 平均优于 baseline，但不稳定地落后于 shuffled。
 4. SWaT baseline 本身具有可用排序能力（AP `0.714338`、AUROC `0.823407`），但三个 FiLM 臂均未同时超过 baseline；真实状态不优于 shuffled。
 5. WADI 四臂均接近随机排序。其核心问题是正常训练/验证工况与测试工况严重漂移，而不是训练未完成或数据文件损坏。
 6. 因此冻结 C3 的论文表述必须限定为“状态语义明确时有明显收益、跨工业数据外推不稳定”，不能声称五数据集普遍提升。
@@ -32,7 +32,7 @@
 
 - 骨干为 Conv1D + Feature-GAT + Temporal-GAT + GRU，不使用 Transformer。
 - 状态表示为 8-D，只在三路融合表示后通过 FiLM 注入。
-- seed `3407`，训练 `10 epochs`。
+- MSL/SMAP 使用 seed `3407`、`3408`、`3409`，其余快速验证使用 seed `3407`；训练 `10 epochs`。
 - MSL、SMAP、SWaT、WADI 使用原始逐点 AP/AUROC。
 - 清华使用固定 Top-5% 聚合后的车辆级 AP/AUROC。
 - AP/AUROC 可用于判断各数据集内部的模型排序，但清华车辆级指标不能和其余四个逐点指标直接比较绝对大小。
@@ -49,14 +49,14 @@
 
 | 数据集 | 实验臂 | AP | ΔAP | AUROC | ΔAUROC |
 |---|---|---:|---:|---:|---:|
-| MSL | baseline | 0.239876 | — | 0.684256 | — |
-| MSL | film_no_aux | 0.231627 | -0.008249 | 0.667205 | -0.017050 |
-| MSL | film_shuffled | 0.243120 | +0.003244 | 0.692399 | +0.008144 |
-| MSL | **film_true** | **0.246150** | **+0.006274** | **0.705825** | **+0.021570** |
-| SMAP | baseline | 0.141868 | — | 0.545149 | — |
-| SMAP | film_no_aux | 0.141742 | -0.000126 | 0.549199 | +0.004049 |
-| SMAP | film_shuffled | 0.149276 | +0.007408 | 0.595070 | +0.049921 |
-| SMAP | **film_true** | **0.151236** | **+0.009368** | **0.604501** | **+0.059351** |
+| MSL（3 seeds） | baseline | 0.247096 ± 0.009040 | — | 0.696492 ± 0.022932 | — |
+| MSL（3 seeds） | film_no_aux | 0.246624 ± 0.017307 | -0.000472 | 0.698754 ± 0.033295 | +0.002263 |
+| MSL（3 seeds） | film_shuffled | 0.247705 ± 0.005711 | +0.000609 | 0.696755 ± 0.005494 | +0.000264 |
+| MSL（3 seeds） | **film_true** | **0.249830 ± 0.005957** | **+0.002734** | **0.710259 ± 0.007843** | **+0.013768** |
+| SMAP（3 seeds） | baseline | 0.143541 ± 0.003092 | — | 0.554536 ± 0.032126 | — |
+| SMAP（3 seeds） | film_no_aux | 0.140549 ± 0.002919 | -0.002992 | 0.550724 ± 0.023794 | -0.003812 |
+| SMAP（3 seeds） | **film_shuffled** | **0.146798 ± 0.002746** | **+0.003256** | **0.581252 ± 0.015042** | **+0.026716** |
+| SMAP（3 seeds） | film_true | 0.145256 ± 0.009668 | +0.001715 | 0.569029 ± 0.049324 | +0.014494 |
 | 清华 Brand3 fold1 | baseline | 0.462771 | — | 0.634921 | — |
 | 清华 Brand3 fold1 | film_no_aux | 0.586590 | +0.123820 | 0.714286 | +0.079365 |
 | 清华 Brand3 fold1 | film_shuffled | 0.487812 | +0.025041 | 0.666667 | +0.031746 |
@@ -74,7 +74,7 @@
 
 - `film_true` 同时提高 AP 和 AUROC：MSL、SMAP、清华，共 `3/5` 个数据集。
 - `film_true` 同时低于 baseline：SWaT；WADI 虽 AP 略升，但 AUROC 下降且整体接近随机。
-- `film_true` 同时优于 shuffled：MSL、SMAP、清华，共 `3/5`；SWaT/WADI 均不成立。
+- `film_true` 同时优于 shuffled：MSL、清华，共 `2/5`；SMAP、SWaT/WADI 均不成立。
 - 最强且最清晰的证据来自清华；最明确的失败来自 WADI。
 
 ## 4. 低误报工作点补充
@@ -96,12 +96,11 @@ SWaT 的低误报召回约为 `0.60`，说明 baseline 和 FiLM 都有实用检�
 
 ## 5. 分数据集判断
 
-### 5.1 MSL 与 SMAP：弱正向证据
+### 5.1 MSL 与 SMAP：多 seed 验证
 
-- `film_true` 在两个数据集上都提高 AP/AUROC。
-- 相对 `film_no_aux`，辅助状态约束在 MSL 提高 AP/AUROC `+0.014523/+0.038620`，在 SMAP 提高 `+0.009494/+0.055302`。
-- `film_true` 相对 shuffled 仅小幅领先：MSL 为 `+0.003030/+0.013426`，SMAP 为 `+0.001960/+0.009431`。
-- 方向一致，但单 seed 和小幅差距不足以证明模型稳定依赖正确的状态—窗口配对。
+- MSL：`film_true` 相对 baseline 的 AP/AUROC 为 `+0.002734/+0.013768`，相对 shuffled 为 `+0.002125/+0.013504`；三个 seed 的真实状态 FiLM 均优于 shuffled，提供有限但一致的状态配对证据。
+- SMAP：`film_true` 相对 baseline 的 AP/AUROC 为 `+0.001715/+0.014494`，但相对 shuffled 为 `-0.001542/-0.012223`；因此不能将 SMAP 的提升归因于正确状态—窗口配对。
+- 相对 `film_no_aux`，真实状态辅助约束在 MSL 平均提高 AP/AUROC `+0.003206/+0.011505`，在 SMAP 为 `+0.004707/+0.018305`。
 
 ### 5.2 清华：最强状态语义证据
 
@@ -140,13 +139,14 @@ SWaT 的低误报召回约为 `0.60`，说明 baseline 和 FiLM 都有实用检�
 
 1. C3 结构冻结为 restricted-state encoder、fusion FiLM、状态语义辅助损失；不再切换到 Dual-relation 或其他历史候选。
 2. 四臂负对照固定为 baseline、film_no_aux、film_true、film_shuffled；评价时必须完整报告失败数据集，不能只汇报正向结果。
-3. MSL/SMAP 记录为单 seed 弱正向证据；清华 fold1 是强正向但仍需结合多折方差解释。
+3. MSL 的三 seed 结果提供有限但一致的真实状态配对证据；SMAP 的三 seed 结果仅支持 FiLM 的整体排序改善，不支持正确状态配对带来稳定收益；清华 fold1 是强正向但仍需结合多折方差解释。
 4. SWaT baseline 有效而 C3 无稳定整体增益；WADI 受分布漂移主导。这两项是冻结路线的适用边界，不再通过更换模块规避。
 5. 旧 relation/joint-NLL、Dual-relation 和其他候选只保留在历史归档中，不进入最终结构或活动实验计划。
 
 ## 8. 结果来源
 
 - MSL/SMAP/清华同路线报告：`report/analysis/c3_restricted_state_three_dataset_validation_20260816.md`
+- MSL/SMAP 新增 seed 3408/3409：`runs/internal/90_c3_restricted_state_msl_smap_seed3408_3409__formal_20260816/logs/`
 - 后续 C3 清理汇总：`report/analysis/86_c3_results_clean_summary.md`
 - SWaT/WADI 指标：`runs/kaggle_downloads/swat_wadi_v8/evaluation/swat_wadi_metrics.csv`
 - SWaT/WADI 完整 JSON：`runs/kaggle_downloads/swat_wadi_v8/evaluation/swat_wadi_metrics.json`

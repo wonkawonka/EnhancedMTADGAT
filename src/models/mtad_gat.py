@@ -11,6 +11,7 @@ from src.models.modules import (
     FiLMConditioner,
     Forecasting_Model,
     GRULayer,
+    PrototypeQueryRegimeEncoder,
     ReconstructionModel,
     RestrictedStateEncoder,
     TemporalAttentionLayer,
@@ -20,10 +21,10 @@ from src.models.modules import (
 class Enhanced_MTADGAT(nn.Module):
     """Original MTAD-GAT plus two parallel, frozen research extensions.
 
-    C3 consists only of RestrictedStateEncoder, fusion-level FiLM and its
-    semantic auxiliary loss. C4 consists only of an independent
-    control-to-response physical consistency head. The two extensions cannot
-    be enabled together.
+    C3 can use the frozen restricted encoder or the prototype-query upgrade;
+    both retain fusion-level FiLM. C4 is an independent response-aware conditional
+    autoencoder by default; its strict control-only form remains an explicit
+    ablation. The two extensions cannot be enabled together.
     """
 
     def __init__(
@@ -45,11 +46,17 @@ class Enhanced_MTADGAT(nn.Module):
         alpha=0.2,
         target_dims=None,
         use_regime_condition=False,
+        regime_encoder_type="restricted",
         regime_emb_dim=8,
         regime_control_indices=None,
         regime_channel_pooling=False,
         regime_film_scale=0.1,
         regime_condition_shuffle=False,
+        regime_query_dim=32,
+        regime_num_prototypes=6,
+        regime_query_heads=4,
+        regime_top_k=2,
+        regime_temperature=0.5,
         use_physical_consistency_head=False,
         physical_consistency_hidden_dim=64,
         physical_consistency_latent_dim=16,
@@ -63,7 +70,7 @@ class Enhanced_MTADGAT(nn.Module):
 
         self.target_dims = target_dims
         self.use_regime_condition = bool(use_regime_condition)
-        self.regime_encoder_type = "restricted"
+        self.regime_encoder_type = str(regime_encoder_type).lower()
         self.regime_condition_mode = "fusion"
         self.regime_channel_pooling = bool(regime_channel_pooling)
         self.regime_film_scale = max(0.0, min(float(regime_film_scale), 1.0))
@@ -101,12 +108,24 @@ class Enhanced_MTADGAT(nn.Module):
         if self.use_regime_condition:
             # Preserve the original backbone RNG trajectory when C3 is added.
             rng_state = torch.get_rng_state()
-            self.regime_encoder = RestrictedStateEncoder(
-                n_features,
-                emb_dim=regime_emb_dim,
-                control_indices=regime_control_indices,
-                pooled_channels=self.regime_channel_pooling,
-            )
+            if self.regime_encoder_type == "prototype_query":
+                self.regime_encoder = PrototypeQueryRegimeEncoder(
+                    n_features,
+                    emb_dim=regime_emb_dim,
+                    model_dim=regime_query_dim,
+                    num_prototypes=regime_num_prototypes,
+                    num_heads=regime_query_heads,
+                    top_k=regime_top_k,
+                    temperature=regime_temperature,
+                    control_indices=regime_control_indices,
+                )
+            else:
+                self.regime_encoder = RestrictedStateEncoder(
+                    n_features,
+                    emb_dim=regime_emb_dim,
+                    control_indices=regime_control_indices,
+                    pooled_channels=self.regime_channel_pooling,
+                )
             self.fusion_conditioner = FiLMConditioner(
                 regime_emb_dim, 3 * n_features
             )
@@ -249,6 +268,15 @@ class Enhanced_MTADGAT(nn.Module):
     def control_response_auxiliary_loss(self, x):
         """Compatibility name for the frozen C4 consistency objective."""
         return self.regime_auxiliary_loss(x)
+
+    def regime_prototype_loss(self):
+        if not self.use_regime_condition:
+            reference = next(self.parameters())
+            return reference.new_tensor(0.0)
+        collapse_loss = getattr(self.regime_encoder, "routing_collapse_loss", None)
+        if collapse_loss is None:
+            return self._regime_embedding.new_tensor(0.0)
+        return collapse_loss()
 
     def encode_regime(self, x):
         if not self.use_regime_condition:

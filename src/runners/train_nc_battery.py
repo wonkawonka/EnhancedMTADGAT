@@ -1536,6 +1536,14 @@ def main():
         "model_score_dims": primary["score_dims"],
         "model_output_dims": list(range(7)) if target_dims is None else target_dims,
         "response_only_training": bool(args.battery_response_only_training),
+        "physical_consistency_encoder_input": (
+            args.physical_consistency_encoder_input
+            if args.use_physical_consistency_head else None
+        ),
+        "physical_consistency_encoder_bidirectional": (
+            bool(args.physical_consistency_encoder_bidirectional)
+            if args.use_physical_consistency_head else None
+        ),
         "vehicle_top_ratio": primary["selected_top_ratio"],
         "configured_vehicle_top_ratio": args.battery_vehicle_top_ratio,
         "configured_vehicle_top_ratio_mode": args.battery_vehicle_top_ratio_mode,

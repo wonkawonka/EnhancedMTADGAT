@@ -35,7 +35,7 @@ def _unwrap_model(model):
 
 
 class Trainer:
-    """Train the baseline loss plus the one frozen C3/C4 auxiliary loss."""
+    """Train the baseline plus optional C3/C4 auxiliary objectives."""
 
     def __init__(
         self,
@@ -60,6 +60,7 @@ class Trainer:
         prefetch_factor=2,
         window_stride=1,
         regime_aux_lambda=0.0,
+        regime_prototype_lambda=0.0,
         early_stopping_patience=0,
         early_stopping_min_delta=1e-4,
     ):
@@ -83,6 +84,7 @@ class Trainer:
         self.loader_prefetch_factor = max(int(prefetch_factor), 1)
         self.window_stride = max(int(window_stride), 1)
         self.regime_aux_lambda = max(0.0, float(regime_aux_lambda))
+        self.regime_prototype_lambda = max(0.0, float(regime_prototype_lambda))
         self.early_stopping_patience = max(0, int(early_stopping_patience))
         self.early_stopping_min_delta = max(0.0, float(early_stopping_min_delta))
         self.early_stopping_bad_epochs = 0
@@ -105,10 +107,12 @@ class Trainer:
             "train_forecast": [],
             "train_recon": [],
             "train_regime_aux": [],
+            "train_regime_prototype": [],
             "val_total": [],
             "val_forecast": [],
             "val_recon": [],
             "val_regime_aux": [],
+            "val_regime_prototype": [],
         }
 
     def _batch_losses(self, x, y):
@@ -130,8 +134,17 @@ class Trainer:
             auxiliary = base_model.regime_auxiliary_loss(x)
         else:
             auxiliary = x.new_tensor(0.0)
-        total = forecast + reconstruction + self.regime_aux_lambda * auxiliary
-        return forecast, reconstruction, auxiliary, total
+        if self.regime_prototype_lambda > 0.0:
+            prototype = base_model.regime_prototype_loss()
+        else:
+            prototype = x.new_tensor(0.0)
+        total = (
+            forecast
+            + reconstruction
+            + self.regime_aux_lambda * auxiliary
+            + self.regime_prototype_lambda * prototype
+        )
+        return forecast, reconstruction, auxiliary, prototype, total
 
     @staticmethod
     def _epoch_value(values):
@@ -140,7 +153,7 @@ class Trainer:
 
     def _run_loader(self, data_loader, training):
         self.model.train(training)
-        collected = [[], [], []]
+        collected = [[], [], [], []]
         context = torch.enable_grad() if training else torch.no_grad()
         with context:
             for x, y in data_loader:
@@ -148,16 +161,25 @@ class Trainer:
                 if training:
                     self.optimizer.zero_grad()
                 with _autocast_context(self.device):
-                    forecast, reconstruction, auxiliary, total = self._batch_losses(x, y)
+                    forecast, reconstruction, auxiliary, prototype, total = self._batch_losses(x, y)
                 if training:
                     self.scaler.scale(total).backward()
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
-                for bucket, value in zip(collected, (forecast, reconstruction, auxiliary)):
+                for bucket, value in zip(
+                    collected, (forecast, reconstruction, auxiliary, prototype)
+                ):
                     bucket.append(value.item())
-        forecast, reconstruction, auxiliary = map(self._epoch_value, collected)
-        total = forecast + reconstruction + self.regime_aux_lambda * auxiliary
-        return forecast, reconstruction, total, 0.0, 0.0, auxiliary
+        forecast, reconstruction, auxiliary, prototype = map(
+            self._epoch_value, collected
+        )
+        total = (
+            forecast
+            + reconstruction
+            + self.regime_aux_lambda * auxiliary
+            + self.regime_prototype_lambda * prototype
+        )
+        return forecast, reconstruction, total, 0.0, prototype, auxiliary
 
     def fit(self, train_loader, val_loader=None):
         """Train with optional validation, checkpoint resume and early stopping."""
@@ -208,24 +230,27 @@ class Trainer:
         print(f"-- Training done in {duration}s.")
 
     def _record(self, prefix, values):
-        forecast, reconstruction, total, _, _, auxiliary = values
+        forecast, reconstruction, total, _, prototype, auxiliary = values
         self.losses[f"{prefix}_forecast"].append(forecast)
         self.losses[f"{prefix}_recon"].append(reconstruction)
         self.losses[f"{prefix}_regime_aux"].append(auxiliary)
+        self.losses[f"{prefix}_regime_prototype"].append(prototype)
         self.losses[f"{prefix}_total"].append(total)
 
     @staticmethod
     def _format_losses(epoch, train_values, val_values, elapsed):
-        f, r, total, _, _, aux = train_values
+        f, r, total, _, proto, aux = train_values
         message = (
             f"[Epoch {epoch + 1}] forecast_loss = {f:.5f}, recon_loss = {r:.5f}, "
-            f"frozen_aux = {aux:.5f}, total_loss = {total:.5f}"
+            f"state_aux = {aux:.5f}, prototype_loss = {proto:.5f}, "
+            f"total_loss = {total:.5f}"
         )
         if val_values is not None:
-            vf, vr, vt, _, _, va = val_values
+            vf, vr, vt, _, vp, va = val_values
             message += (
                 f" ---- val_forecast_loss = {vf:.5f}, val_recon_loss = {vr:.5f}, "
-                f"val_frozen_aux = {va:.5f}, val_total_loss = {vt:.5f}"
+                f"val_state_aux = {va:.5f}, val_prototype_loss = {vp:.5f}, "
+                f"val_total_loss = {vt:.5f}"
             )
         return f"{message} [{elapsed:.1f}s]"
 

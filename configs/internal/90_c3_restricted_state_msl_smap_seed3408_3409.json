@@ -1,0 +1,68 @@
+{
+  "plan_name": "90_c3_restricted_state_msl_smap_seed3408_3409",
+  "_thesis_role": "补齐 MSL/SMAP 的 C3 restricted-state FiLM 多随机种子验证；seed 3407 已完成，本计划仅运行剩余两个 seed。",
+  "_protocol": "MSL/SMAP，seed 3408、3409，10 epochs；四臂均从头训练。真实/打乱 FiLM 检验状态配对，with/without auxiliary 检验状态语义约束。",
+  "seeds": [3408, 3409],
+  "common_args": {
+    "epochs": 10,
+    "bs": 128,
+    "lookback": 100,
+    "window_stride": 1,
+    "val_split": 0.1,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "model_name": "mtad_gat",
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "sparse_graph_lambda": 0.0,
+    "use_c3_joint_relation": false,
+    "regime_emb_dim": 8,
+    "regime_encoder_type": "restricted",
+    "regime_condition_mode": "fusion",
+    "regime_film_scale": 0.1,
+    "regime_group_dro_lambda": 0.0,
+    "score_fusion_mode": "fixed",
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_physical_consistency_head": false,
+    "use_physical_state_encoding": false,
+    "use_physical_regularization": false,
+    "use_physical_response_score": false,
+    "use_control_response_decoder": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false
+  },
+  "experiments": [
+    {
+      "name": "baseline",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {"use_regime_condition": false, "regime_aux_lambda": 0.0, "run_id": "c3r_baseline"}
+    },
+    {
+      "name": "film_no_aux",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {"use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.0, "run_id": "c3r_film_no_aux"}
+    },
+    {
+      "name": "film_true",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {"use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.05, "run_id": "c3r_film_true"}
+    },
+    {
+      "name": "film_shuffled",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {"use_regime_condition": true, "regime_condition_shuffle": true, "regime_aux_lambda": 0.05, "run_id": "c3r_film_shuffled"}
+    }
+  ]
+}

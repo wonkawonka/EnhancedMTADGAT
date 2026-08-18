@@ -217,6 +217,7 @@ def build_trainer(model, optimizer, args, window_size, n_features, target_dims, 
         prefetch_factor=getattr(args, "prefetch_factor", 2),
         window_stride=getattr(args, "window_stride", 1),
         regime_aux_lambda=getattr(args, "regime_aux_lambda", 0.0),
+        regime_prototype_lambda=getattr(args, "regime_prototype_lambda", 0.0),
         early_stopping_patience=getattr(args, "early_stopping_patience", 0),
         early_stopping_min_delta=getattr(args, "early_stopping_min_delta", 1e-4),
     )

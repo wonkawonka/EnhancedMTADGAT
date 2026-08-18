@@ -83,10 +83,16 @@ def get_parser():
         "--regime_encoder_type",
         type=str,
         default="temporal",
-        choices=["restricted", "temporal", "statistics"],
-        help="restricted uses marginal descriptors only; temporal/statistics are retained for ablation",
+        choices=["restricted", "prototype_query", "temporal", "statistics"],
+        help="restricted is the frozen marginal encoder; prototype_query is the proposed C3 upgrade",
     )
     parser.add_argument("--regime_aux_lambda", type=float, default=0.05, help="Self-supervised dynamic descriptor loss weight")
+    parser.add_argument("--regime_prototype_lambda", type=float, default=0.0, help="Weight of the prototype-query routing anti-collapse loss")
+    parser.add_argument("--regime_query_dim", type=int, default=32, help="Internal token/query width of prototype-query C3")
+    parser.add_argument("--regime_num_prototypes", type=int, default=6, help="Number of learnable operating-regime queries")
+    parser.add_argument("--regime_query_heads", type=int, default=4, help="Cross-attention head count of prototype-query C3")
+    parser.add_argument("--regime_top_k", type=int, default=2, help="Number of prototypes retained for state aggregation")
+    parser.add_argument("--regime_temperature", type=float, default=0.5, help="Dense routing softmax temperature before Top-k")
     parser.add_argument(
         "--use_physical_state_encoding",
         type=str2bool,
@@ -227,6 +233,22 @@ def get_parser():
     )
     parser.add_argument("--physical_consistency_hidden_dim", type=int, default=64)
     parser.add_argument("--physical_consistency_latent_dim", type=int, default=16)
+    parser.add_argument(
+        "--physical_consistency_encoder_input",
+        type=str,
+        default="full_window",
+        choices=["full_window", "control_only"],
+        help=(
+            "C4 state input: restored response-aware full window or strict current/SOC-only "
+            "ablation"
+        ),
+    )
+    parser.add_argument(
+        "--physical_consistency_encoder_bidirectional",
+        type=str2bool,
+        default=False,
+        help="Use a one-way C4 state GRU by default; true enables the historical bidirectional ablation",
+    )
     parser.add_argument("--physical_consistency_aux_weight", type=float, default=0.0)
     parser.add_argument("--physical_consistency_kl_weight", type=float, default=0.0001)
     parser.add_argument(

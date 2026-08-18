@@ -30,12 +30,20 @@ def resolve_model_args(args):
     get_model_family_defaults(model_name)
     args.model_name = model_name
 
-    # C3 is exactly RestrictedStateEncoder + fusion FiLM + semantic auxiliary loss.
+    # C3 keeps the fusion-FiLM boundary.  The restricted encoder remains the
+    # frozen ablation; prototype_query is the explicit proposed upgrade.
     args.use_transformer = False
     args.feature_att_trans = False
     args.multi_scale_mode = "none"
     args.use_revin = False
-    args.regime_encoder_type = "restricted"
+    requested_regime_encoder = str(
+        getattr(args, "regime_encoder_type", "restricted")
+    ).lower()
+    args.regime_encoder_type = (
+        "prototype_query"
+        if requested_regime_encoder == "prototype_query"
+        else "restricted"
+    )
     args.regime_condition_mode = "fusion"
 
     # C4 is exactly the independent control-to-response consistency head.
@@ -63,7 +71,7 @@ def resolve_model_args(args):
 
 
 def resolve_physical_state_config(args):
-    """Map Tsinghua EV controls and responses for the frozen C4 head."""
+    """Map Tsinghua EV responses and the configurable C4 state observer."""
     if str(getattr(args, "dataset", "")).upper() != "TSINGHUA_EV":
         return None
     return {
@@ -73,6 +81,12 @@ def resolve_physical_state_config(args):
         "consistency_current_index": 1,
         "consistency_soc_index": 2,
         "consistency_response_dims": [0, 3, 4, 5, 6],
+        "consistency_encoder_input": str(
+            getattr(args, "physical_consistency_encoder_input", "full_window")
+        ),
+        "consistency_encoder_bidirectional": bool(
+            getattr(args, "physical_consistency_encoder_bidirectional", False)
+        ),
         "response_score_dims": get_score_dims("TSINGHUA_EV"),
     }
 
@@ -80,8 +94,16 @@ def resolve_physical_state_config(args):
 def resolve_regime_config(args, n_features):
     """Select only the control/context channels used by frozen C3."""
     dataset = str(getattr(args, "dataset", "")).upper()
+    if str(getattr(args, "regime_encoder_type", "restricted")).lower() == "prototype_query":
+        # The proposed C3 is dataset-agnostic: every observed channel becomes
+        # one statistical token. Dataset-specific channel filtering is left
+        # to explicit future ablations rather than built into the architecture.
+        return {"control_indices": list(range(n_features)), "pooled_channels": False}
     if dataset == "TSINGHUA_EV":
-        return {"control_indices": [1, 2], "pooled_channels": False}
+        # C3 is a generic data-driven regime encoder.  For Tsinghua EV it sees
+        # the full window, just as the anonymous-context route does on MSL/SMAP;
+        # only C4 reserves the strict current/SOC-only control-response split.
+        return {"control_indices": list(range(n_features)), "pooled_channels": False}
     if dataset in {"MSL", "SMAP"} and n_features > 1:
         return {
             "control_indices": list(range(1, n_features)),
@@ -127,11 +149,17 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
         alpha=args.alpha,
         target_dims=target_dims,
         use_regime_condition=bool(getattr(args, "use_regime_condition", False)),
+        regime_encoder_type=str(getattr(args, "regime_encoder_type", "restricted")),
         regime_emb_dim=int(getattr(args, "regime_emb_dim", 8)),
         regime_control_indices=regime["control_indices"],
         regime_channel_pooling=regime["pooled_channels"],
         regime_film_scale=float(getattr(args, "regime_film_scale", 0.1)),
         regime_condition_shuffle=bool(getattr(args, "regime_condition_shuffle", False)),
+        regime_query_dim=int(getattr(args, "regime_query_dim", 32)),
+        regime_num_prototypes=int(getattr(args, "regime_num_prototypes", 6)),
+        regime_query_heads=int(getattr(args, "regime_query_heads", 4)),
+        regime_top_k=int(getattr(args, "regime_top_k", 2)),
+        regime_temperature=float(getattr(args, "regime_temperature", 0.5)),
         use_physical_consistency_head=use_c4,
         physical_consistency_hidden_dim=int(
             getattr(args, "physical_consistency_hidden_dim", 64)
