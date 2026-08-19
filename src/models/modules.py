@@ -100,11 +100,7 @@ class RestrictedStateEncoder(nn.Module):
 
 
 class PrototypeQueryRegimeEncoder(nn.Module):
-    """用统计 Token 和可学习 Query 构造连续工况状态。
-
-    稠密路由概率只用于可微的防坍缩正则；Top-k 稀疏权重用于实际的
-    原型聚合。这样未进入 Top-k 的原型仍能通过路由正则获得梯度。
-    """
+    """用统计 Token、可学习 Query 和软路由构造连续工况状态。"""
 
     def __init__(
         self,
@@ -113,7 +109,6 @@ class PrototypeQueryRegimeEncoder(nn.Module):
         model_dim=32,
         num_prototypes=6,
         num_heads=4,
-        top_k=2,
         temperature=0.5,
         control_indices=None,
     ):
@@ -140,7 +135,6 @@ class PrototypeQueryRegimeEncoder(nn.Module):
         self.descriptor_dim = 4
         self.model_dim = model_dim
         self.num_prototypes = num_prototypes
-        self.top_k = max(1, min(int(top_k), num_prototypes))
         self.temperature = max(float(temperature), 1e-4)
         self.auxiliary_dim = len(valid_indices) * self.descriptor_dim
 
@@ -160,22 +154,12 @@ class PrototypeQueryRegimeEncoder(nn.Module):
             model_dim, num_heads, batch_first=True
         )
         self.prototype_norm = nn.LayerNorm(model_dim)
-        self.global_projection = nn.Linear(model_dim, model_dim)
         self.route_global = nn.Linear(model_dim, model_dim, bias=False)
         self.route_prototype = nn.Linear(model_dim, model_dim, bias=False)
-        self.residual_projection = nn.Linear(model_dim, model_dim)
-
-        state_input_dim = 3 * model_dim + num_prototypes
-        state_hidden_dim = max(2 * model_dim, int(emb_dim) * 2)
-        self.embedding_head = nn.Sequential(
-            nn.Linear(state_input_dim, state_hidden_dim),
-            nn.GELU(),
-            nn.Linear(state_hidden_dim, int(emb_dim)),
-        )
+        self.embedding_head = nn.Linear(model_dim, int(emb_dim))
         self.auxiliary_head = nn.Linear(int(emb_dim), self.auxiliary_dim)
 
         self.last_routing_probabilities = None
-        self.last_sparse_routing = None
         self.last_cross_attention = None
 
     @staticmethod
@@ -197,7 +181,7 @@ class PrototypeQueryRegimeEncoder(nn.Module):
             queries, tokens, tokens, need_weights=True, average_attn_weights=False
         )
         prototype_outputs = self.prototype_norm(prototype_outputs + queries)
-        global_state = self.global_projection(tokens.mean(dim=1))
+        global_state = tokens.mean(dim=1)
 
         route_global = F.normalize(self.route_global(global_state), dim=-1)
         route_prototypes = F.normalize(
@@ -205,27 +189,12 @@ class PrototypeQueryRegimeEncoder(nn.Module):
         )
         logits = torch.einsum("bd,bkd->bk", route_global, route_prototypes)
         routing = torch.softmax(logits / self.temperature, dim=-1)
-
-        top_values, top_indices = torch.topk(routing, self.top_k, dim=-1)
-        sparse_routing = torch.zeros_like(routing).scatter(
-            1, top_indices, top_values
-        )
-        sparse_routing = sparse_routing / sparse_routing.sum(
-            dim=-1, keepdim=True
-        ).clamp_min(1e-8)
-
         prototype_state = torch.einsum(
-            "bk,bkd->bd", sparse_routing, prototype_outputs
+            "bk,bkd->bd", routing, prototype_outputs
         )
-        continuous_residual = self.residual_projection(global_state) - prototype_state
-        state_input = torch.cat(
-            (global_state, prototype_state, continuous_residual, sparse_routing),
-            dim=-1,
-        )
-        embedding = self.embedding_head(state_input)
+        embedding = self.embedding_head(prototype_state)
 
         self.last_routing_probabilities = routing
-        self.last_sparse_routing = sparse_routing
         self.last_cross_attention = attention
 
         if return_auxiliary:
@@ -234,7 +203,7 @@ class PrototypeQueryRegimeEncoder(nn.Module):
         return embedding
 
     def routing_collapse_loss(self):
-        """Confidence plus global-usage entropy, evaluated before Top-k."""
+        """用单窗口置信度和批次使用均衡约束软路由。"""
         routing = self.last_routing_probabilities
         if routing is None:
             return self.prototypes.new_tensor(0.0)
@@ -255,10 +224,11 @@ class PrototypeQueryRegimeEncoder(nn.Module):
             return None
         with torch.no_grad():
             routing = self.last_routing_probabilities
-            sparse = self.last_sparse_routing
             return {
                 "routing_mass": routing.mean(dim=0).detach().cpu(),
-                "topk_hit_rate": (sparse > 0).float().mean(dim=0).detach().cpu(),
+                "winner_rate": F.one_hot(
+                    routing.argmax(dim=-1), num_classes=self.num_prototypes
+                ).float().mean(dim=0).detach().cpu(),
             }
 
 

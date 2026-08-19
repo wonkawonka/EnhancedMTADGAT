@@ -158,7 +158,6 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
         regime_query_dim=int(getattr(args, "regime_query_dim", 32)),
         regime_num_prototypes=int(getattr(args, "regime_num_prototypes", 6)),
         regime_query_heads=int(getattr(args, "regime_query_heads", 4)),
-        regime_top_k=int(getattr(args, "regime_top_k", 2)),
         regime_temperature=float(getattr(args, "regime_temperature", 0.5)),
         use_physical_consistency_head=use_c4,
         physical_consistency_hidden_dim=int(

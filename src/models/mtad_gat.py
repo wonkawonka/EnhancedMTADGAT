@@ -55,7 +55,6 @@ class Enhanced_MTADGAT(nn.Module):
         regime_query_dim=32,
         regime_num_prototypes=6,
         regime_query_heads=4,
-        regime_top_k=2,
         regime_temperature=0.5,
         use_physical_consistency_head=False,
         physical_consistency_hidden_dim=64,
@@ -115,7 +114,6 @@ class Enhanced_MTADGAT(nn.Module):
                     model_dim=regime_query_dim,
                     num_prototypes=regime_num_prototypes,
                     num_heads=regime_query_heads,
-                    top_k=regime_top_k,
                     temperature=regime_temperature,
                     control_indices=regime_control_indices,
                 )

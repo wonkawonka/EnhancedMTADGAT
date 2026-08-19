@@ -91,8 +91,7 @@ def get_parser():
     parser.add_argument("--regime_query_dim", type=int, default=32, help="Internal token/query width of prototype-query C3")
     parser.add_argument("--regime_num_prototypes", type=int, default=6, help="Number of learnable operating-regime queries")
     parser.add_argument("--regime_query_heads", type=int, default=4, help="Cross-attention head count of prototype-query C3")
-    parser.add_argument("--regime_top_k", type=int, default=2, help="Number of prototypes retained for state aggregation")
-    parser.add_argument("--regime_temperature", type=float, default=0.5, help="Dense routing softmax temperature before Top-k")
+    parser.add_argument("--regime_temperature", type=float, default=0.5, help="Soft routing temperature of prototype-query C3")
     parser.add_argument(
         "--use_physical_state_encoding",
         type=str2bool,
