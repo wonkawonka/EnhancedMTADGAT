@@ -135,7 +135,6 @@ class PrototypeQueryRegimeEncoder(nn.Module):
         self.descriptor_dim = 4
         self.model_dim = model_dim
         self.num_prototypes = num_prototypes
-        self.temperature = max(float(temperature), 1e-4)
         self.auxiliary_dim = len(valid_indices) * self.descriptor_dim
 
         self.channel_encoder = nn.Sequential(
@@ -154,12 +153,12 @@ class PrototypeQueryRegimeEncoder(nn.Module):
             model_dim, num_heads, batch_first=True
         )
         self.prototype_norm = nn.LayerNorm(model_dim)
-        self.route_global = nn.Linear(model_dim, model_dim, bias=False)
-        self.route_prototype = nn.Linear(model_dim, model_dim, bias=False)
-        self.embedding_head = nn.Linear(model_dim, int(emb_dim))
+        self.embedding_head = nn.Linear(
+            num_prototypes * model_dim,
+            emb_dim
+        )
         self.auxiliary_head = nn.Linear(int(emb_dim), self.auxiliary_dim)
 
-        self.last_routing_probabilities = None
         self.last_cross_attention = None
 
     @staticmethod
@@ -178,20 +177,19 @@ class PrototypeQueryRegimeEncoder(nn.Module):
 
         queries = self.prototypes.unsqueeze(0).expand(x.size(0), -1, -1)
         prototype_outputs, attention = self.cross_attention(
-            queries, tokens, tokens, need_weights=True, average_attn_weights=False
+            queries, tokens, tokens,
+            need_weights=True,
+            average_attn_weights=False
         )
-        prototype_outputs = self.prototype_norm(prototype_outputs + queries)
-        global_state = tokens.mean(dim=1)
 
-        route_global = F.normalize(self.route_global(global_state), dim=-1)
-        route_prototypes = F.normalize(
-            self.route_prototype(prototype_outputs), dim=-1
+        prototype_outputs = self.prototype_norm(
+            prototype_outputs + queries
         )
-        logits = torch.einsum("bd,bkd->bk", route_global, route_prototypes)
-        routing = torch.softmax(logits / self.temperature, dim=-1)
-        prototype_state = torch.einsum(
-            "bk,bkd->bd", routing, prototype_outputs
-        )
+
+        # [B, K, model_dim] -> [B, K * model_dim]
+        prototype_state = prototype_outputs.flatten(start_dim=1)
+
+        # [B, K * model_dim] -> [B, emb_dim]
         embedding = self.embedding_head(prototype_state)
 
         self.last_routing_probabilities = routing
@@ -202,7 +200,6 @@ class PrototypeQueryRegimeEncoder(nn.Module):
             return embedding, self.auxiliary_head(embedding), target.detach()
         return embedding
 
-    def routing_collapse_loss(self):
         """用单窗口置信度和批次使用均衡约束软路由。"""
         routing = self.last_routing_probabilities
         if routing is None:
@@ -218,19 +215,6 @@ class PrototypeQueryRegimeEncoder(nn.Module):
             mean_probability * mean_probability.log()
         ).sum() / log_k
         return confidence + usage
-
-    def routing_diagnostics(self):
-        if self.last_routing_probabilities is None:
-            return None
-        with torch.no_grad():
-            routing = self.last_routing_probabilities
-            return {
-                "routing_mass": routing.mean(dim=0).detach().cpu(),
-                "winner_rate": F.one_hot(
-                    routing.argmax(dim=-1), num_classes=self.num_prototypes
-                ).float().mean(dim=0).detach().cpu(),
-            }
-
 
 class FiLMConditioner(nn.Module):
     """根据动态状态嵌入生成按特征调制的仿射参数。"""
