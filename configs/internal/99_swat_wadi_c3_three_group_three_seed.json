@@ -1,0 +1,97 @@
+{
+  "plan_name": "99_swat_wadi_c3_three_group_three_seed",
+  "_lifecycle": "formal_post_99_main_result",
+  "_thesis_role": "正式主结果：SWAT/WADI 的 baseline、restricted C3 和 prototype-query C3 三随机种子比较。99号起不再作为 quick validation。",
+  "_protocol": "仅使用官方正常训练段训练；SWAT/WADI 采用固定预处理 schema、独立测试时段和原始逐点 AUROC/AP 主指标，并报告低 FPR 召回、事件指标和运行性能。",
+  "_epoch_protocol": "内部 C3 正式任务统一最大 30 epochs、patience=3；SWAT/WADI 的窗口步长为 10 以控制重叠窗口数量，不能把旧的 10 epoch quick-validation 预算带入正式结果。",
+  "_runtime_protocol": "99号起的正式实验统一记录NVIDIA T4上的参数量、训练/推理时间、峰值显存、窗口吞吐和批延迟P50/P95。",
+  "_runtime_metrics": [
+    "preprocessing_seconds",
+    "parameter_count",
+    "trainable_parameter_count",
+    "total_train_seconds",
+    "mean_epoch_seconds",
+    "median_epoch_seconds",
+    "peak_cuda_memory_mb",
+    "inference_seconds",
+    "windows_per_second",
+    "milliseconds_per_window",
+    "batch_latency_p50_ms",
+    "batch_latency_p95_ms"
+  ],
+  "seeds": [3407, 3408, 3409],
+  "common_args": {
+    "epochs": 30,
+    "bs": 64,
+    "lookback": 100,
+    "window_stride": 10,
+    "val_split": 0.1,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "model_name": "mtad_gat",
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "regime_emb_dim": 8,
+    "regime_query_dim": 32,
+    "regime_num_prototypes": 6,
+    "regime_query_heads": 4,
+    "regime_temperature": 0.5,
+    "regime_condition_mode": "fusion",
+    "regime_film_scale": 0.1,
+    "regime_aux_lambda": 0.05,
+    "regime_prototype_lambda": 0.0,
+    "score_fusion_mode": "fixed",
+    "use_c3_joint_relation": false,
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_physical_consistency_head": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 0,
+    "predict_num_workers": 0,
+    "persistent_workers": false,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false
+  },
+  "experiments": [
+    {
+      "name": "baseline",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "use_regime_condition": false,
+        "regime_aux_lambda": 0.0,
+        "run_id": "c3_three_group_baseline"
+      }
+    },
+    {
+      "name": "restricted",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "regime_encoder_type": "restricted",
+        "use_regime_condition": true,
+        "regime_condition_shuffle": false,
+        "regime_aux_lambda": 0.05,
+        "regime_prototype_lambda": 0.0,
+        "run_id": "c3_three_group_restricted"
+      }
+    },
+    {
+      "name": "prototype_query",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "regime_encoder_type": "prototype_query",
+        "use_regime_condition": true,
+        "regime_condition_shuffle": false,
+        "regime_aux_lambda": 0.05,
+        "regime_prototype_lambda": 0.0,
+        "run_id": "c3_three_group_prototype_query"
+      }
+    }
+  ]
+}

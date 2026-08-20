@@ -1,0 +1,106 @@
+{
+  "plan_name": "97_c3_prototype_query_brand3_fivefold",
+  "_lifecycle": "archived_development_pre_99",
+  "_archive_note": "97号为99号正式实验前的单 seed 开发结果；正式 Brand3 结果使用101号三 seed 五折计划。",
+  "_thesis_role": "清华 EV Brand3 五折正式比较：MTAD-GAT baseline、restricted C3 与当前 prototype-query C3。",
+  "_protocol": "Brand3 paper_protocol、paper_channel 归一化、七通道训练、response 通道评分；5 folds，单 seed，每折最多训练 30 epochs。",
+  "_metric": "比较五折车辆级 AP/AUROC 的均值与标准差；C3 descriptor auxiliary 权重为 0.05，不使用 prototype routing/anti-collapse loss。",
+  "common_args": {
+    "dataset": "TSINGHUA_EV",
+    "battery_brand": 3,
+    "battery_fold_seed": 0,
+    "battery_split_protocol": "paper_protocol",
+    "battery_normalization": "paper_channel",
+    "battery_windows_per_snippet": 1,
+    "battery_vehicle_top_ratio": 0.05,
+    "battery_vehicle_top_ratio_mode": "fixed",
+    "battery_response_only_training": false,
+    "battery_score_channels": "response",
+
+    "epochs": 30,
+    "bs": 64,
+    "lookback": 127,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+
+    "model_name": "mtad_gat",
+
+    "regime_emb_dim": 8,
+    "regime_query_dim": 32,
+    "regime_num_prototypes": 6,
+    "regime_query_heads": 4,
+    "regime_film_scale": 0.1,
+    "regime_aux_lambda": 0.05,
+    "regime_prototype_lambda": 0.0,
+
+    "score_fusion_mode": "fixed",
+
+    "use_c3_joint_relation": false,
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_physical_consistency_head": false,
+
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+
+    "early_stopping_patience": 0,
+    "early_stopping_min_delta": 0.0001,
+
+    "log_tensorboard": false,
+    "seed": 3407
+  },
+
+  "experiments": [
+  {
+    "name": "baseline",
+    "runner": "src.runners.train_nc_battery",
+    "matrix": {
+      "battery_fold": [0, 1, 2, 3, 4]
+    },
+    "args": {
+      "use_regime_condition": false,
+      "regime_aux_lambda": 0.0,
+      "regime_prototype_lambda": 0.0,
+      "run_id": "c3_b3_baseline"
+    }
+  },
+  {
+    "name": "restricted",
+    "runner": "src.runners.train_nc_battery",
+    "matrix": {
+      "battery_fold": [0, 1, 2, 3, 4]
+    },
+    "args": {
+      "regime_encoder_type": "restricted",
+      "use_regime_condition": true,
+      "regime_condition_shuffle": false,
+      "regime_aux_lambda": 0.05,
+      "regime_film_scale": 0.1,
+      "regime_prototype_lambda": 0.0,
+      "run_id": "c3_b3_restricted"
+    }
+  },
+  {
+    "name": "prototype_query",
+    "runner": "src.runners.train_nc_battery",
+    "matrix": {
+      "battery_fold": [0, 1, 2, 3, 4]
+    },
+    "args": {
+      "regime_encoder_type": "prototype_query",
+      "use_regime_condition": true,
+      "regime_condition_shuffle": false,
+      "regime_aux_lambda": 0.05,
+      "regime_film_scale": 0.1,
+      "regime_prototype_lambda": 0.0,
+      "run_id": "c3_b3_prototype_query"
+    }
+  }
+]
+}

@@ -1,6 +1,6 @@
 {
   "id": "daisychen2/swat-wadi-frozen-c3-restricted-film",
-  "title": "SWaT WADI Frozen C3 Restricted FiLM",
+  "title": "SWaT WADI C3 Three Groups Three Seeds",
   "code_file": "kaggle_75_swat_wadi_film_relation_auroc.ipynb",
   "language": "python",
   "kernel_type": "notebook",
@@ -10,7 +10,6 @@
   "machine_shape": "NvidiaTeslaT4",
   "enable_internet": true,
   "dataset_sources": [
-    "daisychen2/enhanced-mtadgat-frozen-source-20260816-v2",
     "daisychen2/swat-a1a2",
     "daisychen2/wadi-a2"
   ],

@@ -91,6 +91,9 @@ class Trainer:
         self.scaler = _build_grad_scaler(use_cuda)
         self.losses = self._empty_losses()
         self.epoch_times = []
+        # 运行性能是正式实验的一部分：保留训练时间、显存和参数量，
+        # 由各 runner 写入最终结果文件。这里不改变优化或模型结构。
+        self.runtime_stats = {}
         self.start_epoch = 0
         self.best_val_loss = None
         self.checkpoint_name = "last_checkpoint.pt"
@@ -134,15 +137,11 @@ class Trainer:
             auxiliary = base_model.regime_auxiliary_loss(x)
         else:
             auxiliary = x.new_tensor(0.0)
-        if self.regime_prototype_lambda > 0.0:
-            prototype = base_model.regime_prototype_loss()
-        else:
-            prototype = x.new_tensor(0.0)
+        prototype = x.new_tensor(0.0)
         total = (
             forecast
             + reconstruction
             + self.regime_aux_lambda * auxiliary
-            + self.regime_prototype_lambda * prototype
         )
         return forecast, reconstruction, auxiliary, prototype, total
 
@@ -187,9 +186,12 @@ class Trainer:
         print(f"Init total train loss: {initial[2]:.5f}")
         if val_loader is not None:
             print(f"Init total val loss: {self.evaluate(val_loader)[2]:.5f}")
-        train_start = time.time()
+        if self.device == "cuda":
+            torch.cuda.synchronize()
+            torch.cuda.reset_peak_memory_stats()
+        train_start = time.perf_counter()
         for epoch in range(self.start_epoch, self.n_epochs):
-            epoch_start = time.time()
+            epoch_start = time.perf_counter()
             train_values = self._run_loader(train_loader, training=True)
             self._record("train", train_values)
             val_values = None
@@ -211,7 +213,7 @@ class Trainer:
                         and self.early_stopping_bad_epochs >= self.early_stopping_patience
                     )
             self.start_epoch = epoch + 1
-            elapsed = time.time() - epoch_start
+            elapsed = time.perf_counter() - epoch_start
             self.epoch_times.append(elapsed)
             self.save_checkpoint()
             if self.log_tensorboard:
@@ -224,10 +226,41 @@ class Trainer:
                 break
         if val_loader is None:
             self.save("model.pt")
-        duration = int(time.time() - train_start)
+        if self.device == "cuda":
+            torch.cuda.synchronize()
+        duration = time.perf_counter() - train_start
+        self.runtime_stats = self._build_runtime_stats(duration)
         if self.log_tensorboard:
-            self.writer.add_text("total_train_time", str(duration))
-        print(f"-- Training done in {duration}s.")
+            self.writer.add_text("total_train_time", f"{duration:.6f}")
+        print(f"-- Training done in {duration:.2f}s.")
+
+    def _build_runtime_stats(self, total_seconds):
+        """Return comparable runtime metadata for formal experiments."""
+        model = _unwrap_model(self.model)
+        parameters = list(model.parameters())
+        stats = {
+            "device": self.device,
+            "gpu_name": None,
+            "gpu_total_memory_mb": None,
+            "parameter_count": int(sum(parameter.numel() for parameter in parameters)),
+            "trainable_parameter_count": int(
+                sum(parameter.numel() for parameter in parameters if parameter.requires_grad)
+            ),
+            "max_epochs": int(self.n_epochs),
+            "epochs_completed": int(len(self.epoch_times)),
+            "total_train_seconds": float(total_seconds),
+            "mean_epoch_seconds": float(np.mean(self.epoch_times)) if self.epoch_times else 0.0,
+            "median_epoch_seconds": float(np.median(self.epoch_times)) if self.epoch_times else 0.0,
+            "peak_cuda_memory_mb": 0.0,
+            "peak_cuda_reserved_mb": 0.0,
+        }
+        if self.device == "cuda" and torch.cuda.is_available():
+            properties = torch.cuda.get_device_properties(0)
+            stats["gpu_name"] = torch.cuda.get_device_name(0)
+            stats["gpu_total_memory_mb"] = float(properties.total_memory / (1024 ** 2))
+            stats["peak_cuda_memory_mb"] = float(torch.cuda.max_memory_allocated() / (1024 ** 2))
+            stats["peak_cuda_reserved_mb"] = float(torch.cuda.max_memory_reserved() / (1024 ** 2))
+        return stats
 
     def _record(self, prefix, values):
         forecast, reconstruction, total, _, prototype, auxiliary = values
@@ -273,6 +306,7 @@ class Trainer:
                 "scaler_state_dict": self.scaler.state_dict(),
                 "losses": self.losses,
                 "epoch_times": self.epoch_times,
+                "runtime_stats": self.runtime_stats,
                 "best_val_loss": self.best_val_loss,
                 "early_stopping_bad_epochs": self.early_stopping_bad_epochs,
                 "n_epochs": self.n_epochs,
@@ -301,6 +335,7 @@ class Trainer:
         for key in self.losses:
             self.losses[key] = old_losses.get(key, [])
         self.epoch_times = checkpoint.get("epoch_times", [])
+        self.runtime_stats = checkpoint.get("runtime_stats", {})
         self.best_val_loss = checkpoint.get("best_val_loss")
         self.early_stopping_bad_epochs = int(checkpoint.get("early_stopping_bad_epochs", 0))
         self.start_epoch = int(checkpoint.get("epoch", 0))
@@ -327,9 +362,12 @@ class Trainer:
                 dataset, self.batch_size, val_split, shuffle_dataset, test_dataset=None, **options
             )
             loaders.append((entity_name, train_loader, val_loader))
-        train_start = time.time()
+        if self.device == "cuda":
+            torch.cuda.synchronize()
+            torch.cuda.reset_peak_memory_stats()
+        train_start = time.perf_counter()
         for epoch in range(self.start_epoch, self.n_epochs):
-            epoch_start = time.time()
+            epoch_start = time.perf_counter()
             entity_name, train_loader, val_loader = loaders[epoch % len(loaders)]
             train_values = self._run_loader(train_loader, training=True)
             self._record("train", train_values)
@@ -340,10 +378,14 @@ class Trainer:
                     self.best_val_loss = val_values[2]
                     self.save("model.pt")
             self.start_epoch = epoch + 1
-            elapsed = time.time() - epoch_start
+            elapsed = time.perf_counter() - epoch_start
             self.epoch_times.append(elapsed)
             self.save_checkpoint()
             print(f"Entity: {entity_name} | {self._format_losses(epoch, train_values, val_values, elapsed)}")
         if all(val_loader is None for _, _, val_loader in loaders):
             self.save("model.pt")
-        print(f"-- Round-robin training done in {int(time.time() - train_start)}s.")
+        if self.device == "cuda":
+            torch.cuda.synchronize()
+        duration = time.perf_counter() - train_start
+        self.runtime_stats = self._build_runtime_stats(duration)
+        print(f"-- Round-robin training done in {duration:.2f}s.")

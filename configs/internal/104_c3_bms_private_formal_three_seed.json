@@ -1,0 +1,105 @@
+{
+  "plan_name": "104_c3_bms_private_formal_three_seed",
+  "_lifecycle": "formal_post_99_private_dataset",
+  "_thesis_role": "正式私有 BMS 实验：验证冻结 C3 在真实电池管理系统正常运行数据上的条件化误报抑制与跨簇稳定性。",
+  "_protocol": "每个 BMS cluster 按时间顺序切分：前 80% 仅用于训练，后 20% 作为独立已知正常测试区间；归一化参数只由所有训练区间拟合。训练区间内部的 10% 仅用于早停验证，不随机打散 train/test 边界。",
+  "_sampling_protocol": "BMS 六个簇各约 21.4 万训练点，窗口长度 100；预先固定 window_stride=10 以减少高度重叠窗口和 T4 计算浪费，所有模型臂与 seed 完全一致。误报率的分母明确记为 stride=10 的评分窗口数。",
+  "_label_boundary": "当前私有 BMS 发布包的 test_label 是全零占位，不能报告监督故障 AP/AUROC/Recall，也不能声称已验证故障检出。正式结论限定为正常工况阈值超限、每万窗口误报、分簇/分时间块/分工况稳定性。若后续补充人工确认故障标签，再单独追加带标签评估，不回填当前结果。",
+  "_effectiveness_claim": "C3 有效的操作性判据：相对 baseline，prototype-query 在三 seed 的 false_alarm_rate、false_alarms_per_10k_windows、cluster/block/regime FPR 波动不恶化，并在固定正常校准规则下取得更低误报；若只降低误报但分布稳定性变差，结论只能写为局部改善。",
+  "_epoch_protocol": "BMS 作为内部 C3 正式任务使用最大 30 epochs、patience=3、batch size=64；与 MSL/SMAP/SWAT/WADI 的内部 C3 训练预算一致。实际完成 epoch、训练时间和峰值显存全部记录，不能用测试误报结果选择 epoch。",
+  "_runtime_protocol": "每个任务记录预处理时间、参数量、训练时间、实际 epoch、推理吞吐、P50/P95 批延迟和峰值显存；BMS 额外写出 bms_false_alarm_by_cluster.csv、bms_false_alarm_by_block.csv、bms_false_alarm_by_regime.csv 和 bms_operational_summary.json。",
+  "_seed_protocol": "baseline、restricted、prototype-query 及两个核心机制消融均使用 seed 3407、3408、3409；最终表报告每个指标的均值、标准差和逐 seed 结果。",
+  "seeds": [3407, 3408, 3409],
+  "common_args": {
+    "dataset": "BMS",
+    "epochs": 30,
+    "bs": 64,
+    "lookback": 100,
+    "window_stride": 10,
+    "val_split": 0.1,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "model_name": "mtad_gat",
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "regime_emb_dim": 8,
+    "regime_query_dim": 32,
+    "regime_num_prototypes": 6,
+    "regime_query_heads": 4,
+    "regime_temperature": 0.5,
+    "regime_condition_mode": "fusion",
+    "regime_film_scale": 0.1,
+    "regime_condition_shuffle_mode": "farthest",
+    "regime_prototype_lambda": 0.0,
+    "score_fusion_mode": "fixed",
+    "use_c3_joint_relation": false,
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_physical_consistency_head": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false
+  },
+  "experiments": [
+    {
+      "name": "bms_baseline",
+      "args": {
+        "use_regime_condition": false,
+        "regime_aux_lambda": 0.0,
+        "regime_condition_shuffle": false,
+        "run_id": "c3_formal_bms_baseline"
+      }
+    },
+    {
+      "name": "bms_restricted",
+      "args": {
+        "regime_encoder_type": "restricted",
+        "use_regime_condition": true,
+        "regime_condition_shuffle": false,
+        "regime_aux_lambda": 0.05,
+        "run_id": "c3_formal_bms_restricted"
+      }
+    },
+    {
+      "name": "bms_prototype_query",
+      "args": {
+        "regime_encoder_type": "prototype_query",
+        "use_regime_condition": true,
+        "regime_condition_shuffle": false,
+        "regime_aux_lambda": 0.05,
+        "run_id": "c3_formal_bms_prototype_query"
+      }
+    },
+    {
+      "name": "bms_prototype_query_shuffled_state_farthest",
+      "args": {
+        "regime_encoder_type": "prototype_query",
+        "use_regime_condition": true,
+        "regime_condition_shuffle": true,
+        "regime_condition_shuffle_mode": "farthest",
+        "regime_aux_lambda": 0.05,
+        "run_id": "c3_formal_bms_shuffled_farthest"
+      }
+    },
+    {
+      "name": "bms_prototype_query_no_aux",
+      "args": {
+        "regime_encoder_type": "prototype_query",
+        "use_regime_condition": true,
+        "regime_condition_shuffle": false,
+        "regime_aux_lambda": 0.0,
+        "run_id": "c3_formal_bms_no_aux"
+      }
+    }
+  ]
+}

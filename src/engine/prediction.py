@@ -130,6 +130,17 @@ class Predictor:
 
         self.last_scoring_stats = {}
 
+        # Formal runs pass the training-side runtime snapshot through prediction
+        # arguments so the standard report contains one comparable efficiency block.
+        self.training_runtime = dict(pred_args.get("training_runtime", {}))
+        self.preprocessing_seconds = float(pred_args.get("preprocessing_seconds", 0.0))
+        self.model_parameters = int(
+            pred_args.get(
+                "model_parameters",
+                sum(parameter.numel() for parameter in self.model.parameters()),
+            )
+        )
+
         self._fusion_weights = None
 
         self.reg_level = pred_args["reg_level"]
@@ -1447,9 +1458,17 @@ class Predictor:
 
         previous_attention = None
 
+        batch_latencies = []
+        if device == "cuda":
+            torch.cuda.synchronize()
+            torch.cuda.reset_peak_memory_stats()
+        inference_started = time.perf_counter()
+
         with torch.no_grad():
 
             for x, y in tqdm(loader):
+
+                batch_started = time.perf_counter()
 
                 x = x.to(device)
 
@@ -1518,6 +1537,8 @@ class Predictor:
 
                 recons.append(window_recon[:, -1, :].detach().cpu().numpy())
 
+                batch_latencies.append(time.perf_counter() - batch_started)
+
 
         preds = np.concatenate(preds, axis=0)
 
@@ -1526,6 +1547,29 @@ class Predictor:
         actual_indices = self.window_size + np.arange(len(data)) * self.window_stride
 
         actual = values.detach().cpu().numpy()[actual_indices]
+
+        if device == "cuda":
+            torch.cuda.synchronize()
+        inference_seconds = time.perf_counter() - inference_started
+        total_windows = int(len(data))
+        self.last_scoring_stats = {
+            "device": device,
+            "window_count": total_windows,
+            "inference_seconds": float(inference_seconds),
+            "windows_per_second": float(total_windows / max(inference_seconds, 1e-9)),
+            "milliseconds_per_window": float(1000.0 * inference_seconds / max(total_windows, 1)),
+            "batch_count": int(len(batch_latencies)),
+            "batch_latency_p50_ms": float(np.percentile(batch_latencies, 50) * 1000.0)
+            if batch_latencies else 0.0,
+            "batch_latency_p95_ms": float(np.percentile(batch_latencies, 95) * 1000.0)
+            if batch_latencies else 0.0,
+            "peak_cuda_memory_mb": (
+                float(torch.cuda.max_memory_allocated() / (1024 ** 2)) if device == "cuda" else 0.0
+            ),
+            "peak_cuda_reserved_mb": (
+                float(torch.cuda.max_memory_reserved() / (1024 ** 2)) if device == "cuda" else 0.0
+            ),
+        }
 
 
         if self.target_dims is not None:
@@ -1770,6 +1814,9 @@ class Predictor:
             "milliseconds_per_window": float(1000.0 * inference_seconds / max(total_windows, 1)),
             "peak_cuda_memory_mb": (
                 float(torch.cuda.max_memory_allocated() / (1024 ** 2)) if device == "cuda" else 0.0
+            ),
+            "peak_cuda_reserved_mb": (
+                float(torch.cuda.max_memory_reserved() / (1024 ** 2)) if device == "cuda" else 0.0
             ),
         }
 
@@ -2056,6 +2103,9 @@ class Predictor:
         """
 
 
+        train_scoring_stats = {}
+        test_scoring_stats = {}
+
         if load_scores:
 
             print("Loading anomaly scores")
@@ -2084,6 +2134,7 @@ class Predictor:
             else:
 
                 train_pred_df = self.get_score_for_sequences(train)
+                train_scoring_stats = dict(self.last_scoring_stats)
 
             if self.use_relation_change_score and self.relation_change_mode == "normal_transition_residual":
 
@@ -2094,6 +2145,7 @@ class Predictor:
                 )
 
             test_pred_df = self.get_score_for_sequences(test)
+            test_scoring_stats = dict(self.last_scoring_stats)
 
             if self.use_relation_change_score:
 
@@ -2302,6 +2354,27 @@ class Predictor:
                 "event_consistency_result": event_report,
 
                 "raw_point_result": raw_metric_report,
+
+                "model_parameters": int(self.model_parameters),
+
+                "inference_efficiency": {
+                    "train": train_scoring_stats,
+                    "test": test_scoring_stats,
+                    "total_inference_seconds": float(
+                        train_scoring_stats.get("inference_seconds", 0.0)
+                        + test_scoring_stats.get("inference_seconds", 0.0)
+                    ),
+                },
+
+                "runtime": {
+                    "model_parameters": int(self.model_parameters),
+                    "preprocessing_seconds": float(self.preprocessing_seconds),
+                    "training": self.training_runtime,
+                    "inference": {
+                        "train": train_scoring_stats,
+                        "test": test_scoring_stats,
+                    },
+                },
 
             },
 

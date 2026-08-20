@@ -1,5 +1,6 @@
 {
   "plan_name": "04_msl_external_baselines",
+  "_lifecycle": "external_repository_development_pre_99",
   "_thesis_role": "MSL 外部模型对照：TranAD、Anomaly Transformer、GDN 与 DCdetector。",
   "_protocol": "所有模型读取项目中同一份 MSL train/test/label。主表统一报告未进行 point adjustment 的逐点 AP/AUROC；各模型保留其论文推荐优化策略和训练轮数。",
   "common_env": {

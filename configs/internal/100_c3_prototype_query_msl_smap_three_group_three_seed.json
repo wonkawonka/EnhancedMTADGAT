@@ -1,0 +1,81 @@
+{
+  "plan_name": "100_c3_prototype_query_msl_smap_three_group_three_seed",
+  "_lifecycle": "formal_post_99_main_result",
+  "_thesis_role": "正式公共遥测主结果：MSL/SMAP 的 MTAD-GAT baseline、restricted C3 和 prototype-query C3 三随机种子比较。",
+  "_protocol": "官方正常训练段训练，独立测试序列评价；原始逐点 AP/AUROC 为主指标，同时报告事件和低 FPR 指标。",
+  "_epoch_protocol": "MSL/SMAP 三组使用相同的最大 30 epochs、patience=3；epoch 预算在同一数据集内统一，跨数据集不强行统一。",
+  "_runtime_protocol": "正式任务记录预处理时间、参数量、训练时间、推理吞吐、P50/P95 批延迟和峰值显存。",
+  "seeds": [3407, 3408, 3409],
+  "common_args": {
+    "epochs": 30,
+    "bs": 128,
+    "lookback": 100,
+    "window_stride": 1,
+    "val_split": 0.1,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "model_name": "mtad_gat",
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "regime_emb_dim": 8,
+    "regime_query_dim": 32,
+    "regime_num_prototypes": 6,
+    "regime_query_heads": 4,
+    "regime_temperature": 0.5,
+    "regime_condition_mode": "fusion",
+    "regime_film_scale": 0.1,
+    "regime_condition_shuffle_mode": "cyclic",
+    "regime_prototype_lambda": 0.0,
+    "score_fusion_mode": "fixed",
+    "use_c3_joint_relation": false,
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_physical_consistency_head": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false
+  },
+  "experiments": [
+    {
+      "name": "baseline",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {
+        "use_regime_condition": false,
+        "regime_aux_lambda": 0.0,
+        "run_id": "c3_formal_public_baseline"
+      }
+    },
+    {
+      "name": "restricted",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {
+        "regime_encoder_type": "restricted",
+        "use_regime_condition": true,
+        "regime_condition_shuffle": false,
+        "regime_aux_lambda": 0.05,
+        "run_id": "c3_formal_public_restricted"
+      }
+    },
+    {
+      "name": "prototype_query",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {
+        "regime_encoder_type": "prototype_query",
+        "use_regime_condition": true,
+        "regime_condition_shuffle": false,
+        "regime_aux_lambda": 0.05,
+        "run_id": "c3_formal_public_prototype_query"
+      }
+    }
+  ]
+}

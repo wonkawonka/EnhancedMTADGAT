@@ -4,6 +4,7 @@ import gc
 import json
 import os
 import random
+import time
 from datetime import datetime
 
 import torch.nn as nn
@@ -450,6 +451,7 @@ if __name__ == "__main__":
     parser = get_parser()
     args = apply_dataset_defaults(parser.parse_args())
     resolve_model_args(args)
+    runtime_started = time.perf_counter()
 
     validate_accelerator(args)
 
@@ -771,6 +773,7 @@ if __name__ == "__main__":
             persistent_workers=args.persistent_workers,
             prefetch_factor=args.prefetch_factor,
         )
+        preprocessing_seconds = time.perf_counter() - runtime_started
 
         model = build_model(args, n_features, window_size, out_dim, target_dims=target_dims)
         model = maybe_compile_model(model)
@@ -970,6 +973,9 @@ if __name__ == "__main__":
             "event_min_length": args.event_min_length,
             "reg_level": reg_level,
             "save_path": save_path,
+            "preprocessing_seconds": float(preprocessing_seconds),
+            "training_runtime": dict(getattr(trainer, "runtime_stats", {})),
+            "model_parameters": int(sum(parameter.numel() for parameter in trainer.model.parameters())),
         }
         best_model = trainer.model
 
@@ -1076,7 +1082,12 @@ if __name__ == "__main__":
                 gc.collect()
 
             print("BMS按簇输出已生成（联合训练、分簇测试，训练基线缓存复用）")
-            operational_report = save_bms_operational_report(save_path, bms_test_tensors, window_size)
+            operational_report = save_bms_operational_report(
+                save_path,
+                bms_test_tensors,
+                window_size,
+                window_stride=args.window_stride,
+            )
             print(f"[BMS] known-normal false alarms and stability: {operational_report}")
         elif dataset == CH_BATTERY_DATASET_NAME and ch_battery_test_tensors is not None:
             total_samples = len(ch_battery_test_tensors)

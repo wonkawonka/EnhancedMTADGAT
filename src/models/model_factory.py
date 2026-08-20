@@ -155,6 +155,9 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
         regime_channel_pooling=regime["pooled_channels"],
         regime_film_scale=float(getattr(args, "regime_film_scale", 0.1)),
         regime_condition_shuffle=bool(getattr(args, "regime_condition_shuffle", False)),
+        regime_condition_shuffle_mode=str(
+            getattr(args, "regime_condition_shuffle_mode", "cyclic")
+        ),
         regime_query_dim=int(getattr(args, "regime_query_dim", 32)),
         regime_num_prototypes=int(getattr(args, "regime_num_prototypes", 6)),
         regime_query_heads=int(getattr(args, "regime_query_heads", 4)),

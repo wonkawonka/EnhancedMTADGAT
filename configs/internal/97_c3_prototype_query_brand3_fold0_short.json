@@ -1,0 +1,98 @@
+{
+  "plan_name": "97_c3_prototype_query_brand3_fold0_short",
+  "_thesis_role": "清华 EV Brand3 fold0 的低成本趋势验证：同一训练设置下比较冻结 MTAD-GAT baseline 与当前精简 prototype-query C3。",
+  "_protocol": "沿用 Brand3 paper_protocol、paper_channel 归一化、七通道训练与 response 通道评分；只跑 fold0 和单 seed，训练 5 epochs，用于判断新 C3 是否值得进入完整五折实验。",
+  "_metric": "优先比较同一协议下的车辆级 AP/AUROC，并结合验证损失观察趋势；C3 的 descriptor auxiliary 仅用于训练，不再使用 routing/anti-collapse prototype loss。",
+  "common_args": {
+    "dataset": "TSINGHUA_EV",
+    "battery_brand": 3,
+    "battery_fold_seed": 0,
+    "battery_split_protocol": "paper_protocol",
+    "battery_normalization": "paper_channel",
+    "battery_windows_per_snippet": 1,
+    "battery_vehicle_top_ratio": 0.05,
+    "battery_vehicle_top_ratio_mode": "fixed",
+    "battery_response_only_training": false,
+    "battery_score_channels": "response",
+
+    "epochs": 30,
+    "bs": 64,
+    "lookback": 127,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+
+    "model_name": "mtad_gat",
+
+    "regime_emb_dim": 8,
+    "regime_query_dim": 32,
+    "regime_num_prototypes": 6,
+    "regime_query_heads": 4,
+    "regime_film_scale": 0.1,
+    "regime_aux_lambda": 0.05,
+    "regime_prototype_lambda": 0.0,
+
+    "score_fusion_mode": "fixed",
+
+    "use_c3_joint_relation": false,
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_physical_consistency_head": false,
+
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+
+    "early_stopping_patience": 0,
+    "early_stopping_min_delta": 0.0001,
+
+    "log_tensorboard": false,
+    "seed": 3407
+  },
+
+  "experiments": [
+  {
+    "name": "baseline_fold0_30ep",
+    "runner": "src.runners.train_nc_battery",
+    "args": {
+      "battery_fold": 0,
+      "use_regime_condition": false,
+      "regime_aux_lambda": 0.0,
+      "regime_prototype_lambda": 0.0,
+      "run_id": "baseline_b3f0_30ep"
+    }
+  },
+  {
+    "name": "restricted_c3_fold0_30ep",
+    "runner": "src.runners.train_nc_battery",
+    "args": {
+      "battery_fold": 0,
+      "regime_encoder_type": "restricted",
+      "use_regime_condition": true,
+      "regime_condition_shuffle": false,
+      "regime_aux_lambda": 0.05,
+      "regime_film_scale": 0.1,
+      "regime_prototype_lambda": 0.0,
+      "run_id": "restricted_b3f0_30ep"
+    }
+  },
+  {
+    "name": "prototype_query_fold0_30ep",
+    "runner": "src.runners.train_nc_battery",
+    "args": {
+      "battery_fold": 0,
+      "regime_encoder_type": "prototype_query",
+      "use_regime_condition": true,
+      "regime_condition_shuffle": false,
+      "regime_aux_lambda": 0.05,
+      "regime_film_scale": 0.1,
+      "regime_prototype_lambda": 0.0,
+      "run_id": "prototype_query_b3f0_30ep"
+    }
+  }
+]
+}

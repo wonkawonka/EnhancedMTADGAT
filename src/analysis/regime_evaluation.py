@@ -12,8 +12,12 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score
 from torch.utils.data import DataLoader, Subset
 
-from src.data.regime_utils import NASA_REGIME_NAMES
-from src.data.utils import SlidingWindowDataset, ensure_sequence_list
+from src.data.regime_utils import (
+    BMS_REGIME_NAMES,
+    NASA_REGIME_NAMES,
+    derive_bms_regime_labels,
+)
+from src.data.utils import BMS_FEATURE_NAMES, SlidingWindowDataset, ensure_sequence_list
 
 
 def _unwrap_model(model):
@@ -137,11 +141,12 @@ def _false_alarm_stats(alarms):
     }
 
 
-def save_bms_operational_report(output_dir, test_entities, window_size, block_size=1000):
+def save_bms_operational_report(output_dir, test_entities, window_size, block_size=1000, window_stride=1):
     """Report empirical false alarms and score stability on known-normal BMS data."""
     output_dir = Path(output_dir)
     cluster_rows = []
     block_rows = []
+    regime_rows = []
     all_scores = []
     all_normalized_scores = []
     all_alarms = []
@@ -175,6 +180,30 @@ def save_bms_operational_report(output_dir, test_entities, window_size, block_si
         all_normalized_scores.extend(normalized_scores.tolist())
         all_alarms.extend(alarms.tolist())
 
+        # BMS has no confirmed fault labels in the current private release.
+        # Stratify the known-normal test interval by the derived operating
+        # state so C3's condition-aware effect is evaluated without turning
+        # an unlabeled interval into a supervised detection claim.
+        entity_values = test_entities.get(cluster_name) if hasattr(test_entities, "get") else None
+        if entity_values is not None:
+            if isinstance(entity_values, torch.Tensor):
+                entity_values = entity_values.detach().cpu().numpy()
+            entity_values = np.asarray(entity_values)
+            if entity_values.ndim == 2 and len(entity_values) > int(window_size):
+                current_index = BMS_FEATURE_NAMES.index("BMSnI")
+                regime_labels = derive_bms_regime_labels(entity_values, current_index)
+                regime_labels = regime_labels[int(window_size)::max(int(window_stride), 1)]
+                usable = min(len(regime_labels), len(frame))
+                for regime_id in np.unique(regime_labels[:usable]):
+                    mask = regime_labels[:usable] == regime_id
+                    regime_rows.append({
+                        "cluster": cluster_name,
+                        "regime_id": int(regime_id),
+                        "regime": BMS_REGIME_NAMES.get(int(regime_id), f"regime_{int(regime_id)}"),
+                        **_false_alarm_stats(alarms[:usable][mask]),
+                        **_distribution_stats(normalized_scores[:usable][mask], "score_to_threshold"),
+                    })
+
         for block_index, start in enumerate(range(0, len(frame), block_size)):
             stop = min(len(frame), start + block_size)
             block_rows.append({
@@ -188,13 +217,16 @@ def save_bms_operational_report(output_dir, test_entities, window_size, block_si
 
     cluster_frame = pd.DataFrame(cluster_rows)
     block_frame = pd.DataFrame(block_rows)
+    regime_frame = pd.DataFrame(regime_rows)
     cluster_frame.to_csv(output_dir / "bms_false_alarm_by_cluster.csv", index=False)
     block_frame.to_csv(output_dir / "bms_false_alarm_by_block.csv", index=False)
+    regime_frame.to_csv(output_dir / "bms_false_alarm_by_regime.csv", index=False)
     # Retain the previous filename so old collection scripts keep working.
     cluster_frame.to_csv(output_dir / "bms_operational_stability.csv", index=False)
 
     cluster_rates = cluster_frame.get("false_alarm_rate", pd.Series(dtype=float)).dropna().to_numpy()
     block_rates = block_frame.get("false_alarm_rate", pd.Series(dtype=float)).dropna().to_numpy()
+    regime_rates = regime_frame.get("false_alarm_rate", pd.Series(dtype=float)).dropna().to_numpy()
     report = {
         "data_assumption": "the evaluated BMS interval is confirmed normal operation",
         "metric_semantics": "threshold exceedances are empirical false alarms, not detected faults",
@@ -203,6 +235,8 @@ def save_bms_operational_report(output_dir, test_entities, window_size, block_si
         "window_size": int(window_size),
         "time_block_size_windows": int(block_size),
         "cluster_count": int(len(cluster_frame)),
+        "regime_count": int(len(regime_frame)),
+        "regime_source": "BMSnI-derived idle/frequency_regulation labels; not model inputs or fault labels",
         **_false_alarm_stats(all_alarms),
         **_distribution_stats(all_scores, "score"),
         **_distribution_stats(all_normalized_scores, "score_to_threshold"),
@@ -211,6 +245,8 @@ def save_bms_operational_report(output_dir, test_entities, window_size, block_si
         "block_false_alarm_rate_std": float(np.std(block_rates)) if block_rates.size else None,
         "block_false_alarm_rate_p95": float(np.quantile(block_rates, 0.95)) if block_rates.size else None,
         "block_false_alarm_rate_max": float(np.max(block_rates)) if block_rates.size else None,
+        "regime_false_alarm_rate_std": float(np.std(regime_rates)) if regime_rates.size else None,
+        "regime_false_alarm_rate_range": float(np.ptp(regime_rates)) if regime_rates.size else None,
     }
     (output_dir / "bms_operational_summary.json").write_text(
         json.dumps(report, indent=2), encoding="utf-8"
@@ -227,19 +263,59 @@ def save_bms_conditioning_comparison(batch_root):
     batch_root = Path(batch_root)
     output_root = batch_root / "output"
     run_names = {
-        "baseline": "bms_mtadgat",
-        "c3_feature_gat": "bms_c3_feature_gat",
-        "c4_backbone": "bms_mtadgat_c4_backbone",
-        "c4_physical_consistency": "bms_c4_physical_consistency",
+        "baseline": ("bms_mtadgat", "bms_baseline_seed*"),
+        "restricted": ("bms_restricted_seed*", "bms_c3_feature_gat"),
+        "prototype_query": ("bms_prototype_query_seed*",),
+        "shuffled_farthest": ("bms_prototype_query_shuffled_state_farthest_seed*",),
+        "no_aux": ("bms_prototype_query_no_aux_seed*",),
+        "c4_backbone": ("bms_mtadgat_c4_backbone",),
         # Backward-compatible names for the old plan.
-        "unconditioned": "bms_frequency_regulation_unconditioned",
-        "conditioned": "bms_frequency_regulation_conditioned",
+        "unconditioned": ("bms_frequency_regulation_unconditioned",),
+        "conditioned": ("bms_frequency_regulation_conditioned",),
+        "c4_physical_consistency": ("bms_c4_physical_consistency",),
     }
+
+    def collect_reports(patterns):
+        paths = []
+        for pattern in patterns:
+            candidate = output_root / pattern
+            if "*" in pattern:
+                paths.extend(sorted(output_root.glob(f"{pattern}/bms_operational_summary.json")))
+            elif candidate.is_dir():
+                paths.append(candidate / "bms_operational_summary.json")
+        summaries = []
+        for path in paths:
+            if path.is_file():
+                summaries.append(json.loads(path.read_text(encoding="utf-8")))
+        if not summaries:
+            return None
+        aggregate = {
+            "seed_count": int(len(summaries)),
+            "per_seed": summaries,
+        }
+        numeric_metrics = (
+            "false_alarm_rate",
+            "false_alarms_per_10k_windows",
+            "cluster_false_alarm_rate_std",
+            "cluster_false_alarm_rate_range",
+            "block_false_alarm_rate_std",
+            "block_false_alarm_rate_p95",
+            "block_false_alarm_rate_max",
+            "regime_false_alarm_rate_std",
+            "regime_false_alarm_rate_range",
+            "score_to_threshold_cv",
+        )
+        for metric in numeric_metrics:
+            values = [item.get(metric) for item in summaries if item.get(metric) is not None]
+            aggregate[metric] = float(np.mean(values)) if values else None
+            aggregate[f"{metric}_std"] = float(np.std(values)) if len(values) > 1 else 0.0 if values else None
+        return aggregate
+
     reports = {}
-    for label, run_name in run_names.items():
-        path = output_root / run_name / "bms_operational_summary.json"
-        if path.is_file():
-            reports[label] = json.loads(path.read_text(encoding="utf-8"))
+    for label, patterns in run_names.items():
+        report = collect_reports(patterns)
+        if report is not None:
+            reports[label] = report
 
     if not reports:
         return None
@@ -252,6 +328,8 @@ def save_bms_conditioning_comparison(batch_root):
         "block_false_alarm_rate_std",
         "block_false_alarm_rate_p95",
         "block_false_alarm_rate_max",
+        "regime_false_alarm_rate_std",
+        "regime_false_alarm_rate_range",
         "score_to_threshold_cv",
     )
     rows = []
@@ -268,6 +346,8 @@ def save_bms_conditioning_comparison(batch_root):
                 "metric": metric,
                 "model": label,
                 "value": value,
+                "value_std": report.get(f"{metric}_std"),
+                "seed_count": report.get("seed_count", 1),
                 "reference_model": reference_label,
                 "reference_value": reference,
                 "minus_reference": delta,

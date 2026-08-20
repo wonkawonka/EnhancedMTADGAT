@@ -7,6 +7,7 @@ import json
 import os
 import random
 import re
+import time
 from pathlib import Path
 
 import numpy as np
@@ -151,7 +152,7 @@ def _condition_descriptors(
 def _collect_errors(
     model, loader, device, physical_terms, target_dims=None, use_condition_slow_state=False,
     use_relation_change_score=False, use_relation_prototype_suppression=False,
-    relation_change_mode="consecutive_js",
+    relation_change_mode="consecutive_js", runtime_collector=None,
 ):
     """在一个数据划分上执行推理，保留窗口误差及其车辆/片段元数据。
 
@@ -165,6 +166,7 @@ def _collect_errors(
     c3_joint_parts, c3_value_parts, c3_relation_parts = [], [], []
     cars, labels, snippets = [], [], []
     for batch in loader:
+        batch_started = time.perf_counter()
         if len(batch) == 6:
             x, y, batch_cars, batch_labels, batch_snippets, batch_mileages = batch
         else:
@@ -255,6 +257,8 @@ def _collect_errors(
         cars.extend(str(value) for value in batch_cars)
         labels.extend(int(value) for value in batch_labels)
         snippets.extend(str(value) for value in batch_snippets)
+        if runtime_collector is not None:
+            runtime_collector.append(time.perf_counter() - batch_started)
     output = {
         "pred": np.concatenate(pred_parts),
         "recon": np.concatenate(recon_parts),
@@ -1237,6 +1241,7 @@ def main():
     args = apply_dataset_defaults(get_parser().parse_args())
     args.dataset = "TSINGHUA_EV"
     resolve_model_args(args)
+    run_started = time.perf_counter()
     _configure_reproducibility(args.seed, args.deterministic)
     if args.require_cuda and not torch.cuda.is_available():
         raise RuntimeError("CUDA is required but unavailable")
@@ -1288,6 +1293,7 @@ def main():
         )
         for name, split in splits.items()
     }
+    preprocessing_seconds = time.perf_counter() - run_started
     output_dir = Path(
         os.environ.get(
             "PLAN_OUTPUT_DIR",
@@ -1335,11 +1341,17 @@ def main():
         state = torch.load(checkpoint_path, map_location=trainer.device)
     model.load_state_dict(state)
     # 阶段 7：分别收集验证、阈值校准与测试侧的窗口误差。此时仍未计算最终指标。
+    if trainer.device == "cuda":
+        torch.cuda.synchronize()
+        torch.cuda.reset_peak_memory_stats()
+    inference_started = time.perf_counter()
+    inference_batch_latencies = []
     validation_errors = _collect_errors(
         model, _loader(datasets["validation"], args, False), trainer.device,
         args.physical_response_terms, target_dims, args.use_condition_slow_state,
         args.use_relation_change_score, args.use_relation_prototype_suppression,
         args.relation_change_mode,
+        runtime_collector=inference_batch_latencies,
     )
     if splits["calibration"] is splits["validation"]:
         calibration_errors = validation_errors
@@ -1351,13 +1363,58 @@ def main():
             args.physical_response_terms, target_dims, args.use_condition_slow_state,
             args.use_relation_change_score, args.use_relation_prototype_suppression,
             args.relation_change_mode,
+            runtime_collector=inference_batch_latencies,
         )
     test_errors = _collect_errors(
         model, _loader(datasets["test"], args, False), trainer.device,
         args.physical_response_terms, target_dims, args.use_condition_slow_state,
         args.use_relation_change_score, args.use_relation_prototype_suppression,
         args.relation_change_mode,
+        runtime_collector=inference_batch_latencies,
     )
+    if trainer.device == "cuda":
+        torch.cuda.synchronize()
+    inference_seconds = time.perf_counter() - inference_started
+    inference_window_count = int(
+        len(validation_errors["pred"])
+        + (0 if calibration_errors is validation_errors else len(calibration_errors["pred"]))
+        + len(test_errors["pred"])
+    )
+    runtime = {
+        "device": trainer.device,
+        "gpu_name": torch.cuda.get_device_name(0) if trainer.device == "cuda" else None,
+        "gpu_total_memory_mb": (
+            float(torch.cuda.get_device_properties(0).total_memory / (1024 ** 2))
+            if trainer.device == "cuda" else None
+        ),
+        "model_parameters": int(sum(parameter.numel() for parameter in model.parameters())),
+        "trainable_parameter_count": int(
+            sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
+        ),
+        "preprocessing_seconds": float(preprocessing_seconds),
+        "training": dict(getattr(trainer, "runtime_stats", {})),
+        "inference": {
+            "window_count": inference_window_count,
+            "inference_seconds": float(inference_seconds),
+            "windows_per_second": float(inference_window_count / max(inference_seconds, 1e-9)),
+            "milliseconds_per_window": float(
+                1000.0 * inference_seconds / max(inference_window_count, 1)
+            ),
+            "batch_count": int(len(inference_batch_latencies)),
+            "batch_latency_p50_ms": float(np.percentile(inference_batch_latencies, 50) * 1000.0)
+            if inference_batch_latencies else 0.0,
+            "batch_latency_p95_ms": float(np.percentile(inference_batch_latencies, 95) * 1000.0)
+            if inference_batch_latencies else 0.0,
+            "peak_cuda_memory_mb": (
+                float(torch.cuda.max_memory_allocated() / (1024 ** 2))
+                if trainer.device == "cuda" else 0.0
+            ),
+            "peak_cuda_reserved_mb": (
+                float(torch.cuda.max_memory_reserved() / (1024 ** 2))
+                if trainer.device == "cuda" else 0.0
+            ),
+        },
+    }
     # 阶段 8：用验证误差决定预测分支和重构分支的融合权重。
     pred_weights, recon_weights = _branch_weights(
         validation_errors["pred"], validation_errors["recon"], args.score_fusion_mode, args.gamma
@@ -1575,6 +1632,7 @@ def main():
         "relation_prototype_suppression": primary["relation_prototype_suppression"],
         "voltage_spread_case": voltage_spread_case,
         "scaler": None if scaler is None else scaler.state_dict(),
+        "runtime": runtime,
     }
     with (output_dir / "metrics.json").open("w", encoding="utf-8") as handle:
         json.dump(result, handle, ensure_ascii=False, indent=2)

@@ -544,6 +544,7 @@ def main():
                         output_dir,
                         cluster_names,
                         int(merged_args.get("lookback", 100)),
+                        window_stride=int(merged_args.get("window_stride") or 1),
                     )
                     summary = json.loads(summary_path.read_text(encoding="utf-8"))
             skip_ready = "false_alarm_rate" in summary

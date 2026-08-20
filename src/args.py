@@ -480,6 +480,13 @@ def get_parser():
         help="Development-only negative control: cyclically mismatch selected FiLM condition channels across samples in each batch while preserving their marginal distribution.",
     )
     parser.add_argument(
+        "--regime_condition_shuffle_mode",
+        type=str,
+        default="cyclic",
+        choices=["cyclic", "farthest"],
+        help="State-mismatch strategy: cyclic preserves the legacy one-step roll; farthest pairs each batch sample with a non-self sample having a maximally distant statistical descriptor.",
+    )
+    parser.add_argument(
         "--regime_group_dro_lambda",
         type=float,
         default=0.0,

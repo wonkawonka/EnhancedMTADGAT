@@ -1,15 +1,15 @@
 # C3/C4 活动实验计划
 
-当前只保留已经执行过且与最终冻结结构一致的四个内部计划：
+99 号起进入正式实验；97、98 只保留为开发归档，不进入正式主表：
 
-- `internal/85_c3_restricted_state_public_quick_validation.json`
-- `internal/86_c3_restricted_state_tsinghua_quick_validation.json`
-- `internal/89_swat_wadi_frozen_c3_restricted_film.json`
-- `internal/31_c4_physical_only_brand3_paper_fivefold_development.json`
+- `internal/99_swat_wadi_c3_three_group_three_seed.json`：SWAT/WADI 正式主结果
+- `internal/100_c3_prototype_query_msl_smap_three_group_three_seed.json`：MSL/SMAP 正式主结果
+- `internal/101_c3_prototype_query_brand3_fivefold_three_seed.json`：Brand3 正式五折主结果
+- `internal/102_c3_prototype_query_brand2_fivefold_three_seed.json`：Brand2 正式五折主结果
+- `internal/103_c3_core_ablation_msl_smap_brand3_fold1_three_seed.json`：正式核心消融；文件名保留历史 fold1 命名，但 `plan_name` 已改为完整 Brand3 五折
+- `internal/104_c3_bms_private_formal_three_seed.json`：私有 BMS 正常工况误报与稳定性
 
-85、86、89 统一比较 C3 的 `baseline / film_no_aux / film_true / film_shuffled`；31 只运行清华 C4 独立物理一致性分支。不要新建内容重复的“冻结计划”。
-
-其余 C3/C4 历史计划已可恢复地归档到 `archive/c3_c4_legacy_20260816/configs/`。C3/C4 之外的 external 配置不属于本次清理范围。
+外部公共数据正式对比为 `external/05_public_baselines_msl_smap.json`；旧的 `external/04_msl_external_baselines.json` 仅作仓库兼容性开发计划，未完成统一多 seed 输出前不进入主表。历史 C3/C4 计划保留在原位置或 `archive/`，不得与 99 号后的正式结果混合。
 
 示例：
 

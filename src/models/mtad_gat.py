@@ -52,6 +52,7 @@ class Enhanced_MTADGAT(nn.Module):
         regime_channel_pooling=False,
         regime_film_scale=0.1,
         regime_condition_shuffle=False,
+        regime_condition_shuffle_mode="cyclic",
         regime_query_dim=32,
         regime_num_prototypes=6,
         regime_query_heads=4,
@@ -74,6 +75,11 @@ class Enhanced_MTADGAT(nn.Module):
         self.regime_channel_pooling = bool(regime_channel_pooling)
         self.regime_film_scale = max(0.0, min(float(regime_film_scale), 1.0))
         self.regime_condition_shuffle = bool(regime_condition_shuffle)
+        self.regime_condition_shuffle_mode = str(regime_condition_shuffle_mode).lower()
+        if self.regime_condition_shuffle_mode not in {"cyclic", "farthest"}:
+            raise ValueError(
+                "regime_condition_shuffle_mode must be 'cyclic' or 'farthest'"
+            )
         self.use_physical_consistency_head = bool(use_physical_consistency_head)
         self.physical_consistency_aux_weight = max(
             0.0, float(physical_consistency_aux_weight)
@@ -191,6 +197,36 @@ class Enhanced_MTADGAT(nn.Module):
             )
             torch.set_rng_state(rng_state)
 
+    @staticmethod
+    def _farthest_derangement(descriptors):
+        """Greedily assign each sample a non-self, farthest unused state.
+
+        Descriptors are computed from the current batch only and detached, so this
+        negative control cannot use labels or back-propagate through the matching.
+        The one-to-one assignment preserves the batch marginal distribution while
+        avoiding the legacy one-step/cyclic near-shift.
+        """
+        batch_size = int(descriptors.size(0))
+        if batch_size <= 1:
+            return torch.arange(batch_size, device=descriptors.device)
+        normalized = descriptors.float()
+        normalized = normalized - normalized.mean(dim=0, keepdim=True)
+        normalized = normalized / normalized.std(dim=0, unbiased=False, keepdim=True).clamp_min(1e-6)
+        distances = torch.cdist(normalized, normalized, p=2)
+        distances.fill_diagonal_(float("-inf"))
+        available = torch.ones(batch_size, dtype=torch.bool, device=descriptors.device)
+        permutation = torch.empty(batch_size, dtype=torch.long, device=descriptors.device)
+        # Batch sizes are at most a few hundred in the formal protocol; this
+        # greedy O(B^2) matching is negligible relative to MTAD-GAT forward cost.
+        for row in range(batch_size):
+            candidates = distances[row].masked_fill(~available, float("-inf"))
+            target = torch.argmax(candidates)
+            if not torch.isfinite(candidates[target]):
+                target = torch.argmax(available.to(dtype=torch.int64))
+            permutation[row] = target
+            available[target] = False
+        return permutation
+
     def forward(self, x):
         state_input = x
         regime_embedding = None
@@ -203,7 +239,13 @@ class Enhanced_MTADGAT(nn.Module):
                 condition_input = state_input.clone()
                 indices = self.regime_encoder.control_indices
                 controls = torch.index_select(state_input, dim=2, index=indices)
-                condition_input[:, :, indices] = torch.roll(controls, shifts=1, dims=0)
+                if self.regime_condition_shuffle_mode == "farthest":
+                    descriptors = self.regime_encoder.descriptor_target(state_input).detach()
+                    permutation = self._farthest_derangement(descriptors)
+                    shuffled_controls = controls.index_select(0, permutation)
+                else:
+                    shuffled_controls = torch.roll(controls, shifts=1, dims=0)
+                condition_input[:, :, indices] = shuffled_controls
             (
                 regime_embedding,
                 self._regime_aux_prediction,
@@ -267,7 +309,6 @@ class Enhanced_MTADGAT(nn.Module):
         """Compatibility name for the frozen C4 consistency objective."""
         return self.regime_auxiliary_loss(x)
 
-    def regime_prototype_loss(self):
         if not self.use_regime_condition:
             reference = next(self.parameters())
             return reference.new_tensor(0.0)

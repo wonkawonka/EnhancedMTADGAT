@@ -192,29 +192,12 @@ class PrototypeQueryRegimeEncoder(nn.Module):
         # [B, K * model_dim] -> [B, emb_dim]
         embedding = self.embedding_head(prototype_state)
 
-        self.last_routing_probabilities = routing
         self.last_cross_attention = attention
 
         if return_auxiliary:
             target = descriptors.flatten(start_dim=1)
             return embedding, self.auxiliary_head(embedding), target.detach()
         return embedding
-
-        """用单窗口置信度和批次使用均衡约束软路由。"""
-        routing = self.last_routing_probabilities
-        if routing is None:
-            return self.prototypes.new_tensor(0.0)
-        eps = torch.finfo(routing.dtype).eps
-        log_k = math.log(self.num_prototypes)
-        probabilities = routing.clamp_min(eps)
-        confidence = -(
-            probabilities * probabilities.log()
-        ).sum(dim=-1).mean() / log_k
-        mean_probability = routing.mean(dim=0).clamp_min(eps)
-        usage = 1.0 + (
-            mean_probability * mean_probability.log()
-        ).sum() / log_k
-        return confidence + usage
 
 class FiLMConditioner(nn.Module):
     """根据动态状态嵌入生成按特征调制的仿射参数。"""

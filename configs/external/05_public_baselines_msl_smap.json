@@ -1,0 +1,56 @@
+{
+  "plan_name": "05_public_baselines_msl_smap",
+  "_lifecycle": "formal_post_99_external_comparison",
+  "_thesis_role": "公共遥测外部对比：PCA/SPE 经典子空间检测器与 USAD 双自编码器，覆盖 MSL/SMAP。",
+  "_protocol": "所有方法读取项目统一的 MSL/SMAP train/test/label；仅训练段参与拟合，测试阶段使用原始逐点分数，不做 point adjustment。主表报告 AP/AUROC，附带训练、推理和显存指标。",
+  "_epoch_protocol": "PCA/SPE 无迭代 epoch；USAD 在 MSL/SMAP 内统一最大 10 epochs。外部模型保留其适合的训练协议，不把无训练的 PCA 强行折算为 epoch。",
+  "_seed_protocol": "PCA/SPE 与 USAD 均使用 3407、3408、3409 三个随机种子并报告均值、标准差和单次结果；PCA/SPE 若使用全量训练点，三次结果应完全一致，这是预期的确定性检查。",
+  "_runtime_protocol": "每个任务写出 preprocessing_seconds、training_seconds、inference_seconds、windows_per_second、milliseconds_per_window、model_parameters、GPU 型号、峰值显存。",
+  "common_env": {
+    "PYTHONIOENCODING": "utf-8",
+    "PYTHONUNBUFFERED": "1",
+    "MPLBACKEND": "Agg",
+    "MPLCONFIGDIR": "/tmp/matplotlib"
+  },
+  "experiments": [
+    {
+      "name": "pca_spe",
+      "cwd": ".",
+      "script": "src/runners/run_public_baselines.py",
+      "matrix": {
+        "dataset": ["MSL", "SMAP"],
+        "seed": [3407, 3408, 3409]
+      },
+      "args": {
+        "method": "pca_spe",
+        "normalize": true,
+        "pca_components": 8,
+        "sample_limit": 100000,
+        "use_cuda": false
+      }
+    },
+    {
+      "name": "usad",
+      "cwd": ".",
+      "script": "src/runners/run_public_baselines.py",
+      "matrix": {
+        "dataset": ["MSL", "SMAP"],
+        "seed": [3407, 3408, 3409]
+      },
+      "args": {
+        "method": "usad",
+        "normalize": true,
+        "lookback": 100,
+        "stride": 1,
+        "batch_size": 128,
+        "num_workers": 0,
+        "epochs": 10,
+        "learning_rate": 0.001,
+        "hidden_dim": 128,
+        "latent_dim": 32,
+        "sample_limit": 100000,
+        "use_cuda": true
+      }
+    }
+  ]
+}

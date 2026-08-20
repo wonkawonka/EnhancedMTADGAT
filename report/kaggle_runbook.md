@@ -48,16 +48,19 @@ Input 只负责读取原始文件；预处理结果写入当前仓库的
 `datasets/BMS/processed/`（Kaggle 仓库位于 `/kaggle/working`，因此这里可写）。
 后续 BMS 训练会自动优先读取这一目录，不需要重复预处理。
 
-BMS 预处理完成后运行成对实验：
+BMS 预处理完成后运行正式 C3 私有数据计划：
 
 ```bash
-python run.py internal --plan configs/internal/05_condition_validation.json \
-  --only bms_frequency_regulation_unconditioned,bms_frequency_regulation_conditioned \
+python run.py internal \
+  --plan configs/internal/104_c3_bms_private_formal_three_seed.json \
   --resume --skip-existing
 ```
 
-两项都完成后会在 `runs/internal/05_condition_validation/` 自动生成
-`bms_conditioning_comparison.json/csv`；负差值表示条件化后的误报或波动更低。
+计划包含 baseline、restricted C3、prototype-query、farthest shuffled 和 no-aux 五个实验臂，
+每臂三个 seed，共 15 个任务；窗口长度 100、stride=10。所有任务完成后会在批次目录自动生成
+`bms_conditioning_comparison.json/csv`，并在每个实验目录生成按簇、时间块和
+`BMSnI` 派生工况的误报报告。负差值表示条件化后的误报或波动更低；当前数据无故障标签，
+因此不把这些结果解释为故障召回。
 
 仓库或 Kaggle Dataset 中应存在：
 
