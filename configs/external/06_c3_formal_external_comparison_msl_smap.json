@@ -1,0 +1,123 @@
+{
+  "plan_name": "06_c3_formal_external_comparison_msl_smap",
+  "_lifecycle": "formal_post_99_external_comparison",
+  "_source_plans": [
+    "04_msl_external_baselines",
+    "05_public_baselines_msl_smap"
+  ],
+  "_thesis_role": "统一 C3 外部对比注册计划：将 MSL 上的 TranAD、Anomaly Transformer、GDN、DCdetector 与 MSL/SMAP 上的 PCA/SPE、USAD 放入同一结果口径。",
+  "_protocol": "所有方法使用项目统一的数据读取和训练段归一化；测试阶段使用原始逐点分数，不做 point adjustment；主表分别报告 AP、AUROC、训练时间、推理时间和峰值显存。",
+  "_seed_protocol": "正式结果固定 seed 3407、3408、3409。PCA/SPE 与 USAD 已有三 seed 矩阵；TranAD、Anomaly Transformer、GDN、DCdetector 的旧 04 入口尚未形成统一 seed wrapper，旧单次结果必须标为开发结果，完成 seed 适配后才能进入正式主表。",
+  "_epoch_protocol": "PCA/SPE 无迭代 epoch；USAD 最大 10 epochs；TranAD、Anomaly Transformer、GDN、DCdetector 保留其公开实现的训练预算并单独记录实际 epoch，不把不同模型的 epoch 数机械混成同一预算。",
+  "_formal_gate": "同一方法同一数据集完成三个 seed，且 metrics.json/runtime.json 齐全后，才允许进入论文外部对比主表。",
+  "_coverage_gap": "04 原配置只覆盖 MSL；SMAP 上的四个 04 方法列为后续扩展矩阵，完成数据适配和 seed wrapper 前不填写结果。",
+  "common_env": {
+    "PYTHONIOENCODING": "utf-8",
+    "PYTHONUNBUFFERED": "1",
+    "MPLBACKEND": "Agg",
+    "MPLCONFIGDIR": "/tmp/matplotlib"
+  },
+  "experiments": [
+    {
+      "name": "tranad_msl",
+      "baseline": "TranAD",
+      "script": "main.py",
+      "flags": ["retrain"],
+      "args": {
+        "dataset": "MSL",
+        "model": "TranAD",
+        "num_epochs": 5
+      }
+    },
+    {
+      "name": "anomaly_transformer_msl",
+      "baseline": "Anomaly-Transformer",
+      "script": "main.py",
+      "args": {
+        "dataset": "MSL",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/msl_external",
+        "input_c": 55,
+        "output_c": 55,
+        "num_epochs": 10,
+        "batch_size": 32,
+        "win_size": 100,
+        "anormly_ratio": 4.0
+      }
+    },
+    {
+      "name": "gdn_msl",
+      "baseline": "GDN",
+      "script": "main.py",
+      "args": {
+        "-dataset": "msl",
+        "-device": "cuda",
+        "-epoch": 10,
+        "-batch": 128,
+        "-slide_win": 15,
+        "-slide_stride": 5,
+        "-random_seed": 3407,
+        "-save_path_pattern": "msl_external"
+      }
+    },
+    {
+      "name": "dcdetector_msl",
+      "baseline": "DCdetector",
+      "script": "main.py",
+      "args": {
+        "dataset": "MSL",
+        "mode": "train",
+        "data_path": ".",
+        "model_save_path": "./checkpoints/msl_external",
+        "input_c": 55,
+        "output_c": 55,
+        "num_epochs": 10,
+        "batch_size": 128,
+        "win_size": 100,
+        "patch_size": "[5]",
+        "anormly_ratio": 4.0,
+        "lr": 0.0001
+      }
+    },
+    {
+      "name": "pca_spe",
+      "cwd": ".",
+      "module": "src.runners.run_public_baselines",
+      "matrix": {
+        "dataset": ["MSL", "SMAP"],
+        "seed": [3407, 3408, 3409]
+      },
+      "args": {
+        "method": "pca_spe",
+        "normalize": true,
+        "pca_components": 8,
+        "sample_limit": 100000,
+        "use_cuda": false
+      }
+    },
+    {
+      "name": "usad",
+      "cwd": ".",
+      "module": "src.runners.run_public_baselines",
+      "matrix": {
+        "dataset": ["MSL", "SMAP"],
+        "seed": [3407, 3408, 3409]
+      },
+      "args": {
+        "method": "usad",
+        "normalize": true,
+        "lookback": 100,
+        "stride": 1,
+        "batch_size": 128,
+        "num_workers": 0,
+        "epochs": 10,
+        "learning_rate": 0.001,
+        "hidden_dim": 128,
+        "latent_dim": 32,
+        "sample_limit": 100000,
+        "use_cuda": true
+      }
+    }
+  ]
+}

@@ -36,3 +36,4 @@ external_baselines/OmniAnomaly/ServerMachineDataset/
 notebooks/
 archive/
 scripts/
+kaggle/kernels/

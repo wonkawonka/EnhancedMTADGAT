@@ -587,10 +587,34 @@ def load_data(dataset, apply_sr_cleaning=False):
             csv_reader = reader(file, delimiter=",")
             res = [row for row in csv_reader][1:]
         res = sorted(res, key=lambda k: k[0])
-        data_info = [
-            row for row in res
-            if row[1] == dataset and not (dataset == "MSL" and row[0] == "P-2")
-        ]
+        # ``labeled_anomalies.csv`` stores anomaly events, not one row per
+        # physical channel.  A channel can therefore occur more than once
+        # (currently SMAP/P-2).  Load its train/test array once and union all
+        # event intervals into the single label sequence below.
+        grouped_rows = {}
+        for row in res:
+            if row[1] != dataset:
+                continue
+            channel_id = row[0]
+            if channel_id not in grouped_rows:
+                grouped_rows[channel_id] = list(row)
+                continue
+
+            merged_row = grouped_rows[channel_id]
+            if int(merged_row[-1]) != int(row[-1]):
+                raise ValueError(
+                    f"{dataset}: conflicting lengths for channel {channel_id}: "
+                    f"{merged_row[-1]} vs {row[-1]}"
+                )
+            merged_anomalies = literal_eval(merged_row[2])
+            merged_anomalies.extend(literal_eval(row[2]))
+            merged_row[2] = repr(merged_anomalies)
+            print(
+                f"{dataset}: merge duplicate labeled_anomalies row for "
+                f"channel {channel_id}"
+            )
+
+        data_info = [grouped_rows[channel_id] for channel_id in sorted(grouped_rows)]
         labels = []
         for row in data_info:
             anomalies = literal_eval(row[2])
