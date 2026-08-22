@@ -368,9 +368,15 @@ class Solver(object):
 
         from sklearn.metrics import precision_recall_fscore_support
         from sklearn.metrics import accuracy_score
+        from sklearn.metrics import average_precision_score, roc_auc_score
         accuracy = accuracy_score(gt, pred)
         precision, recall, f_score, support = precision_recall_fscore_support(gt, pred,
                                                                               average='binary')
+        raw_average_precision = average_precision_score(gt, test_energy)
+        raw_auroc = (
+            roc_auc_score(gt, test_energy)
+            if np.unique(gt).size > 1 else None
+        )
         print(
             "Accuracy : {:0.4f}, Precision : {:0.4f}, Recall : {:0.4f}, F-score : {:0.4f} ".format(
                 accuracy, precision,
@@ -382,6 +388,11 @@ class Solver(object):
             save_standardized_output(
                     output_dir=output_dir,
                     metrics={
+                        # Ranking metrics use the raw point-level scores and
+                        # are not affected by the native point adjustment.
+                        "average_precision": float(raw_average_precision),
+                        "auroc": float(raw_auroc) if raw_auroc is not None else None,
+                        "point_adjustment": True,
                         "metric_f1": float(f_score),
                         "metric_precision": float(precision),
                         "metric_recall": float(recall),

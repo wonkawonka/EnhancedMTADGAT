@@ -20,6 +20,10 @@ def main(config):
 
     if config.mode == 'train':
         solver.train()
+        # The original entry point stopped after optimization, leaving only
+        # the checkpoint.  The unified external protocol requires the test
+        # pass and its standardized metrics in the same output directory.
+        solver.test()
     elif config.mode == 'test':
         solver.test()
 
