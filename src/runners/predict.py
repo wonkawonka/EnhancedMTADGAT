@@ -340,6 +340,11 @@ if __name__ == "__main__":
         "use_physical_response_score": getattr(args, "use_physical_response_score", False),
         "physical_response_config": resolve_physical_state_config(args),
         "physical_response_max_weight": getattr(args, "physical_response_max_weight", 0.35),
+        "use_physical_consistency_head": getattr(args, "use_physical_consistency_head", False),
+        "physical_consistency_score_max_weight": getattr(
+            args, "physical_consistency_score_max_weight", 0.35
+        ),
+        "normal_threshold_quantile": getattr(args, "normal_threshold_quantile", 0.99),
         "use_relation_change_score": getattr(args, "use_relation_change_score", False),
         "relation_change_weight": getattr(args, "relation_change_weight", 0.2),
         "relation_change_fusion_mode": getattr(args, "relation_change_fusion_mode", "linear_legacy"),

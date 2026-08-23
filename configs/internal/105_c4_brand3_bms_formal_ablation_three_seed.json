@@ -1,0 +1,103 @@
+{
+  "plan_name": "105_c4_brand3_bms_formal_ablation_three_seed",
+  "_lifecycle": "formal_c4_ablation_and_external_anchor",
+  "_thesis_role": "C4 正式消融与外部模型对比锚点：在 Brand3 和 BMS 上冻结同一 C4 定义并运行三随机种子。",
+  "_protocol": "Brand3 使用 strict_normal_validation 五折、训练折 MinMax、固定车辆 Top-5% 聚合及正常验证 P99 阈值；BMS 六簇各自按时间切分，训练段前90%建模、末尾10%正常校准，测试保持独立，窗口100、stride=10。",
+  "_label_boundary": "Brand3 报告车辆级 AP、AUROC 及正常验证阈值下的 F1/Precision/Recall；BMS 当前标签为全零占位，只报告误报率、每万窗口误报和簇/时间块/工况稳定性，禁止报告 AP/AUROC/F1。",
+  "_ablation_arms": "baseline；完整 C4（full-window 单向状态编码 + 一致性辅助训练 + 正常校准融合）；同模型不融合一致性分数；control-only 状态编码；历史双向状态编码。完整 C4 是与外部模型比较的唯一 C4 主结果。",
+  "_external_comparison": "C4 完整臂与 07(seed3407) 及 08(seed3408/3409) 的 11 个外部模型比较；必须按相同 dataset/fold/seed 配对，不混用旧 01/06 结果。",
+  "_runtime_protocol": "每项记录配置、模型、训练时间、实际 epoch、推理吞吐、P50/P95 延迟和峰值显存。",
+  "seeds": [3407, 3408, 3409],
+  "common_args": {
+    "epochs": 30,
+    "bs": 64,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "model_name": "mtad_gat",
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "use_regime_condition": false,
+    "regime_aux_lambda": 0.0,
+    "use_c3_joint_relation": false,
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "physical_consistency_hidden_dim": 64,
+    "physical_consistency_latent_dim": 16,
+    "physical_consistency_kl_weight": 0.0001,
+    "normal_threshold_quantile": 0.99,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false,
+    "battery_brand": 3,
+    "battery_fold_seed": -1,
+    "battery_split_protocol": "strict_normal_validation",
+    "battery_normalization": "minmax",
+    "battery_windows_per_snippet": 1,
+    "battery_vehicle_top_ratio": 0.05,
+    "battery_vehicle_top_ratio_mode": "fixed",
+    "battery_response_only_training": false,
+    "battery_score_channels": "response"
+  },
+  "experiments": [
+    {
+      "name": "brand3_baseline",
+      "runner": "src.runners.train_nc_battery",
+      "matrix": {"battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"dataset": "TSINGHUA_EV", "lookback": 127, "use_physical_consistency_head": false, "physical_consistency_aux_weight": 0.0, "run_id": "c4_formal_brand3_baseline"}
+    },
+    {
+      "name": "brand3_c4_full",
+      "runner": "src.runners.train_nc_battery",
+      "matrix": {"battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"dataset": "TSINGHUA_EV", "lookback": 127, "use_physical_consistency_head": true, "physical_consistency_encoder_input": "full_window", "physical_consistency_encoder_bidirectional": false, "physical_consistency_aux_weight": 1.0, "physical_consistency_score_max_weight": 0.35, "run_id": "c4_formal_brand3_full"}
+    },
+    {
+      "name": "brand3_c4_no_score_fusion",
+      "runner": "src.runners.train_nc_battery",
+      "matrix": {"battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"dataset": "TSINGHUA_EV", "lookback": 127, "use_physical_consistency_head": true, "physical_consistency_encoder_input": "full_window", "physical_consistency_encoder_bidirectional": false, "physical_consistency_aux_weight": 1.0, "physical_consistency_score_max_weight": 0.0, "run_id": "c4_formal_brand3_no_score"}
+    },
+    {
+      "name": "brand3_c4_control_only",
+      "runner": "src.runners.train_nc_battery",
+      "matrix": {"battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"dataset": "TSINGHUA_EV", "lookback": 127, "use_physical_consistency_head": true, "physical_consistency_encoder_input": "control_only", "physical_consistency_encoder_bidirectional": false, "physical_consistency_aux_weight": 1.0, "physical_consistency_score_max_weight": 0.35, "run_id": "c4_formal_brand3_control_only"}
+    },
+    {
+      "name": "brand3_c4_bidirectional",
+      "runner": "src.runners.train_nc_battery",
+      "matrix": {"battery_fold": [0, 1, 2, 3, 4]},
+      "args": {"dataset": "TSINGHUA_EV", "lookback": 127, "use_physical_consistency_head": true, "physical_consistency_encoder_input": "full_window", "physical_consistency_encoder_bidirectional": true, "physical_consistency_aux_weight": 1.0, "physical_consistency_score_max_weight": 0.35, "run_id": "c4_formal_brand3_bidirectional"}
+    },
+    {
+      "name": "bms_baseline",
+      "args": {"dataset": "BMS", "lookback": 100, "window_stride": 10, "val_split": 0.1, "use_physical_consistency_head": false, "physical_consistency_aux_weight": 0.0, "run_id": "c4_formal_bms_baseline"}
+    },
+    {
+      "name": "bms_c4_full",
+      "args": {"dataset": "BMS", "lookback": 100, "window_stride": 10, "val_split": 0.1, "use_physical_consistency_head": true, "physical_consistency_encoder_input": "full_window", "physical_consistency_encoder_bidirectional": false, "physical_consistency_aux_weight": 1.0, "physical_consistency_score_max_weight": 0.35, "run_id": "c4_formal_bms_full"}
+    },
+    {
+      "name": "bms_c4_no_score_fusion",
+      "args": {"dataset": "BMS", "lookback": 100, "window_stride": 10, "val_split": 0.1, "use_physical_consistency_head": true, "physical_consistency_encoder_input": "full_window", "physical_consistency_encoder_bidirectional": false, "physical_consistency_aux_weight": 1.0, "physical_consistency_score_max_weight": 0.0, "run_id": "c4_formal_bms_no_score"}
+    },
+    {
+      "name": "bms_c4_control_only",
+      "args": {"dataset": "BMS", "lookback": 100, "window_stride": 10, "val_split": 0.1, "use_physical_consistency_head": true, "physical_consistency_encoder_input": "control_only", "physical_consistency_encoder_bidirectional": false, "physical_consistency_aux_weight": 1.0, "physical_consistency_score_max_weight": 0.35, "run_id": "c4_formal_bms_control_only"}
+    },
+    {
+      "name": "bms_c4_bidirectional",
+      "args": {"dataset": "BMS", "lookback": 100, "window_stride": 10, "val_split": 0.1, "use_physical_consistency_head": true, "physical_consistency_encoder_input": "full_window", "physical_consistency_encoder_bidirectional": true, "physical_consistency_aux_weight": 1.0, "physical_consistency_score_max_weight": 0.35, "run_id": "c4_formal_bms_bidirectional"}
+    }
+  ]
+}

@@ -72,6 +72,10 @@ class Predictor:
 
         self.level = pred_args["level"]
 
+        self.normal_threshold_quantile = float(np.clip(
+            pred_args.get("normal_threshold_quantile", 0.99), 0.5, 0.9999
+        ))
+
         self.dynamic_pot = pred_args["dynamic_pot"]
 
         self.use_mov_av = pred_args["use_mov_av"]
@@ -91,6 +95,14 @@ class Predictor:
         self.physical_response_config = pred_args.get("physical_response_config")
 
         self.physical_response_max_weight = float(pred_args.get("physical_response_max_weight", 0.35))
+
+        self.use_physical_consistency_score = bool(
+            pred_args.get("use_physical_consistency_head", False)
+        )
+
+        self.physical_consistency_score_max_weight = float(np.clip(
+            pred_args.get("physical_consistency_score_max_weight", 0.35), 0.0, 0.5
+        ))
 
         self.use_relation_change_score = bool(pred_args.get("use_relation_change_score", False))
 
@@ -125,6 +137,8 @@ class Predictor:
         self.last_sample_relation_raw = {}
 
         self._physical_fusion_calibration = None
+
+        self._physical_consistency_fusion_calibration = None
 
         self.last_physical_response_term_summary = {}
 
@@ -407,6 +421,21 @@ class Predictor:
 
             summary["calibration_source"] = "normal_validation_or_training_reference"
 
+        if self._physical_consistency_fusion_calibration is not None:
+
+            summary["physical_consistency"] = {
+
+                **{
+                    key: float(value)
+                    for key, value in self._physical_consistency_fusion_calibration.items()
+                },
+
+                "max_weight": float(self.physical_consistency_score_max_weight),
+
+                "calibration_source": "normal_training_reference",
+
+            }
+
         if self._relation_change_calibration is not None:
 
             summary["relation_change"] = {
@@ -424,6 +453,96 @@ class Predictor:
             }
 
         return summary
+
+
+    def _fit_physical_consistency_calibration(self, train_df):
+
+        required = {"A_Score_Global", "Physical_Consistency_Score"}
+
+        if not required.issubset(train_df.columns):
+
+            missing = sorted(required - set(train_df.columns))
+
+            raise KeyError(f"C4 score calibration is missing columns: {missing}")
+
+        model_scores = train_df["A_Score_Global"].to_numpy(dtype=np.float32)
+
+        physical_scores = train_df["Physical_Consistency_Score"].to_numpy(dtype=np.float32)
+
+        model_center = float(np.median(model_scores))
+
+        physical_center = float(np.median(physical_scores))
+
+        model_scale = float(max(1.4826 * np.median(np.abs(model_scores - model_center)), 1e-7))
+
+        physical_scale = float(max(
+            1.4826 * np.median(np.abs(physical_scores - physical_center)), 1e-7
+        ))
+
+        model_quality = 1.0 / (self._branch_stability(model_scores) + 1e-6)
+
+        physical_quality = 1.0 / (self._branch_stability(physical_scores) + 1e-6)
+
+        quality_weight = physical_quality / (model_quality + physical_quality)
+
+        self._physical_consistency_fusion_calibration = {
+
+            "model_center": model_center,
+
+            "model_scale": model_scale,
+
+            "physical_center": physical_center,
+
+            "physical_scale": physical_scale,
+
+            "weight": float(np.clip(
+                quality_weight, 0.0, self.physical_consistency_score_max_weight
+            )),
+
+        }
+
+
+    def _apply_physical_consistency_fusion(self, score_df):
+
+        calibration = self._physical_consistency_fusion_calibration
+
+        if calibration is None:
+
+            raise RuntimeError("C4 consistency calibration must be fitted on normal training data")
+
+        model_scores = score_df["A_Score_Global"].to_numpy(dtype=np.float32)
+
+        physical_scores = score_df["Physical_Consistency_Score"].to_numpy(dtype=np.float32)
+
+        physical_excess = np.maximum(
+
+            0.0,
+
+            (physical_scores - calibration["physical_center"]) / calibration["physical_scale"],
+
+        )
+
+        physical_aligned = (
+
+            calibration["model_center"] + calibration["model_scale"] * physical_excess
+
+        )
+
+        weight = calibration["weight"]
+
+        score_df["A_Score_Backbone"] = model_scores
+
+        score_df["Physical_Consistency_Aligned"] = physical_aligned.astype(np.float32)
+
+        score_df["Physical_Consistency_Weight"] = float(weight)
+
+        score_df["A_Score_Global"] = (
+
+            (1.0 - weight) * model_scores + weight * physical_aligned
+
+        ).astype(np.float32)
+
+        return score_df
 
 
     @staticmethod
@@ -2147,6 +2266,14 @@ class Predictor:
             test_pred_df = self.get_score_for_sequences(test)
             test_scoring_stats = dict(self.last_scoring_stats)
 
+            if self.use_physical_consistency_score:
+
+                self._fit_physical_consistency_calibration(train_pred_df)
+
+                train_pred_df = self._apply_physical_consistency_fusion(train_pred_df)
+
+                test_pred_df = self._apply_physical_consistency_fusion(test_pred_df)
+
             if self.use_relation_change_score:
 
                 self._fit_relation_change_calibration(train_pred_df)
@@ -2270,7 +2397,23 @@ class Predictor:
 
         bf_eval = self._to_serializable_dict(bf_eval)
 
-        global_epsilon = e_eval["threshold"] if "threshold" in e_eval else np.percentile(train_anomaly_scores, 95)
+        if true_anomalies is None and str(self.dataset).upper() == "BMS":
+
+            global_epsilon = float(np.quantile(
+                train_anomaly_scores, self.normal_threshold_quantile
+            ))
+
+            e_eval["threshold"] = global_epsilon
+
+            e_eval["threshold_quantile"] = self.normal_threshold_quantile
+
+        else:
+
+            global_epsilon = (
+                e_eval["threshold"]
+                if "threshold" in e_eval
+                else np.percentile(train_anomaly_scores, 95)
+            )
 
         event_low_threshold = self._compute_event_low_threshold(train_anomaly_scores, global_epsilon)
 

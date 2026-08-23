@@ -257,6 +257,12 @@ def get_parser():
         help="Maximum normal-calibrated weight of the independent C4 score",
     )
     parser.add_argument(
+        "--normal_threshold_quantile",
+        type=float,
+        default=0.99,
+        help="Normal calibration-score quantile used by normal-only datasets such as BMS",
+    )
+    parser.add_argument(
         "--use_physical_regularization",
         type=str2bool,
         default=False,

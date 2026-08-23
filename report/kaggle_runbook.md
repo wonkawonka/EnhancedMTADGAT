@@ -136,6 +136,26 @@ python run.py external \
 
 输出位于 `runs/external/07_unified_external_all_models_msl_smap_brand3_bms_seed3407/`。MSL/SMAP 写出逐点 AP、AUROC 和正常验证阈值下的原始 F1；Brand3 写车辆级 AP、AUROC、F1；BMS 只写正常工况误报、每万窗口误报以及分簇、时间块和工况稳定性，禁止把全零占位标签用于 AP/AUROC/F1。
 
+### C4 Brand3/BMS 消融与外部对比
+
+C4 正式消融使用 105：5 个实验臂 ×（Brand3 五折 + BMS）× 3 seeds，共 90 项。
+
+```bash
+python run.py internal \
+  --plan configs/internal/105_c4_brand3_bms_formal_ablation_three_seed.json \
+  --skip-existing
+```
+
+C4 外部主表的 seed3407 复用 07；其余两个 seed 使用 08，只运行 11 个外部模型的 Brand3/BMS，共 132 项：
+
+```bash
+python run.py external \
+  --plan configs/external/08_unified_external_brand3_bms_seed3408_3409.json \
+  --skip-existing
+```
+
+完整口径见 `report/analysis/c4_ablation_and_external_comparison_plan.md`。C4 主表只使用 105 的 `brand3_c4_full` 与 `bms_c4_full`；其他 C4 实验臂只进入消融表。
+
 ## 4. 每组实验的目的
 
 | 比较 | 回答的问题 |

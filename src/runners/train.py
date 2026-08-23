@@ -408,6 +408,11 @@ def train_universal_model(args):
                 "use_physical_response_score": getattr(args, "use_physical_response_score", False),
                 "physical_response_config": resolve_physical_state_config(args),
                 "physical_response_max_weight": getattr(args, "physical_response_max_weight", 0.35),
+                "use_physical_consistency_head": getattr(args, "use_physical_consistency_head", False),
+                "physical_consistency_score_max_weight": getattr(
+                    args, "physical_consistency_score_max_weight", 0.35
+                ),
+                "normal_threshold_quantile": getattr(args, "normal_threshold_quantile", 0.99),
                 "use_relation_change_score": getattr(args, "use_relation_change_score", False),
                 "relation_change_weight": getattr(args, "relation_change_weight", 0.2),
                 "relation_change_fusion_mode": getattr(args, "relation_change_fusion_mode", "linear_legacy"),
@@ -550,6 +555,7 @@ if __name__ == "__main__":
 
         nasa_train_tensors = None
         bms_train_tensors = None
+        bms_validation_tensors = None
         ch_battery_train_tensors = None
         tsinghua_train_tensors = None
         tsinghua_validation_tensors = None
@@ -561,8 +567,13 @@ if __name__ == "__main__":
             first_train_battery = next(iter(nasa_train_tensors))
             x_train = _get_first_sequence_tensor(nasa_train_tensors[first_train_battery])
         elif dataset == "BMS" and isinstance(x_train, dict):
-            bms_train_tensors = {cluster_name: torch.from_numpy(cluster_data).float()
-                                 for cluster_name, cluster_data in x_train.items()}
+            bms_train_tensors = {}
+            bms_validation_tensors = {}
+            for cluster_name, cluster_data in x_train.items():
+                split = max(window_size + 1, int(len(cluster_data) * (1.0 - val_split)))
+                split = min(split, len(cluster_data) - (window_size + 1))
+                bms_train_tensors[cluster_name] = torch.from_numpy(cluster_data[:split]).float()
+                bms_validation_tensors[cluster_name] = torch.from_numpy(cluster_data[split:]).float()
             first_train_cluster = next(iter(bms_train_tensors))
             x_train = bms_train_tensors[first_train_cluster]
         elif dataset == CH_BATTERY_DATASET_NAME and isinstance(x_train, dict):
@@ -674,6 +685,11 @@ if __name__ == "__main__":
                 for cluster_tensor in bms_train_tensors.values()
             ]
             train_dataset = torch.utils.data.ConcatDataset(train_sub_datasets)
+            validation_sub_datasets = [
+                SlidingWindowDataset(cluster_tensor, window_size, target_dims, stride=args.window_stride)
+                for cluster_tensor in bms_validation_tensors.values()
+            ]
+            validation_dataset = torch.utils.data.ConcatDataset(validation_sub_datasets)
         elif dataset == CH_BATTERY_DATASET_NAME and ch_battery_train_tensors is not None:
             train_sub_datasets = [
                 SlidingWindowDataset(sample_tensor, window_size, target_dims, stride=args.window_stride)
@@ -959,6 +975,11 @@ if __name__ == "__main__":
             "use_physical_response_score": getattr(args, "use_physical_response_score", False),
             "physical_response_config": resolve_physical_state_config(args),
             "physical_response_max_weight": getattr(args, "physical_response_max_weight", 0.35),
+            "use_physical_consistency_head": getattr(args, "use_physical_consistency_head", False),
+            "physical_consistency_score_max_weight": getattr(
+                args, "physical_consistency_score_max_weight", 0.35
+            ),
+            "normal_threshold_quantile": getattr(args, "normal_threshold_quantile", 0.99),
             "use_relation_change_score": getattr(args, "use_relation_change_score", False),
             "relation_change_weight": getattr(args, "relation_change_weight", 0.2),
             "relation_change_fusion_mode": getattr(args, "relation_change_fusion_mode", "linear_legacy"),
@@ -1035,7 +1056,11 @@ if __name__ == "__main__":
             print(f"[{dataset}] regime probe: {regime_report}")
         elif dataset == "BMS" and bms_test_tensors is not None:
             total_clusters = len(bms_test_tensors)
-            train_reference = bms_train_tensors if bms_train_tensors is not None else x_train
+            train_reference = (
+                bms_validation_tensors
+                if bms_validation_tensors is not None
+                else bms_train_tensors if bms_train_tensors is not None else x_train
+            )
 
             # 预计算训练数据分数（所有聚类共享，避免重复模型推理）
             cache_predictor = Predictor(

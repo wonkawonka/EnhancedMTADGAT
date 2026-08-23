@@ -230,7 +230,7 @@ def save_bms_operational_report(output_dir, test_entities, window_size, block_si
     report = {
         "data_assumption": "the evaluated BMS interval is confirmed normal operation",
         "metric_semantics": "threshold exceedances are empirical false alarms, not detected faults",
-        "threshold_source": "normal training scores via the model's epsilon threshold",
+        "threshold_source": "held-out normal calibration scores at the configured quantile (default P99)",
         "reported_supervised_fault_metrics": False,
         "window_size": int(window_size),
         "time_block_size_windows": int(block_size),
@@ -269,6 +269,10 @@ def save_bms_conditioning_comparison(batch_root):
         "shuffled_farthest": ("bms_prototype_query_shuffled_state_farthest_seed*",),
         "no_aux": ("bms_prototype_query_no_aux_seed*",),
         "c4_backbone": ("bms_mtadgat_c4_backbone",),
+        "c4_full": ("bms_c4_full_seed*",),
+        "c4_no_score_fusion": ("bms_c4_no_score_fusion_seed*",),
+        "c4_control_only": ("bms_c4_control_only_seed*",),
+        "c4_bidirectional": ("bms_c4_bidirectional_seed*",),
         # Backward-compatible names for the old plan.
         "unconditioned": ("bms_frequency_regulation_unconditioned",),
         "conditioned": ("bms_frequency_regulation_conditioned",),

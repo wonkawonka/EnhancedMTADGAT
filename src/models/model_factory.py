@@ -1,6 +1,6 @@
 """Build the frozen MTAD-GAT baseline, C3 and C4 architectures."""
 
-from src.data.utils import get_score_dims
+from src.data.utils import BMS_FEATURE_NAMES, get_score_dims
 from src.models.mtad_gat import Enhanced_MTADGAT
 
 
@@ -71,24 +71,41 @@ def resolve_model_args(args):
 
 
 def resolve_physical_state_config(args):
-    """Map Tsinghua EV responses and the configurable C4 state observer."""
-    if str(getattr(args, "dataset", "")).upper() != "TSINGHUA_EV":
-        return None
-    return {
-        "dataset_name": "TSINGHUA_EV",
-        "current_index": 1,
-        "soc_index": 2,
-        "consistency_current_index": 1,
-        "consistency_soc_index": 2,
-        "consistency_response_dims": [0, 3, 4, 5, 6],
+    """Map Brand3/BMS controls and responses for the frozen C4 observer."""
+    dataset = str(getattr(args, "dataset", "")).upper()
+    shared = {
         "consistency_encoder_input": str(
             getattr(args, "physical_consistency_encoder_input", "full_window")
         ),
         "consistency_encoder_bidirectional": bool(
             getattr(args, "physical_consistency_encoder_bidirectional", False)
         ),
-        "response_score_dims": get_score_dims("TSINGHUA_EV"),
     }
+    if dataset == "TSINGHUA_EV":
+        return {
+            **shared,
+            "dataset_name": dataset,
+            "current_index": 1,
+            "soc_index": 2,
+            "consistency_current_index": 1,
+            "consistency_soc_index": 2,
+            "consistency_response_dims": [0, 3, 4, 5, 6],
+            "response_score_dims": get_score_dims(dataset),
+        }
+    if dataset == "BMS":
+        # SYS_I is the imposed system-level control; BMSnI remains a scored
+        # cluster response so C4 cannot explain away cluster over-current.
+        return {
+            **shared,
+            "dataset_name": dataset,
+            "current_index": BMS_FEATURE_NAMES.index("BMSnI"),
+            "soc_index": BMS_FEATURE_NAMES.index("BMSnRSOC"),
+            "consistency_current_index": BMS_FEATURE_NAMES.index("SYS_I"),
+            "consistency_soc_index": BMS_FEATURE_NAMES.index("BMSnRSOC"),
+            "consistency_response_dims": get_score_dims(dataset),
+            "response_score_dims": get_score_dims(dataset),
+        }
+    return None
 
 
 def resolve_regime_config(args, n_features):
@@ -127,7 +144,7 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
     physical = resolve_physical_state_config(args)
     use_c4 = bool(getattr(args, "use_physical_consistency_head", False))
     if use_c4 and physical is None:
-        raise ValueError("Frozen C4 is only defined for TSINGHUA_EV")
+        raise ValueError("Frozen C4 is only defined for TSINGHUA_EV and BMS")
     if use_c4 and bool(getattr(args, "use_regime_condition", False)):
         raise ValueError("Frozen C3 and C4 are parallel models and cannot be enabled together")
 
