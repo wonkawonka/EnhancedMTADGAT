@@ -6,7 +6,7 @@
     "05_public_baselines_msl_smap"
   ],
   "_thesis_role": "统一 C3 外部对比注册计划：将 MSL 上的 TranAD、Anomaly Transformer、GDN、DCdetector 与 MSL/SMAP 上的 PCA/SPE、USAD 放入同一结果口径。",
-  "_protocol": "所有方法使用项目统一的数据读取和训练段归一化；测试阶段使用原始逐点分数，不做 point adjustment；主表分别报告 AP、AUROC、训练时间、推理时间和峰值显存。",
+  "_protocol": "所有方法使用项目统一的数据读取和训练段归一化；每个训练实体末尾10%为正常验证段，用验证分数99%分位数冻结阈值。测试阶段使用原始逐点分数，不做 point adjustment；主表报告 AP、AUROC、F1_raw、Precision_raw、Recall_raw、训练时间、推理时间和峰值显存。AP/AUROC不依赖阈值，严禁使用测试标签选阈值。",
   "_seed_protocol": "正式结果固定 seed 3407、3408、3409。PCA/SPE 与 USAD 已有三 seed 矩阵；TranAD、Anomaly Transformer、GDN、DCdetector 的旧 04 入口尚未形成统一 seed wrapper，旧单次结果必须标为开发结果，完成 seed 适配后才能进入正式主表。",
   "_epoch_protocol": "PCA/SPE 无迭代 epoch；USAD 最大 10 epochs；TranAD、Anomaly Transformer、GDN、DCdetector 保留其公开实现的训练预算并单独记录实际 epoch，不把不同模型的 epoch 数机械混成同一预算。",
   "_formal_gate": "同一方法同一数据集完成三个 seed，且 metrics.json/runtime.json 齐全后，才允许进入论文外部对比主表。",
@@ -91,6 +91,8 @@
       "args": {
         "method": "pca_spe",
         "normalize": true,
+        "val_ratio": 0.1,
+        "threshold_quantile": 0.99,
         "pca_components": 8,
         "sample_limit": 100000,
         "use_cuda": false
@@ -107,6 +109,8 @@
       "args": {
         "method": "usad",
         "normalize": true,
+        "val_ratio": 0.1,
+        "threshold_quantile": 0.99,
         "lookback": 100,
         "stride": 1,
         "batch_size": 128,

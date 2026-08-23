@@ -116,6 +116,26 @@ python run.py external \
 
 六个模型均已集成到本项目，正式运行不需要克隆官方仓库，也不需要旧版 `torch-geometric` 或 `easydict`。统一入口使用相同的车辆折、数据路径和结果导出协议。
 
+### 统一外部对比 07（seed=3407 首轮）
+
+07 是论文后续统一外部主表的唯一首轮计划；旧 01/06 结果只保留为历史协议记录。它包含 11 个模型在 MSL、SMAP、BMS 和 Brand3 五折上的完整矩阵，共 88 项：
+
+```bash
+python run.py external \
+  --plan configs/external/07_unified_external_all_models_msl_smap_brand3_bms_seed3407.json \
+  --skip-existing
+```
+
+提交前可只展开命令，不训练：
+
+```bash
+python run.py external \
+  --plan configs/external/07_unified_external_all_models_msl_smap_brand3_bms_seed3407.json \
+  --dry-run --batch-tag submission-check
+```
+
+输出位于 `runs/external/07_unified_external_all_models_msl_smap_brand3_bms_seed3407/`。MSL/SMAP 写出逐点 AP、AUROC 和正常验证阈值下的原始 F1；Brand3 写车辆级 AP、AUROC、F1；BMS 只写正常工况误报、每万窗口误报以及分簇、时间块和工况稳定性，禁止把全零占位标签用于 AP/AUROC/F1。
+
 ## 4. 每组实验的目的
 
 | 比较 | 回答的问题 |

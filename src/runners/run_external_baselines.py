@@ -71,9 +71,27 @@ def load_plan(plan_path):
 
 
 def expand_experiment_matrix(experiments):
-    """Expand compact Cartesian matrices such as battery brand x fold."""
+    """Expand Cartesian matrices or explicit conditional argument cases."""
     expanded = []
     for experiment in experiments:
+        cases = experiment.get("cases", [])
+        if cases:
+            if experiment.get("matrix"):
+                raise ValueError(
+                    f"Experiment {experiment.get('name', 'experiment')!r} cannot define both cases and matrix"
+                )
+            for case in cases:
+                if not isinstance(case, dict) or not case:
+                    raise ValueError("Each experiment case must be a non-empty object")
+                item = dict(experiment)
+                item.pop("cases", None)
+                item["args"] = {**experiment.get("args", {}), **case}
+                suffix = "_".join(
+                    f"{ {'brand_fold': 'f'}.get(key, key) }{value}" for key, value in case.items()
+                )
+                item["name"] = f"{experiment.get('name', 'experiment')}_{suffix}"
+                expanded.append(item)
+            continue
         matrix = experiment.get("matrix", {})
         if not matrix:
             expanded.append(experiment)
@@ -364,9 +382,16 @@ def main():
 
 
     common_args = dict(plan.get("common_args", {}))
+    common_cwd = plan.get("common_cwd")
+    common_required_outputs = plan.get("required_outputs")
+    pack_experiments = bool(plan.get("pack_experiments", True))
     experiments = []
     for raw_experiment in plan.get("experiments", []):
         experiment = dict(raw_experiment)
+        if common_cwd is not None:
+            experiment.setdefault("cwd", common_cwd)
+        if common_required_outputs is not None:
+            experiment.setdefault("required_outputs", common_required_outputs)
         experiment["args"] = {**common_args, **raw_experiment.get("args", {})}
         experiments.append(experiment)
     experiments = expand_experiment_matrix(experiments)
@@ -403,7 +428,11 @@ def main():
 
         if only_names:
 
-            if name in only_names or baseline_name in only_names:
+            if (
+                name in only_names
+                or baseline_name in only_names
+                or any(name.startswith(f"{selected}_") for selected in only_names)
+            ):
 
                 pass
 
@@ -504,12 +533,14 @@ def main():
 
             "return_code": None,
 
+            "required_outputs": experiment.get("required_outputs", ["metrics.json"]),
+
         }
 
 
         if args.skip_existing:
 
-            if (output_dir / "metrics.json").exists():
+            if all((output_dir / item).exists() for item in record["required_outputs"]):
 
                 record["status"] = "skipped_existing"
 
@@ -553,7 +584,7 @@ def main():
 
         record["status"] = "done" if return_code == 0 else "failed"
 
-        if return_code == 0:
+        if return_code == 0 and pack_experiments:
 
             packed_output = pack_experiment_output(output_dir)
 

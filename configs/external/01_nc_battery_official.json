@@ -1,7 +1,7 @@
 {
   "plan_name": "01_nc_battery_official",
   "_thesis_role": "新电池正式外部对照：五种通用无监督基线加同数据集专用DyAD",
-  "_protocol": "公平主对照复用内部模型的strict_normal_validation品牌独立车辆折、训练集统计量和车辆级top比例；每次推理同时报告top-1/5/10/20%及均值。论文协议复核另见02_nc_battery_paper_protocol.json。",
+  "_protocol": "公平主对照复用内部模型的strict_normal_validation品牌独立车辆折、训练集统计量和车辆级top比例；正常校准集仅用于冻结车辆级阈值并报告F1、Precision、Recall，严禁使用测试标签选阈值；AP/AUROC保持无阈值排序指标。论文协议复核另见02_nc_battery_paper_protocol.json。",
   "_source": "Zhang et al., Realistic fault detection of Li-ion battery via dynamical deep learning, Nature Communications 2023",
   "common_env": {
     "PYTHONIOENCODING": "utf-8",

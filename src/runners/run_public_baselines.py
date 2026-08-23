@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from sklearn.decomposition import IncrementalPCA
-from sklearn.metrics import average_precision_score, roc_auc_score
+from sklearn.metrics import average_precision_score, f1_score, precision_score, recall_score, roc_auc_score
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
@@ -109,7 +109,22 @@ def _ranking_metrics(scores, labels):
     return result
 
 
-def run_pca_spe(args, train_sequences, test_sequences, test_labels, output_dir):
+def _with_frozen_threshold(metrics, scores, labels, validation_scores, quantile):
+    """Add raw point F1 using a normal-only validation threshold, never test labels."""
+    threshold = float(np.quantile(np.asarray(validation_scores), float(quantile)))
+    predictions = np.asarray(scores) > threshold
+    labels = np.asarray(labels, dtype=np.int32)
+    metrics.update({
+        "threshold": threshold,
+        "threshold_source": f"normal_validation_score_q{float(quantile):.4f}",
+        "f1_raw": float(f1_score(labels, predictions, zero_division=0)),
+        "precision_raw": float(precision_score(labels, predictions, zero_division=0)),
+        "recall_raw": float(recall_score(labels, predictions, zero_division=0)),
+    })
+    return metrics
+
+
+def run_pca_spe(args, train_sequences, validation_sequences, test_sequences, test_labels, output_dir):
     device = torch.device("cpu")
     started = time.perf_counter()
     train_points = np.concatenate(train_sequences, axis=0).astype(np.float32, copy=False)
@@ -127,6 +142,10 @@ def run_pca_spe(args, train_sequences, test_sequences, test_labels, output_dir):
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats()
     inference_started = time.perf_counter()
+    validation_scores = []
+    for sequence in validation_sequences:
+        transformed = pca.transform(sequence)
+        validation_scores.append(np.mean((sequence - pca.inverse_transform(transformed)) ** 2, axis=1))
     score_parts, label_parts = [], []
     for sequence, labels in zip(test_sequences, test_labels):
         transformed = pca.transform(sequence)
@@ -148,6 +167,7 @@ def run_pca_spe(args, train_sequences, test_sequences, test_labels, output_dir):
     })
     metrics = {"dataset": args.dataset, "method": "pca_spe", "components": components}
     metrics.update(_ranking_metrics(scores, labels))
+    _with_frozen_threshold(metrics, scores, labels, np.concatenate(validation_scores), args.threshold_quantile)
     _write_result(output_dir, args, metrics, runtime)
 
 
@@ -163,7 +183,7 @@ def _make_references(sequences, lookback, stride, limit, seed):
     return references
 
 
-def run_usad(args, train_sequences, test_sequences, test_labels, output_dir):
+def run_usad(args, train_sequences, validation_sequences, test_sequences, test_labels, output_dir):
     device = _device(args.use_cuda)
     started = time.perf_counter()
     train_references = _make_references(
@@ -204,6 +224,14 @@ def run_usad(args, train_sequences, test_sequences, test_labels, output_dir):
         torch.cuda.synchronize()
     training_seconds = time.perf_counter() - training_started
 
+    validation_dataset = WindowReferenceDataset(validation_sequences, args.lookback, args.stride)
+    validation_loader = DataLoader(validation_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    validation_scores = []
+    ae1.eval(); ae2.eval()
+    with torch.no_grad():
+        for values in validation_loader:
+            values = values.to(device, non_blocking=True)
+            validation_scores.append((0.5 * ((ae1(values) - values).square().mean(dim=1) + (ae2(values) - values).square().mean(dim=1))).cpu().numpy())
     test_dataset = WindowReferenceDataset(test_sequences, args.lookback, args.stride, labels=test_labels)
     test_loader = DataLoader(
         test_dataset, batch_size=args.batch_size, shuffle=False,
@@ -241,6 +269,7 @@ def run_usad(args, train_sequences, test_sequences, test_labels, output_dir):
     })
     metrics = {"dataset": args.dataset, "method": "usad"}
     metrics.update(_ranking_metrics(scores, labels))
+    _with_frozen_threshold(metrics, scores, labels, np.concatenate(validation_scores), args.threshold_quantile)
     _write_result(output_dir, args, metrics, runtime)
 
 
@@ -262,6 +291,8 @@ def parse_args():
     parser.add_argument("--pca_components", type=int, default=8)
     parser.add_argument("--sample_limit", type=int, default=100000)
     parser.add_argument("--use_cuda", type=lambda value: str(value).lower() == "true", default=True)
+    parser.add_argument("--val_ratio", type=float, default=0.1)
+    parser.add_argument("--threshold_quantile", type=float, default=0.99)
     return parser.parse_args()
 
 
@@ -271,14 +302,16 @@ def main():
     torch.manual_seed(args.seed)
     if args.use_cuda and torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
-    train_sequences, _, test_sequences, test_labels = get_nasa_telemetry_sequence_data(
-        args.dataset, val_ratio=0.0, normalize=args.normalize
+    train_sequences, validation_sequences, test_sequences, test_labels = get_nasa_telemetry_sequence_data(
+        args.dataset, val_ratio=args.val_ratio, normalize=args.normalize
     )
+    if not validation_sequences:
+        raise ValueError("A non-empty normal validation split is required for threshold calibration")
     output_dir = Path(args.output_dir).resolve()
     if args.method == "pca_spe":
-        run_pca_spe(args, train_sequences, test_sequences, test_labels, output_dir)
+        run_pca_spe(args, train_sequences, validation_sequences, test_sequences, test_labels, output_dir)
     else:
-        run_usad(args, train_sequences, test_sequences, test_labels, output_dir)
+        run_usad(args, train_sequences, validation_sequences, test_sequences, test_labels, output_dir)
 
 
 if __name__ == "__main__":

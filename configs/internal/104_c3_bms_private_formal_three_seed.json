@@ -2,7 +2,7 @@
   "plan_name": "104_c3_bms_private_formal_three_seed",
   "_lifecycle": "formal_post_99_private_dataset",
   "_thesis_role": "正式私有 BMS 实验：验证冻结 C3 在真实电池管理系统正常运行数据上的条件化误报抑制与跨簇稳定性。",
-  "_protocol": "每个 BMS cluster 按时间顺序切分：前 80% 仅用于训练，后 20% 作为独立已知正常测试区间；归一化参数只由所有训练区间拟合。训练区间内部的 10% 仅用于早停验证，不随机打散 train/test 边界。",
+  "_protocol": "每个 BMS cluster 按时间顺序切分：前 80% 仅用于训练，后 20% 作为独立已知正常测试区间；归一化参数只由所有训练区间拟合。训练区间内部末尾 10% 仅用于早停及以正常分数99%分位数冻结告警阈值，不随机打散 train/test 边界。",
   "_sampling_protocol": "BMS 六个簇各约 21.4 万训练点，窗口长度 100；预先固定 window_stride=10 以减少高度重叠窗口和 T4 计算浪费，所有模型臂与 seed 完全一致。误报率的分母明确记为 stride=10 的评分窗口数。",
   "_label_boundary": "当前私有 BMS 发布包的 test_label 是全零占位，不能报告监督故障 AP/AUROC/Recall，也不能声称已验证故障检出。正式结论限定为正常工况阈值超限、每万窗口误报、分簇/分时间块/分工况稳定性。若后续补充人工确认故障标签，再单独追加带标签评估，不回填当前结果。",
   "_effectiveness_claim": "C3 有效的操作性判据：相对 baseline，prototype-query 在三 seed 的 false_alarm_rate、false_alarms_per_10k_windows、cluster/block/regime FPR 波动不恶化，并在固定正常校准规则下取得更低误报；若只降低误报但分布稳定性变差，结论只能写为局部改善。",
