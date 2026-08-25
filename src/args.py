@@ -228,7 +228,7 @@ def get_parser():
         "--use_physical_consistency_head",
         type=str2bool,
         default=False,
-        help="C4: train an independent bottlenecked control-to-response consistency head",
+        help="C4 response path: train an independent bottlenecked state-conditioned consistency head",
     )
     parser.add_argument("--physical_consistency_hidden_dim", type=int, default=64)
     parser.add_argument("--physical_consistency_latent_dim", type=int, default=16)
@@ -250,6 +250,30 @@ def get_parser():
     )
     parser.add_argument("--physical_consistency_aux_weight", type=float, default=0.0)
     parser.add_argument("--physical_consistency_kl_weight", type=float, default=0.0001)
+    parser.add_argument(
+        "--use_physical_graph_bias",
+        type=str2bool,
+        default=False,
+        help="C4: add a dynamic battery-relation prior to Feature-GAT attention logits",
+    )
+    parser.add_argument(
+        "--physical_graph_bias_weight",
+        type=float,
+        default=0.5,
+        help="Lambda_g multiplying the physical prior before Feature-GAT softmax",
+    )
+    parser.add_argument(
+        "--physical_graph_dynamic_weight",
+        type=float,
+        default=1.0,
+        help="Relative contribution of window-dependent gates over the static physical graph",
+    )
+    parser.add_argument(
+        "--physical_graph_gate_scale",
+        type=float,
+        default=5.0,
+        help="Scale used to map physical state ratios into bounded dynamic graph gates",
+    )
     parser.add_argument(
         "--physical_consistency_score_max_weight",
         type=float,

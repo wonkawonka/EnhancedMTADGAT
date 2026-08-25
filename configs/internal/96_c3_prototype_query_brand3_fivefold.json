@@ -1,7 +1,7 @@
 {
   "plan_name": "96_c3_prototype_query_brand3_fivefold",
   "_thesis_role": "清华 EV Brand3 五折验证精简 C3：完整七通道统计 Token、原型 Query、软路由连续工况状态、融合 FiLM 与路由防坍缩损失。",
-  "_protocol": "沿用 92 号计划的车辆级论文五折、归一化、Top-5% 和训练设置；只新增候选 C3 三臂，历史 baseline/restricted C3 不重复训练。",
+  "_protocol": "沿用 92 号计划的车辆级论文五折、归一化、带标签 calibration 选择 Top-p 和训练设置；只新增候选 C3 三臂，历史 baseline/restricted C3 不重复训练。",
   "_metric": "车辆级 AP 为主指标，AUROC 与低误报 TPR 为辅助指标；同时检查无防坍缩损失和状态打乱负对照。",
   "common_args": {
     "dataset": "TSINGHUA_EV",
@@ -11,7 +11,7 @@
     "battery_normalization": "paper_channel",
     "battery_windows_per_snippet": 1,
     "battery_vehicle_top_ratio": 0.05,
-    "battery_vehicle_top_ratio_mode": "fixed",
+    "battery_vehicle_top_ratio_mode": "labelled_calibration",
     "battery_response_only_training": false,
     "battery_score_channels": "response",
     "epochs": 30,

@@ -1,13 +1,13 @@
 {
   "plan_name": "92_c3_full_window_brand3_paper_fivefold",
   "_thesis_role": "重新验证 C3：清华 EV 使用完整七通道窗口形成数据驱动工况表征；MSL/SMAP 路线不变。",
-  "_protocol": "Brand3 论文协议五折；baseline / FiLM 无辅助 / 完整状态 FiLM / 状态打乱负对照全部从头训练。状态仅在融合层调制，固定 Top-5%，不使用关系分支或外部校准。",
+  "_protocol": "Brand3 论文协议五折；baseline / FiLM 无辅助 / 完整状态 FiLM / 状态打乱负对照全部从头训练。状态仅在融合层调制；带标签 calibration 在 5%--95% 搜索 Top-p 并选择论文式阈值。",
   "_metric": "车辆级 AP 为主指标，AUROC 与低误报 TPR 为辅助指标；所有运行只使用本折正常训练车辆拟合。",
   "common_args": {
     "dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold_seed": 0,
     "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel",
     "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05,
-    "battery_vehicle_top_ratio_mode": "fixed", "battery_response_only_training": false,
+    "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_response_only_training": false,
     "battery_score_channels": "response", "epochs": 10, "bs": 64, "lookback": 127,
     "normalize": true, "init_lr": 0.001, "dropout": 0.3, "model_name": "mtad_gat",
     "regime_emb_dim": 8, "regime_film_scale": 0.1, "score_fusion_mode": "fixed",

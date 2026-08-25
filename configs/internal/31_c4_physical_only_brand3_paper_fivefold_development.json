@@ -5,7 +5,7 @@
   "_metric": "主指标 AP（Average Precision/PR-AUC），AUROC 次指标；计分限定五个响应通道。",
   "common_args": {
     "epochs": 10, "bs": 128, "lookback": 127, "battery_windows_per_snippet": 1,
-    "battery_vehicle_top_ratio": 0.05, "battery_split_protocol": "paper_protocol", "battery_fold_seed": 0,
+    "battery_vehicle_top_ratio": 0.05, "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_split_protocol": "paper_protocol", "battery_fold_seed": 0,
     "battery_normalization": "paper_channel", "battery_response_only_training": false,
     "battery_score_channels": "response", "normalize": true, "init_lr": 0.001, "dropout": 0.3,
     "use_regime_condition": false, "score_fusion_mode": "quality_aware", "regime_aux_lambda": 1.0,

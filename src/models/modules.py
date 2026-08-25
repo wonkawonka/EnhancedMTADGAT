@@ -238,6 +238,165 @@ class ConvLayer(nn.Module):
         return x.permute(0, 2, 1)  # 还原维度顺序
 
 
+class DynamicPhysicalGraphBias(nn.Module):
+    """Zero-centred, state-conditioned relation-type attention modulation.
+
+    Four relation types (load--thermal, voltage-extrema, thermal-extrema and
+    SOC--voltage) are gated from the current window.  All gate parameters are
+    zero-initialised, therefore this module returns an exact zero matrix before
+    learning and the initial forward pass is identical to MTAD-GAT.  The final
+    modulation is bounded and may be positive *or* negative.
+    """
+
+    _ROLE_NAMES = (
+        "voltage",
+        "current",
+        "soc",
+        "voltage_max",
+        "voltage_min",
+        "temperature_max",
+        "temperature_min",
+    )
+
+    def __init__(self, n_features, config=None, dynamic_weight=1.0, gate_scale=5.0):
+        super().__init__()
+        config = dict(config or {})
+        self.n_features = int(n_features)
+        self.dynamic_weight = max(0.0, float(dynamic_weight))
+        self.gate_scale = max(0.0, float(gate_scale))
+
+        roles = {
+            name: self._valid_indices(config.get("physical_graph_roles", {}).get(name, []))
+            for name in self._ROLE_NAMES
+        }
+        if not all(roles[name] for name in self._ROLE_NAMES):
+            missing = [name for name in self._ROLE_NAMES if not roles[name]]
+            raise ValueError(f"Physical graph roles are incomplete: {missing}")
+        self.roles = roles
+        graph_roles = config.get("physical_graph_roles", {})
+        self.voltage_spread_indices = self._valid_indices(
+            graph_roles.get("voltage_spread", [])
+        )
+        self.temperature_spread_indices = self._valid_indices(
+            graph_roles.get("temperature_spread", [])
+        )
+
+        current_gate = torch.zeros(self.n_features, self.n_features)
+        voltage_gate = torch.zeros_like(current_gate)
+        temperature_gate = torch.zeros_like(current_gate)
+        soc_gate = torch.zeros_like(current_gate)
+
+        # I^2 strengthens load-to-thermal relations.  Voltage/temperature
+        # spreads strengthen their corresponding extrema relations, while SOC
+        # movement strengthens SOC-to-voltage coupling.
+        self._connect(current_gate, roles["current"], roles["temperature_max"])
+        self._connect(current_gate, roles["current"], roles["temperature_min"])
+        self._connect(voltage_gate, roles["voltage"], roles["voltage_max"])
+        self._connect(voltage_gate, roles["voltage"], roles["voltage_min"])
+        self._connect(voltage_gate, roles["voltage_max"], roles["voltage_min"])
+        self._connect(temperature_gate, roles["temperature_max"], roles["temperature_min"])
+        self._connect(soc_gate, roles["soc"], roles["voltage"])
+        self._connect(soc_gate, roles["soc"], roles["voltage_max"])
+        self._connect(soc_gate, roles["soc"], roles["voltage_min"])
+
+        self.register_buffer("current_gate_mask", current_gate)
+        self.register_buffer("voltage_gate_mask", voltage_gate)
+        self.register_buffer("temperature_gate_mask", temperature_gate)
+        self.register_buffer("soc_gate_mask", soc_gate)
+        # Four learnable relation-type gates, conditioned on the four physical
+        # state strengths below.  Exact-zero initialization preserves the
+        # baseline forward map before the first optimiser update.
+        self.relation_gate_weight = nn.Parameter(torch.zeros(4, 4))
+        self.relation_gate_bias = nn.Parameter(torch.zeros(4))
+        self.max_modulation = 0.15 * self.dynamic_weight
+
+        offset = torch.as_tensor(config.get("physical_data_offset", []), dtype=torch.float32)
+        scale = torch.as_tensor(config.get("physical_data_scale", []), dtype=torch.float32)
+        if offset.numel() != self.n_features or scale.numel() != self.n_features:
+            offset = torch.empty(0, dtype=torch.float32)
+            scale = torch.empty(0, dtype=torch.float32)
+        self.register_buffer("data_offset", offset)
+        self.register_buffer("data_scale", scale)
+
+    def _valid_indices(self, values):
+        return tuple(sorted({int(value) for value in values if 0 <= int(value) < self.n_features}))
+
+    @staticmethod
+    def _connect(matrix, left, right):
+        for source in left:
+            for target in right:
+                if source != target:
+                    matrix[source, target] = 1.0
+                    matrix[target, source] = 1.0
+
+    def _engineering_values(self, x):
+        if self.data_offset.numel() == self.n_features:
+            return x * self.data_scale.view(1, 1, -1) + self.data_offset.view(1, 1, -1)
+        return x
+
+    def _reference_scale(self, indices, x):
+        if self.data_scale.numel() == self.n_features:
+            return self.data_scale[list(indices)].abs().mean().clamp_min(1e-6)
+        return x.new_tensor(1.0)
+
+    def _spread_gate(self, values, high_indices, low_indices, spread_indices=()):
+        if spread_indices:
+            spread = values[:, :, list(spread_indices)].abs().mean(dim=(1, 2))
+            reference = self._reference_scale(spread_indices, values)
+            return torch.tanh(self.gate_scale * spread / reference)
+        pair_count = min(len(high_indices), len(low_indices))
+        high = values[:, :, list(high_indices[:pair_count])]
+        low = values[:, :, list(low_indices[:pair_count])]
+        reference = 0.5 * (
+            self._reference_scale(high_indices[:pair_count], values)
+            + self._reference_scale(low_indices[:pair_count], values)
+        )
+        ratio = (high - low).abs().mean(dim=(1, 2)) / reference
+        return torch.tanh(self.gate_scale * ratio)
+
+    def forward(self, x):
+        if x.ndim != 3 or x.size(2) != self.n_features:
+            raise ValueError(
+                f"Physical graph expects [batch, window, {self.n_features}], got {tuple(x.shape)}"
+            )
+        values = self._engineering_values(x)
+        current_indices = self.roles["current"]
+        current = values[:, :, list(current_indices)]
+        current_reference = self._reference_scale(current_indices, values)
+        current_energy = current.square().mean(dim=(1, 2)) / current_reference.square()
+        current_strength = torch.tanh(self.gate_scale * current_energy)
+        voltage_strength = self._spread_gate(
+            values,
+            self.roles["voltage_max"],
+            self.roles["voltage_min"],
+            self.voltage_spread_indices,
+        )
+        temperature_strength = self._spread_gate(
+            values,
+            self.roles["temperature_max"],
+            self.roles["temperature_min"],
+            self.temperature_spread_indices,
+        )
+        soc_indices = self.roles["soc"]
+        soc = values[:, :, list(soc_indices)]
+        soc_delta = torch.diff(soc, dim=1).abs().mean(dim=(1, 2))
+        soc_reference = self._reference_scale(soc_indices, values)
+        soc_strength = torch.tanh(self.gate_scale * soc_delta / soc_reference)
+
+        state = torch.stack(
+            (current_strength, voltage_strength, temperature_strength, soc_strength), dim=1
+        )
+        gates = self.max_modulation * torch.tanh(
+            F.linear(state, self.relation_gate_weight, self.relation_gate_bias)
+        )
+        return (
+            gates[:, 0, None, None] * self.current_gate_mask
+            + gates[:, 1, None, None] * self.voltage_gate_mask
+            + gates[:, 2, None, None] * self.temperature_gate_mask
+            + gates[:, 3, None, None] * self.soc_gate_mask
+        )
+
+
 class FeatureAttentionLayer(nn.Module):
     """单图特征/空间注意力层。
     :param n_features: 输入特征数/nodes
@@ -514,6 +673,7 @@ class ControlConditionedResponseVAE(nn.Module):
         hidden_dim=64,
         latent_dim=16,
         config=None,
+        backbone_state_dim=None,
     ):
         super().__init__()
         config = dict(config or {})
@@ -532,14 +692,17 @@ class ControlConditionedResponseVAE(nn.Module):
         self.encoder_bidirectional = bool(
             config.get("consistency_encoder_bidirectional", False)
         )
-        encoder_features = int(n_features) if self.encoder_input == "full_window" else 2
-        self.state_encoder = nn.GRU(
-            encoder_features,
-            int(hidden_dim),
-            batch_first=True,
-            bidirectional=self.encoder_bidirectional,
-        )
-        state_features = int(hidden_dim) * (2 if self.encoder_bidirectional else 1)
+        self.backbone_state_dim = None if backbone_state_dim is None else int(backbone_state_dim)
+        if self.backbone_state_dim is None:
+            encoder_features = int(n_features) if self.encoder_input == "full_window" else 2
+            self.state_encoder = nn.GRU(
+                encoder_features, int(hidden_dim), batch_first=True,
+                bidirectional=self.encoder_bidirectional,
+            )
+            state_features = int(hidden_dim) * (2 if self.encoder_bidirectional else 1)
+        else:
+            self.state_encoder = None
+            state_features = self.backbone_state_dim
         self.mean_head = nn.Linear(state_features, int(latent_dim))
         self.logvar_head = nn.Linear(state_features, int(latent_dim))
         self.latent_to_hidden = nn.Linear(int(latent_dim), int(hidden_dim))
@@ -552,17 +715,18 @@ class ControlConditionedResponseVAE(nn.Module):
             return x.new_zeros(x.size(0), x.size(1), 1)
         return x[:, :, index:index + 1]
 
-    def forward(self, x):
+    def forward(self, x, backbone_state=None):
         current = self._channel(x, self.current_index)
         soc = self._channel(x, self.soc_index)
         control_sequence = torch.cat([current, soc], dim=2)
-        encoder_sequence = x if self.encoder_input == "full_window" else control_sequence
-        _, hidden = self.state_encoder(encoder_sequence)
-        state = (
-            torch.cat([hidden[-2], hidden[-1]], dim=1)
-            if self.encoder_bidirectional
-            else hidden[-1]
-        )
+        if self.state_encoder is None:
+            if backbone_state is None:
+                raise ValueError("C4 v2 response head requires the backbone GRU state")
+            state = backbone_state
+        else:
+            encoder_sequence = x if self.encoder_input == "full_window" else control_sequence
+            _, hidden = self.state_encoder(encoder_sequence)
+            state = torch.cat([hidden[-2], hidden[-1]], dim=1) if self.encoder_bidirectional else hidden[-1]
         mean = self.mean_head(state)
         logvar = self.logvar_head(state).clamp(-8.0, 8.0)
         # 训练和推理都使用后验均值。KL 项仍约束信息瓶颈，而确定性解码可避免该独立

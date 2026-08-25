@@ -1,7 +1,7 @@
 {
   "plan_name": "86_c3_restricted_state_tsinghua_quick_validation",
   "_thesis_role": "清华 Brand3 fold1 冻结 C3：受约束状态编码、融合表示 FiLM、状态语义辅助约束。",
-  "_protocol": "电流/SOC 单通道边际统计形成 8-D 状态；四臂 seed3407、10 epochs、从头训练；不使用 Transformer 或外部校准器。",
+  "_protocol": "电流/SOC 单通道边际统计形成 8-D 状态；四臂 seed3407、10 epochs、从头训练。Brand3 使用 DyAD 带标签 calibration 选择阈值和 Top-p。",
   "common_args": {
     "dataset": "TSINGHUA_EV",
     "battery_brand": 3,
@@ -11,7 +11,7 @@
     "battery_normalization": "paper_channel",
     "battery_windows_per_snippet": 1,
     "battery_vehicle_top_ratio": 0.05,
-    "battery_vehicle_top_ratio_mode": "fixed",
+    "battery_vehicle_top_ratio_mode": "labelled_calibration",
     "battery_response_only_training": false,
     "battery_score_channels": "response",
     "epochs": 10,

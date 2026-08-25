@@ -20,6 +20,7 @@ def get_model_family_defaults(model_name):
         "regime_aux_lambda": 0.0,
         "use_physical_consistency_head": False,
         "physical_consistency_aux_weight": 0.0,
+        "use_physical_graph_bias": False,
         "score_fusion_mode": "fixed",
     }
 
@@ -46,8 +47,8 @@ def resolve_model_args(args):
     )
     args.regime_condition_mode = "fusion"
 
-    # C4 is exactly the independent control-to-response consistency head.
-    # These archived branches must never be reachable from an active plan.
+    # Retire the archived physical branches.  Formal C4 uses only the explicit
+    # physical-graph bias and response-consistency switches defined below.
     for name in (
         "use_physical_state_encoding",
         "use_physical_regularization",
@@ -80,6 +81,8 @@ def resolve_physical_state_config(args):
         "consistency_encoder_bidirectional": bool(
             getattr(args, "physical_consistency_encoder_bidirectional", False)
         ),
+        "physical_data_offset": list(getattr(args, "physical_data_min", []) or []),
+        "physical_data_scale": list(getattr(args, "physical_data_scale", []) or []),
     }
     if dataset == "TSINGHUA_EV":
         return {
@@ -91,6 +94,15 @@ def resolve_physical_state_config(args):
             "consistency_soc_index": 2,
             "consistency_response_dims": [0, 3, 4, 5, 6],
             "response_score_dims": get_score_dims(dataset),
+            "physical_graph_roles": {
+                "voltage": [0],
+                "current": [1],
+                "soc": [2],
+                "voltage_max": [3],
+                "voltage_min": [4],
+                "temperature_max": [5],
+                "temperature_min": [6],
+            },
         }
     if dataset == "BMS":
         # SYS_I is the imposed system-level control; BMSnI remains a scored
@@ -104,6 +116,37 @@ def resolve_physical_state_config(args):
             "consistency_soc_index": BMS_FEATURE_NAMES.index("BMSnRSOC"),
             "consistency_response_dims": get_score_dims(dataset),
             "response_score_dims": get_score_dims(dataset),
+            "physical_graph_roles": {
+                "voltage": [
+                    BMS_FEATURE_NAMES.index("BMSnVol_T"),
+                    BMS_FEATURE_NAMES.index("BMSnVol_B"),
+                    BMS_FEATURE_NAMES.index("BMSnVmean"),
+                    BMS_FEATURE_NAMES.index("SYS_Vol"),
+                ],
+                "current": [
+                    BMS_FEATURE_NAMES.index("BMSnI"),
+                    BMS_FEATURE_NAMES.index("SYS_I"),
+                ],
+                "soc": [BMS_FEATURE_NAMES.index("BMSnRSOC")],
+                "voltage_max": [
+                    BMS_FEATURE_NAMES.index("BMSnVmax"),
+                    BMS_FEATURE_NAMES.index("SYS_Vmax"),
+                ],
+                "voltage_min": [
+                    BMS_FEATURE_NAMES.index("BMSnVmin"),
+                    BMS_FEATURE_NAMES.index("SYS_Vmin"),
+                ],
+                "temperature_max": [
+                    BMS_FEATURE_NAMES.index("BMSnTmax"),
+                    BMS_FEATURE_NAMES.index("SYS_Tmax"),
+                ],
+                "temperature_min": [
+                    BMS_FEATURE_NAMES.index("BMSnTmin"),
+                    BMS_FEATURE_NAMES.index("SYS_Tmin"),
+                ],
+                "voltage_spread": [BMS_FEATURE_NAMES.index("cell_v_range")],
+                "temperature_spread": [BMS_FEATURE_NAMES.index("cell_t_range")],
+            },
         }
     return None
 
@@ -138,15 +181,16 @@ def resolve_regime_config(args, n_features):
 
 
 def build_model(args, n_features, window_size, out_dim, target_dims=None):
-    """Instantiate the single frozen backbone with optional C3 or C4."""
+    """Instantiate the shared backbone with optional C3 or dual-path C4."""
     resolve_model_args(args)
     regime = resolve_regime_config(args, n_features)
     physical = resolve_physical_state_config(args)
     use_c4 = bool(getattr(args, "use_physical_consistency_head", False))
-    if use_c4 and physical is None:
-        raise ValueError("Frozen C4 is only defined for TSINGHUA_EV and BMS")
-    if use_c4 and bool(getattr(args, "use_regime_condition", False)):
-        raise ValueError("Frozen C3 and C4 are parallel models and cannot be enabled together")
+    use_physical_graph = bool(getattr(args, "use_physical_graph_bias", False))
+    if (use_c4 or use_physical_graph) and physical is None:
+        raise ValueError("Physical C4 extensions are only defined for TSINGHUA_EV and BMS")
+    if (use_c4 or use_physical_graph) and bool(getattr(args, "use_regime_condition", False)):
+        raise ValueError("C3 and the physical C4 extensions cannot be enabled together")
 
     return Enhanced_MTADGAT(
         n_features=n_features,
@@ -191,6 +235,16 @@ def build_model(args, n_features, window_size, out_dim, target_dims=None):
         ),
         physical_consistency_kl_weight=float(
             getattr(args, "physical_consistency_kl_weight", 0.0001)
+        ),
+        use_physical_graph_bias=use_physical_graph,
+        physical_graph_bias_weight=float(
+            getattr(args, "physical_graph_bias_weight", 0.5)
+        ),
+        physical_graph_dynamic_weight=float(
+            getattr(args, "physical_graph_dynamic_weight", 1.0)
+        ),
+        physical_graph_gate_scale=float(
+            getattr(args, "physical_graph_gate_scale", 5.0)
         ),
         physical_state_config=physical,
     )

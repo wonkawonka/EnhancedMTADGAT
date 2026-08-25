@@ -311,6 +311,49 @@ def _aggregate_vehicle(scores, entities, labels, ratio):
     return np.asarray(entity_scores), np.asarray(entity_labels, dtype=np.int32)
 
 
+def _paper_labelled_threshold(scores, labels, granularity=1000):
+    """Match the paper-compatible ranked calibration threshold used internally."""
+    scores = np.asarray(scores, dtype=np.float64)
+    labels = np.asarray(labels, dtype=np.int32)
+    if len(scores) == 0 or len(scores) != len(labels):
+        raise ValueError("Labelled Brand3 calibration scores and labels must be non-empty and aligned")
+    order = np.argsort(-scores, kind="mergesort")
+    ranked_scores = scores[order]
+    ranked_labels = labels[order]
+    best_fraction, best_count = -1.0, 1
+    for rank in range(1, 100):
+        count = max(round(len(ranked_scores) * rank / granularity), 1)
+        fraction = float(np.mean(ranked_labels[:count]))
+        if fraction > best_fraction:
+            best_fraction, best_count = fraction, count
+    return float(ranked_scores[best_count - 1])
+
+
+def _brand3_top_ratio(validation_scores, validation_entities, validation_labels, args, protocol):
+    mode = str(args.brand_top_ratio_mode).lower()
+    if mode == "fixed":
+        return float(args.vehicle_top_ratio), "predefined_fixed_top_ratio"
+    if protocol != "paper_protocol":
+        raise ValueError(
+            "labelled_calibration Top-p selection is only valid for Brand3 paper_protocol; "
+            "use --brand_top_ratio_mode fixed for strict_normal_validation"
+        )
+    candidates = range(5, 100, 5)
+    candidate_metrics = []
+    for percent in candidates:
+        candidate_scores, candidate_labels = _aggregate_vehicle(
+            validation_scores,
+            validation_entities,
+            validation_labels,
+            percent / 100.0,
+        )
+        if np.unique(candidate_labels).size < 2:
+            raise ValueError("Brand3 paper calibration must contain both normal and faulty vehicles")
+        candidate_metrics.append((roc_auc_score(candidate_labels, candidate_scores), percent))
+    best_percent = max(candidate_metrics)[1]
+    return best_percent / 100.0, "labelled_calibration_vehicle_auroc"
+
+
 def _final_metrics(data, validation_scores, validation_endpoints, test_scores, test_endpoints, args):
     if data.evaluation_kind == "point_ranking":
         validation_flat = np.concatenate(validation_scores)
@@ -319,20 +362,46 @@ def _final_metrics(data, validation_scores, validation_endpoints, test_scores, t
             np.asarray(label)[endpoints] for label, endpoints in zip(data.test_labels, test_endpoints)
         ]).astype(np.int32)
     elif data.evaluation_kind == "vehicle_ranking":
-        validation_flat, _ = _aggregate_vehicle(
-            validation_scores, data.validation_entity_ids, data.validation_labels, args.vehicle_top_ratio
+        ratio, top_ratio_source = _brand3_top_ratio(
+            validation_scores,
+            data.validation_entity_ids,
+            data.validation_labels,
+            args,
+            data.metadata.get("protocol"),
         )
-        scores, labels = _aggregate_vehicle(test_scores, data.entity_ids, data.test_labels, args.vehicle_top_ratio)
+        validation_flat, _ = _aggregate_vehicle(
+            validation_scores, data.validation_entity_ids, data.validation_labels, ratio
+        )
+        scores, labels = _aggregate_vehicle(test_scores, data.entity_ids, data.test_labels, ratio)
     else:
         validation_flat = np.concatenate(validation_scores)
         scores = np.concatenate(test_scores)
         labels = None
-    threshold = float(np.quantile(validation_flat, args.threshold_quantile))
+    paper_brand3 = (
+        data.evaluation_kind == "vehicle_ranking"
+        and data.metadata.get("protocol") == "paper_protocol"
+    )
+    if paper_brand3:
+        calibration_window_scores = np.concatenate(validation_scores)
+        calibration_window_labels = np.concatenate([
+            np.full(len(score), int(np.asarray(label).reshape(-1)[0]), dtype=np.int32)
+            for score, label in zip(validation_scores, data.validation_labels)
+        ])
+        threshold = _paper_labelled_threshold(
+            calibration_window_scores, calibration_window_labels
+        )
+        threshold_source = "paper_labelled_snippet_rank"
+    else:
+        threshold = float(np.quantile(validation_flat, args.threshold_quantile))
+        threshold_source = f"normal_validation_q{args.threshold_quantile:.4f}"
     result = {
         "dataset": data.dataset, "method": args.method, "seed": args.seed,
-        "threshold": threshold, "threshold_source": f"normal_validation_q{args.threshold_quantile:.4f}",
+        "threshold": threshold, "threshold_source": threshold_source,
         "evaluation_kind": data.evaluation_kind, "sample_count": int(len(scores)),
     }
+    if data.evaluation_kind == "vehicle_ranking":
+        result["vehicle_top_ratio"] = ratio
+        result["top_ratio_selection"] = top_ratio_source
     predictions = scores > threshold
     if labels is None:
         rate = float(np.mean(predictions))
@@ -382,6 +451,22 @@ def parse_args():
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--seed", type=int, default=3407)
     parser.add_argument("--brand_fold", type=int, default=0, choices=range(5))
+    parser.add_argument(
+        "--brand_split_protocol",
+        choices=("paper_protocol", "strict_normal_validation"),
+        default="paper_protocol",
+    )
+    parser.add_argument("--brand_fold_seed", type=int, default=0)
+    parser.add_argument(
+        "--brand_normalization",
+        choices=("paper_channel", "minmax"),
+        default="paper_channel",
+    )
+    parser.add_argument(
+        "--brand_top_ratio_mode",
+        choices=("labelled_calibration", "fixed"),
+        default="labelled_calibration",
+    )
     parser.add_argument("--val_ratio", type=float, default=0.1)
     parser.add_argument("--threshold_quantile", type=float, default=0.99)
     parser.add_argument("--vehicle_top_ratio", type=float, default=0.05)
@@ -416,7 +501,15 @@ def main():
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(args.seed)
     device = _device(args)
     started = time.perf_counter()
-    data = load_external_protocol_data(args.dataset, brand_fold=args.brand_fold, seed=args.seed, val_ratio=args.val_ratio)
+    data = load_external_protocol_data(
+        args.dataset,
+        brand_fold=args.brand_fold,
+        seed=args.seed,
+        val_ratio=args.val_ratio,
+        brand_split_protocol=args.brand_split_protocol,
+        brand_fold_seed=args.brand_fold_seed,
+        brand_normalization=args.brand_normalization,
+    )
     window, stride = _window_and_stride(args)
     include_next = args.method == "gdn"
     train_loader, validation_loader, test_loader = _loaders(data, args, window, stride, include_next)

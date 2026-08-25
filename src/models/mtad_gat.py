@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from src.models.modules import (
     ControlConditionedResponseVAE,
     ConvLayer,
+    DynamicPhysicalGraphBias,
     FeatureAttentionLayer,
     FiLMConditioner,
     Forecasting_Model,
@@ -22,9 +23,9 @@ class Enhanced_MTADGAT(nn.Module):
     """Original MTAD-GAT plus two parallel, frozen research extensions.
 
     C3 can use the frozen restricted encoder or the prototype-query upgrade;
-    both retain fusion-level FiLM. C4 is an independent response-aware conditional
-    autoencoder by default; its strict control-only form remains an explicit
-    ablation. The two extensions cannot be enabled together.
+    both retain fusion-level FiLM. C4 combines an optional physical-relation
+    attention bias with an independent response-aware conditional autoencoder.
+    C3 and the physical C4 extensions cannot be enabled together.
     """
 
     def __init__(
@@ -62,11 +63,17 @@ class Enhanced_MTADGAT(nn.Module):
         physical_consistency_latent_dim=16,
         physical_consistency_aux_weight=0.0,
         physical_consistency_kl_weight=0.0001,
+        use_physical_graph_bias=False,
+        physical_graph_bias_weight=0.5,
+        physical_graph_dynamic_weight=1.0,
+        physical_graph_gate_scale=5.0,
         physical_state_config=None,
     ):
         super().__init__()
-        if use_regime_condition and use_physical_consistency_head:
-            raise ValueError("Frozen C3 and C4 are parallel and cannot be enabled together")
+        if use_regime_condition and (
+            use_physical_consistency_head or use_physical_graph_bias
+        ):
+            raise ValueError("C3 and the physical C4 extensions cannot be enabled together")
 
         self.target_dims = target_dims
         self.use_regime_condition = bool(use_regime_condition)
@@ -81,6 +88,8 @@ class Enhanced_MTADGAT(nn.Module):
                 "regime_condition_shuffle_mode must be 'cyclic' or 'farthest'"
             )
         self.use_physical_consistency_head = bool(use_physical_consistency_head)
+        self.use_physical_graph_bias = bool(use_physical_graph_bias)
+        self.physical_graph_bias_weight = max(0.0, float(physical_graph_bias_weight))
         self.physical_consistency_aux_weight = max(
             0.0, float(physical_consistency_aux_weight)
         )
@@ -109,6 +118,7 @@ class Enhanced_MTADGAT(nn.Module):
         self._physical_consistency_prediction = None
         self._physical_consistency_mean = None
         self._physical_consistency_logvar = None
+        self._physical_graph_bias = None
 
         if self.use_regime_condition:
             # Preserve the original backbone RNG trajectory when C3 is added.
@@ -149,6 +159,13 @@ class Enhanced_MTADGAT(nn.Module):
             output_activation="sigmoid",
             learnable_sparse_graph=False,
         )
+        if self.use_physical_graph_bias:
+            self.physical_graph_bias = DynamicPhysicalGraphBias(
+                n_features,
+                config=self.physical_state_config,
+                dynamic_weight=physical_graph_dynamic_weight,
+                gate_scale=physical_graph_gate_scale,
+            )
         self.temporal_gat = TemporalAttentionLayer(
             n_features,
             window_size,
@@ -194,6 +211,7 @@ class Enhanced_MTADGAT(nn.Module):
                 hidden_dim=physical_consistency_hidden_dim,
                 latent_dim=physical_consistency_latent_dim,
                 config=self.physical_state_config,
+                backbone_state_dim=gru_hid_dim,
             )
             torch.set_rng_state(rng_state)
 
@@ -254,7 +272,12 @@ class Enhanced_MTADGAT(nn.Module):
         self._regime_embedding = regime_embedding
 
         x = self.conv(x)
-        h_feat = self.feature_gat(x)
+        attention_bias = None
+        if self.use_physical_graph_bias:
+            attention_bias = self.physical_graph_bias(state_input)
+            attention_bias = self.physical_graph_bias_weight * attention_bias
+        self._physical_graph_bias = attention_bias
+        h_feat = self.feature_gat(x, attention_bias=attention_bias)
         self._feature_attention_weights = self.feature_gat.last_attention
         self._feature_attention_probabilities = self.feature_gat.last_attention_raw
         h_temp = self.temporal_gat(x)
@@ -274,7 +297,7 @@ class Enhanced_MTADGAT(nn.Module):
                 self._physical_consistency_prediction,
                 self._physical_consistency_mean,
                 self._physical_consistency_logvar,
-            ) = self.physical_consistency_head(state_input)
+            ) = self.physical_consistency_head(state_input, h_end)
         return predictions, reconstructions
 
     def regime_auxiliary_loss(self, x):

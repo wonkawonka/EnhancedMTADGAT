@@ -1,0 +1,16 @@
+{
+  "title": "BMS Processed C3",
+  "id": "daisychen2/bms-processed-c3",
+  "description": "Processed BMS cluster train, test, and test-label pickle files for the C3 external baseline protocol.",
+  "licenses": [
+    {
+      "name": "CC0-1.0"
+    }
+  ],
+  "keywords": [
+    "battery",
+    "bms",
+    "anomaly detection",
+    "processed data"
+  ]
+}

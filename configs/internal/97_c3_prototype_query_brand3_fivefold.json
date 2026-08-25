@@ -1,7 +1,7 @@
 {
   "plan_name": "97_c3_prototype_query_brand3_fivefold",
   "_lifecycle": "archived_development_pre_99",
-  "_archive_note": "97号为99号正式实验前的单 seed 开发结果；正式 Brand3 结果使用101号三 seed 五折计划。",
+  "_archive_note": "97号为99号正式实验前的单 seed 开发结果；既有 fixed Top-5% 输出仅保留为历史。当前配置如重跑则使用 DyAD 带标签 calibration Top-p；正式 Brand3 结果使用101号三 seed 五折计划。",
   "_thesis_role": "清华 EV Brand3 五折正式比较：MTAD-GAT baseline、restricted C3 与当前 prototype-query C3。",
   "_protocol": "Brand3 paper_protocol、paper_channel 归一化、七通道训练、response 通道评分；5 folds，单 seed，每折最多训练 30 epochs。",
   "_metric": "比较五折车辆级 AP/AUROC 的均值与标准差；C3 descriptor auxiliary 权重为 0.05，不使用 prototype routing/anti-collapse loss。",
@@ -13,7 +13,7 @@
     "battery_normalization": "paper_channel",
     "battery_windows_per_snippet": 1,
     "battery_vehicle_top_ratio": 0.05,
-    "battery_vehicle_top_ratio_mode": "fixed",
+    "battery_vehicle_top_ratio_mode": "labelled_calibration",
     "battery_response_only_training": false,
     "battery_score_channels": "response",
 

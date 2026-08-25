@@ -1,7 +1,7 @@
 {
   "plan_name": "97_c3_prototype_query_brand3_fold0_short",
   "_thesis_role": "清华 EV Brand3 fold0 的低成本趋势验证：同一训练设置下比较冻结 MTAD-GAT baseline 与当前精简 prototype-query C3。",
-  "_protocol": "沿用 Brand3 paper_protocol、paper_channel 归一化、七通道训练与 response 通道评分；只跑 fold0 和单 seed，训练 5 epochs，用于判断新 C3 是否值得进入完整五折实验。",
+  "_protocol": "沿用 Brand3 paper_protocol、paper_channel 归一化、七通道训练与 response 通道评分；带标签 calibration 选择阈值和 Top-p；只跑 fold0 和单 seed，训练 5 epochs，用于判断新 C3 是否值得进入完整五折实验。",
   "_metric": "优先比较同一协议下的车辆级 AP/AUROC，并结合验证损失观察趋势；C3 的 descriptor auxiliary 仅用于训练，不再使用 routing/anti-collapse prototype loss。",
   "common_args": {
     "dataset": "TSINGHUA_EV",
@@ -11,7 +11,7 @@
     "battery_normalization": "paper_channel",
     "battery_windows_per_snippet": 1,
     "battery_vehicle_top_ratio": 0.05,
-    "battery_vehicle_top_ratio_mode": "fixed",
+    "battery_vehicle_top_ratio_mode": "labelled_calibration",
     "battery_response_only_training": false,
     "battery_score_channels": "response",
 
