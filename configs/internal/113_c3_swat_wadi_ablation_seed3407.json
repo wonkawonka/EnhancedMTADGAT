@@ -1,0 +1,79 @@
+{
+  "plan_name": "113_c3_swat_wadi_ablation_seed3407",
+  "_lifecycle": "development_ablation_only",
+  "_purpose": "SWAT/WADI 上的 C3 核心机制消融；与 112 调参候选独立，不用于损失或超参数选择。",
+  "_protocol": "所有消融共享 seed=3407、lookback=100、window_stride=10、训练预算和工业数据边界；只检验状态条件与描述辅助损失的归因。",
+  "_selection_rule": "消融只用于机制归因，不按测试指标挑选主模型。",
+  "seeds": [3407],
+  "common_args": {
+    "model_name": "mtad_gat",
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "use_physical_graph_bias": false,
+    "use_physical_consistency_head": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+    "log_tensorboard": false,
+    "regime_encoder_type": "prototype_query",
+    "regime_emb_dim": 8,
+    "regime_query_dim": 32,
+    "regime_num_prototypes": 6,
+    "regime_query_heads": 4,
+    "regime_temperature": 0.5,
+    "regime_film_scale": 0.1,
+    "regime_prototype_lambda": 0.0,
+    "regime_condition_shuffle_mode": "farthest"
+  },
+  "experiments": [
+    {
+      "name": "c3_ablation_baseline",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "use_regime_condition": false, "regime_aux_lambda": 0.0,
+        "run_id": "dev113_c3_ablation_baseline"
+      }
+    },
+    {
+      "name": "c3_ablation_full",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.05,
+        "run_id": "dev113_c3_ablation_full"
+      }
+    },
+    {
+      "name": "c3_ablation_no_aux",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.0,
+        "run_id": "dev113_c3_ablation_no_aux"
+      }
+    },
+    {
+      "name": "c3_ablation_shuffled_state",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "use_regime_condition": true, "regime_condition_shuffle": true, "regime_condition_shuffle_mode": "farthest", "regime_aux_lambda": 0.05,
+        "run_id": "dev113_c3_ablation_shuffled_state"
+      }
+    }
+  ]
+}

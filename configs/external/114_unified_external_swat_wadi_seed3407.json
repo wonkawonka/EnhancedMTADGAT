@@ -1,0 +1,38 @@
+{
+  "plan_name": "114_unified_external_swat_wadi_seed3407",
+  "_lifecycle": "development_external_comparison",
+  "_purpose": "将任务 07 的统一外部模型集合扩展到当前 SWAT/WADI 处理版本；单 seed=3407，结果先作为开发对比。",
+  "_model_set": ["pca_spe", "usad", "isolation_forest", "auto_encoder", "deep_svdd", "lstm_ad", "gdn", "tranad", "anomaly_transformer", "dcdetector", "ganf"],
+  "_dataset_set": ["SWAT", "WADI"],
+  "_protocol": "正常训练段拟合、训练段末 10% 做时间验证、独立测试段逐点评价；SWAT/WADI 使用 stride=10，外部方法保留任务 07 的原生窗口设置。",
+  "common_env": {"PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1", "MPLBACKEND": "Agg", "MPLCONFIGDIR": "/tmp/matplotlib"},
+  "common_cwd": ".",
+  "required_outputs": ["config.json", "metrics.json", "runtime.json", "scores.npz", "model_artifact.json"],
+  "pack_experiments": false,
+  "common_args": {
+    "seed": 3407,
+    "val_ratio": 0.1,
+    "threshold_quantile": 0.99,
+    "normalize": true,
+    "lookback": 100,
+    "window_stride": 10,
+    "batch_size": 32,
+    "num_workers": 0,
+    "train_sample_limit": 0,
+    "evaluation_sample_limit": 0,
+    "use_cuda": true
+  },
+  "experiments": [
+    {"name": "pca_spe", "cases": [{"dataset": "SWAT"}, {"dataset": "WADI"}], "module": "src.runners.run_unified_external_baselines", "args": {"method": "pca_spe", "epochs": 0}},
+    {"name": "usad", "cases": [{"dataset": "SWAT"}, {"dataset": "WADI"}], "module": "src.runners.run_unified_external_baselines", "args": {"method": "usad", "epochs": 10}},
+    {"name": "isolation_forest", "cases": [{"dataset": "SWAT"}, {"dataset": "WADI"}], "module": "src.runners.run_unified_external_baselines", "args": {"method": "isolation_forest", "epochs": 0}},
+    {"name": "auto_encoder", "cases": [{"dataset": "SWAT"}, {"dataset": "WADI"}], "module": "src.runners.run_unified_external_baselines", "args": {"method": "auto_encoder", "epochs": 20}},
+    {"name": "deep_svdd", "cases": [{"dataset": "SWAT"}, {"dataset": "WADI"}], "module": "src.runners.run_unified_external_baselines", "args": {"method": "deep_svdd", "epochs": 10, "svdd_pretrain_epochs": 10}},
+    {"name": "lstm_ad", "cases": [{"dataset": "SWAT"}, {"dataset": "WADI"}], "module": "src.runners.run_unified_external_baselines", "args": {"method": "lstm_ad", "epochs": 20}},
+    {"name": "gdn", "cases": [{"dataset": "SWAT"}, {"dataset": "WADI"}], "module": "src.runners.run_unified_external_baselines", "args": {"method": "gdn", "epochs": 20}},
+    {"name": "tranad", "cases": [{"dataset": "SWAT"}, {"dataset": "WADI"}], "module": "src.runners.run_unified_external_baselines", "args": {"method": "tranad", "epochs": 10}},
+    {"name": "anomaly_transformer", "cases": [{"dataset": "SWAT"}, {"dataset": "WADI"}], "module": "src.runners.run_unified_external_baselines", "args": {"method": "anomaly_transformer", "epochs": 10, "batch_size": 16, "association_weight": 3.0}},
+    {"name": "dcdetector", "cases": [{"dataset": "SWAT"}, {"dataset": "WADI"}], "module": "src.runners.run_unified_external_baselines", "args": {"method": "dcdetector", "epochs": 10, "batch_size": 16}},
+    {"name": "ganf", "cases": [{"dataset": "SWAT"}, {"dataset": "WADI"}], "module": "src.runners.run_unified_external_baselines", "args": {"method": "ganf", "epochs": 10, "batch_size": 32, "graph_lambda": 0.0, "graph_rho": 1.0}}
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "plan_name": "109_c4_brand3_full_loss_tuning_seed3407",
+  "_lifecycle": "development_screen_only",
+  "_purpose": "C4 Full 在 Brand3 fold0 的损失函数调参：不改变 DyAD 数据、主干架构、异常分数、车辆 Top-p 或阈值选择；只比较 MSE、Huber、L1 对 Full 模型训练鲁棒性的影响，不包含机制消融。",
+  "_selection_rule": "开发候选先通过正常验证损失与训练稳定性门槛；只将通过的 Full 候选扩展到其他车辆折。测试车辆标签不用来选择损失、权重或阈值。",
+  "seeds": [3407],
+  "common_args": {
+    "dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold": 0, "battery_fold_seed": 0,
+    "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel",
+    "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05,
+    "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_score_channels": "response",
+    "epochs": 30, "bs": 64, "lookback": 127, "early_stopping_patience": 0,
+    "model_name": "mtad_gat", "normalize": true, "init_lr": 0.001, "dropout": 0.3,
+    "use_transformer": false, "feature_att_trans": false, "multi_scale_mode": "none", "use_revin": false,
+    "use_learnable_sparse_graph": false, "use_regime_condition": false,
+    "use_cuda": true, "require_cuda": true, "deterministic": true,
+    "num_workers": 2, "predict_num_workers": 0, "persistent_workers": true, "log_tensorboard": false,
+    "physical_graph_bias_weight": 1.0, "physical_graph_dynamic_weight": 1.0, "physical_graph_gate_scale": 2.0,
+    "physical_consistency_encoder_input": "full_window", "physical_consistency_encoder_bidirectional": false,
+    "physical_consistency_hidden_dim": 64, "physical_consistency_latent_dim": 16,
+    "physical_consistency_aux_weight": 0.20, "physical_consistency_kl_weight": 0.0001,
+    "physical_consistency_score_max_weight": 0.15, "huber_beta": 0.5
+  },
+  "experiments": [
+    {"name": "full_mse_reference", "runner": "src.runners.train_nc_battery", "args": {"forecast_loss": "mse", "recon_loss": "mse", "use_physical_graph_bias": true, "use_physical_consistency_head": true, "run_id": "dev109_full_mse_reference"}},
+    {"name": "full_huber", "runner": "src.runners.train_nc_battery", "args": {"forecast_loss": "huber", "recon_loss": "huber", "use_physical_graph_bias": true, "use_physical_consistency_head": true, "run_id": "dev109_full_huber"}},
+    {"name": "full_forecast_huber", "runner": "src.runners.train_nc_battery", "args": {"forecast_loss": "huber", "recon_loss": "mse", "use_physical_graph_bias": true, "use_physical_consistency_head": true, "run_id": "dev109_full_forecast_huber"}},
+    {"name": "full_recon_huber", "runner": "src.runners.train_nc_battery", "args": {"forecast_loss": "mse", "recon_loss": "huber", "use_physical_graph_bias": true, "use_physical_consistency_head": true, "run_id": "dev109_full_recon_huber"}},
+    {"name": "full_l1", "runner": "src.runners.train_nc_battery", "args": {"forecast_loss": "l1", "recon_loss": "l1", "use_physical_graph_bias": true, "use_physical_consistency_head": true, "run_id": "dev109_full_l1"}}
+  ]
+}

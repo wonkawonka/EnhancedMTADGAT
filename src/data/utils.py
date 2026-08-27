@@ -116,18 +116,68 @@ def get_bms_feature_names():
     return list(BMS_FEATURE_NAMES)
 
 
-def adjust_anomaly_scores(scores, dataset, is_train, window_size):
+def adjust_anomaly_scores(
+    scores,
+    dataset,
+    is_train,
+    window_size,
+    *,
+    segment_ids=None,
+    calibration_mode="none",
+):
+    """Apply the NASA score calibration used by the source MTAD-GAT wrapper.
+
+    MSL/SMAP are collections of independent telemetry channels.  The upstream
+    implementation concatenates them and min--max normalizes the anomaly score
+    within each channel before global evaluation.  This project now keeps those
+    channels as separate sequences (so windows never cross a channel boundary),
+    therefore the equivalent operation must use explicit ``segment_ids``.
+
+    The calibration is label-free but transductive: train and test score streams
+    are each normalized with their own score range.  It must consequently be
+    recorded in every formal report rather than silently mixed with raw scores.
+    ``is_train`` and ``window_size`` remain in the signature for compatibility
+    with the source helper; boundary zeroing is unnecessary once windows are
+    constructed separately for every segment.
     """
-    调整异常分数。
-    :param scores: 异常分数
-    :param dataset: 数据集名称
-    :param is_train: 是否为训练数据
-    :param window_size: 窗口大小
-    :return: 调整后的异常分数
-    """
-    # 对于大多数情况，我们直接返回原始分数
-    # 如果需要特定的调整，可以在这里实现
-    return scores
+    del is_train, window_size
+
+    values = np.asarray(scores, dtype=np.float32).reshape(-1)
+    dataset = str(dataset).upper()
+    mode = str(calibration_mode or "none").lower()
+
+    if dataset not in NASA_TELEMETRY_DATASETS or mode == "none":
+        return values.copy()
+    if mode != "per_segment_minmax":
+        raise ValueError(f"Unsupported NASA score calibration mode: {calibration_mode}")
+    if segment_ids is None:
+        raise ValueError(
+            "per_segment_minmax calibration requires explicit telemetry segment IDs"
+        )
+
+    segment_ids = np.asarray(segment_ids).reshape(-1)
+    if len(segment_ids) != len(values):
+        raise ValueError(
+            "Telemetry score/segment length mismatch: "
+            f"{len(values)} scores vs {len(segment_ids)} segment IDs"
+        )
+
+    calibrated = np.zeros_like(values, dtype=np.float32)
+    for segment_id in np.unique(segment_ids):
+        mask = segment_ids == segment_id
+        segment_values = values[mask]
+        finite = np.isfinite(segment_values)
+        if not np.any(finite):
+            continue
+        lower = float(np.min(segment_values[finite]))
+        upper = float(np.max(segment_values[finite]))
+        span = upper - lower
+        if span > 1e-12:
+            normalized = np.zeros_like(segment_values, dtype=np.float32)
+            normalized[finite] = (segment_values[finite] - lower) / span
+            calibrated[mask] = normalized
+
+    return calibrated
 
 
 def get_data_dim(dataset):

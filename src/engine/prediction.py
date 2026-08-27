@@ -66,6 +66,19 @@ class Predictor:
 
             self.score_dims = [int(index) for index in self.score_dims]
 
+        self.nasa_score_calibration = str(
+            pred_args.get("nasa_score_calibration", "none")
+        ).lower()
+
+        if self.nasa_score_calibration not in {"none", "per_segment_minmax"}:
+
+            raise ValueError(
+                "Unsupported NASA score calibration mode: "
+                f"{self.nasa_score_calibration}"
+            )
+
+        self.nasa_score_calibration_summary = {}
+
         self.scale_scores = pred_args["scale_scores"]
 
         self.q = pred_args["q"]
@@ -210,6 +223,77 @@ class Predictor:
     def _aggregate_output_scores(self, values):
 
         return np.mean(self._score_view(values), axis=1)
+
+
+    def _apply_nasa_score_calibration(self, score_df, split_name):
+
+        """Restore source MTAD-GAT's per-channel score normalization.
+
+        The upstream NASA wrapper concatenates channels and rescales each channel
+        score independently.  The current loader correctly keeps channel
+        boundaries, so the equivalent calibration is performed with Segment_ID.
+        It never reads labels, but it uses the score range of the current split;
+        the saved summary therefore makes the transductive nature explicit.
+        """
+
+        dataset = str(self.dataset).upper()
+
+        if dataset not in {"MSL", "SMAP"} or self.nasa_score_calibration == "none":
+
+            return score_df
+
+        if "Segment_ID" not in score_df.columns:
+
+            raise ValueError(
+                "NASA per-segment score calibration requires Segment_ID metadata; "
+                "score MSL/SMAP through the boundary-aware sequence loader."
+            )
+
+        calibrated_df = score_df.copy()
+
+        raw_scores = calibrated_df["A_Score_Global"].to_numpy(dtype=np.float32)
+
+        segment_ids = calibrated_df["Segment_ID"].to_numpy(dtype=np.int32)
+
+        calibrated_scores = adjust_anomaly_scores(
+            raw_scores,
+            dataset,
+            is_train=str(split_name).lower() == "train",
+            window_size=self.window_size,
+            segment_ids=segment_ids,
+            calibration_mode=self.nasa_score_calibration,
+        )
+
+        calibrated_df["A_Score_Global_Uncalibrated"] = raw_scores
+
+        calibrated_df["A_Score_Global"] = calibrated_scores
+
+        calibrated_df["NASA_Score_Calibration"] = self.nasa_score_calibration
+
+        ranges = []
+
+        for segment_id in np.unique(segment_ids):
+
+            segment_scores = raw_scores[segment_ids == segment_id]
+
+            finite_scores = segment_scores[np.isfinite(segment_scores)]
+
+            ranges.append(
+                float(np.max(finite_scores) - np.min(finite_scores))
+                if len(finite_scores) else 0.0
+            )
+
+        self.nasa_score_calibration_summary[str(split_name)] = {
+            "mode": self.nasa_score_calibration,
+            "scope": "per_telemetry_segment",
+            "uses_labels": False,
+            "uses_current_split_score_range": True,
+            "segment_count": int(len(np.unique(segment_ids))),
+            "score_count": int(len(raw_scores)),
+            "median_uncalibrated_segment_range": float(np.median(ranges)) if ranges else 0.0,
+        }
+
+        return calibrated_df
 
 
     @staticmethod
@@ -404,6 +488,10 @@ class Predictor:
             "global_score_dims": self.score_dims,
 
         }
+
+        if self.nasa_score_calibration_summary:
+
+            summary["nasa_score_calibration"] = self.nasa_score_calibration_summary
 
         if self._fusion_weights is not None:
 
@@ -2283,21 +2371,13 @@ class Predictor:
                 test_pred_df = self._apply_relation_change_fusion(test_pred_df)
 
 
+            train_pred_df = self._apply_nasa_score_calibration(train_pred_df, "train")
+
+            test_pred_df = self._apply_nasa_score_calibration(test_pred_df, "test")
+
             train_anomaly_scores = train_pred_df['A_Score_Global'].values
 
             test_anomaly_scores = test_pred_df['A_Score_Global'].values
-
-
-            train_anomaly_scores = adjust_anomaly_scores(train_anomaly_scores, self.dataset, True, self.window_size)
-
-            test_anomaly_scores = adjust_anomaly_scores(test_anomaly_scores, self.dataset, False, self.window_size)
-
-
-            # 写入结果数据帧
-
-            train_pred_df['A_Score_Global'] = train_anomaly_scores
-
-            test_pred_df['A_Score_Global'] = test_anomaly_scores
 
 
         true_anomalies = self._prepare_true_anomalies(true_anomalies, expected_length=len(test_pred_df))
@@ -2497,6 +2577,8 @@ class Predictor:
                 "event_consistency_result": event_report,
 
                 "raw_point_result": raw_metric_report,
+
+                "score_calibration": self.get_calibration_summary(),
 
                 "model_parameters": int(self.model_parameters),
 

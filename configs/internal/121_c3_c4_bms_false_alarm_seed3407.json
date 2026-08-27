@@ -1,0 +1,39 @@
+{
+  "plan_name": "121_c3_c4_bms_false_alarm_seed3407",
+  "_lifecycle": "paper_completion_seed3407",
+  "_purpose": "同一 BMS 正常工况协议下补齐 MTAD-GAT、C3、C4 的主比较和核心消融。",
+  "_protocol": "六个 cluster 均按时间顺序切分：前 90% 正常数据联合训练，末尾 10% 只作正常校准，独立测试区间不参与训练或调参；lookback=100，stride=10。",
+  "_reporting_boundary": "BMS 标签为全零占位，只报告 FAR、每万窗口误报和 cluster/时间块/工况稳定性；不输出 AP、AUROC、F1、Recall。任务 07 的外部模型按同一 BMS 口径提供误报对照。",
+  "_selection_rule": "所有臂固定 30 epochs、关闭早停。C3 固定 prototype-query + aux=0.05；C4 从 Brand3 独立筛查迁移 conservative 设置（gate=0.75、aux=0.05、score=0.05），不依据 BMS 测试误报调参。",
+  "seeds": [3407],
+  "common_args": {
+    "dataset": "BMS", "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+    "val_split": 0.1, "normalize": true, "init_lr": 0.001, "dropout": 0.3,
+    "forecast_loss": "mse", "recon_loss": "mse", "model_name": "mtad_gat",
+    "use_transformer": false, "feature_att_trans": false, "multi_scale_mode": "none",
+    "use_revin": false, "use_learnable_sparse_graph": false,
+    "regime_emb_dim": 8, "regime_query_dim": 32, "regime_num_prototypes": 6,
+    "regime_query_heads": 4, "regime_temperature": 0.5,
+    "regime_condition_mode": "fusion", "regime_film_scale": 0.1,
+    "regime_condition_shuffle_mode": "farthest", "regime_prototype_lambda": 0.0,
+    "score_fusion_mode": "fixed", "use_c3_joint_relation": false,
+    "use_relation_change_score": false, "use_condition_residual_calibration": false,
+    "physical_graph_bias_weight": 1.0, "physical_graph_dynamic_weight": 1.0, "physical_graph_gate_scale": 0.75,
+    "physical_consistency_encoder_input": "full_window", "physical_consistency_encoder_bidirectional": false,
+    "physical_consistency_hidden_dim": 64, "physical_consistency_latent_dim": 16,
+    "physical_consistency_kl_weight": 0.0001, "normal_threshold_quantile": 0.99,
+    "early_stopping_patience": 0, "early_stopping_min_delta": 0.0001,
+    "use_cuda": true, "require_cuda": true, "deterministic": true,
+    "num_workers": 2, "predict_num_workers": 0, "persistent_workers": true, "log_tensorboard": false
+  },
+  "experiments": [
+    {"name": "bms_baseline", "args": {"use_regime_condition": false, "regime_aux_lambda": 0.0, "regime_condition_shuffle": false, "use_physical_graph_bias": false, "use_physical_consistency_head": false, "physical_consistency_aux_weight": 0.0, "physical_consistency_score_max_weight": 0.0, "run_id": "local121_bms_baseline"}},
+    {"name": "c3_restricted", "args": {"regime_encoder_type": "restricted", "use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.05, "use_physical_graph_bias": false, "use_physical_consistency_head": false, "physical_consistency_aux_weight": 0.0, "physical_consistency_score_max_weight": 0.0, "run_id": "local121_c3_restricted"}},
+    {"name": "c3_prototype_query_full", "args": {"regime_encoder_type": "prototype_query", "use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.05, "use_physical_graph_bias": false, "use_physical_consistency_head": false, "physical_consistency_aux_weight": 0.0, "physical_consistency_score_max_weight": 0.0, "run_id": "local121_c3_full"}},
+    {"name": "c3_no_aux", "args": {"regime_encoder_type": "prototype_query", "use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.0, "use_physical_graph_bias": false, "use_physical_consistency_head": false, "physical_consistency_aux_weight": 0.0, "physical_consistency_score_max_weight": 0.0, "run_id": "local121_c3_no_aux"}},
+    {"name": "c3_shuffled_state_farthest", "args": {"regime_encoder_type": "prototype_query", "use_regime_condition": true, "regime_condition_shuffle": true, "regime_condition_shuffle_mode": "farthest", "regime_aux_lambda": 0.05, "use_physical_graph_bias": false, "use_physical_consistency_head": false, "physical_consistency_aux_weight": 0.0, "physical_consistency_score_max_weight": 0.0, "run_id": "local121_c3_shuffled_farthest"}},
+    {"name": "c4_graph_only", "args": {"use_regime_condition": false, "regime_aux_lambda": 0.0, "regime_condition_shuffle": false, "use_physical_graph_bias": true, "use_physical_consistency_head": false, "physical_consistency_aux_weight": 0.0, "physical_consistency_score_max_weight": 0.0, "run_id": "local121_c4_graph_only"}},
+    {"name": "c4_response_only", "args": {"use_regime_condition": false, "regime_aux_lambda": 0.0, "regime_condition_shuffle": false, "use_physical_graph_bias": false, "use_physical_consistency_head": true, "physical_consistency_aux_weight": 0.05, "physical_consistency_score_max_weight": 0.05, "run_id": "local121_c4_response_only"}},
+    {"name": "c4_full_conservative", "args": {"use_regime_condition": false, "regime_aux_lambda": 0.0, "regime_condition_shuffle": false, "use_physical_graph_bias": true, "use_physical_consistency_head": true, "physical_consistency_aux_weight": 0.05, "physical_consistency_score_max_weight": 0.05, "run_id": "local121_c4_full_conservative"}}
+  ]
+}

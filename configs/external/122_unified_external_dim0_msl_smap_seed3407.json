@@ -1,0 +1,83 @@
+{
+  "plan_name": "122_unified_external_dim0_msl_smap_seed3407",
+  "_lifecycle": "scope_diagnostic_not_main_table",
+  "_purpose": "补充 MSL/SMAP 外部 Isolation Forest 与 Deep SVDD 的 dim0-only 对照；只保留这两个模型，独立于任务07全特征结果。",
+  "_protocol": "seed=3407，训练侧归一化，MSL/SMAP 独立实体边界，lookback按外部模型原生设置，保留各模型公开训练预算；不使用 per_segment_minmax。",
+  "_comparison_scope": "External-dim0-only 对照当前内部 target0-output（内部输入仍为全特征、只预测/评分第0维）；另与任务123内部 all-channel 配对结果分开报告。",
+  "_model_set": [
+    "isolation_forest",
+    "deep_svdd"
+  ],
+  "_dataset_set": [
+    "MSL",
+    "SMAP"
+  ],
+  "common_env": {
+    "PYTHONIOENCODING": "utf-8",
+    "PYTHONUNBUFFERED": "1",
+    "MPLBACKEND": "Agg",
+    "MPLCONFIGDIR": "/tmp/matplotlib"
+  },
+  "common_cwd": ".",
+  "required_outputs": [
+    "config.json",
+    "metrics.json",
+    "runtime.json",
+    "scores.npz",
+    "model_artifact.json"
+  ],
+  "pack_experiments": false,
+  "common_args": {
+    "seed": 3407,
+    "val_ratio": 0.1,
+    "threshold_quantile": 0.99,
+    "normalize": true,
+    "lookback": 100,
+    "window_stride": 1,
+    "batch_size": 32,
+    "num_workers": 0,
+    "train_sample_limit": 0,
+    "evaluation_sample_limit": 0,
+    "use_cuda": true,
+    "feature_dims": "0",
+    "brand_split_protocol": "paper_protocol",
+    "brand_fold_seed": 0,
+    "brand_normalization": "paper_channel",
+    "brand_top_ratio_mode": "labelled_calibration"
+  },
+  "experiments": [
+    {
+      "name": "isolation_forest_dim0",
+      "cases": [
+        {
+          "dataset": "MSL"
+        },
+        {
+          "dataset": "SMAP"
+        }
+      ],
+      "module": "src.runners.run_unified_external_baselines",
+      "args": {
+        "method": "isolation_forest",
+        "epochs": 0
+      }
+    },
+    {
+      "name": "deep_svdd_dim0",
+      "cases": [
+        {
+          "dataset": "MSL"
+        },
+        {
+          "dataset": "SMAP"
+        }
+      ],
+      "module": "src.runners.run_unified_external_baselines",
+      "args": {
+        "method": "deep_svdd",
+        "epochs": 10,
+        "svdd_pretrain_epochs": 10
+      }
+    }
+  ]
+}

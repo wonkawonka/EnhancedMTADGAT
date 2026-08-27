@@ -1,0 +1,30 @@
+{
+  "plan_name": "108_c4_brand3_extended_local_validation_seed3407",
+  "_lifecycle": "development_screen_only",
+  "_purpose": "C4 Brand3 fold0 Full 模型扩展调参。围绕已显示正信号的零中心状态门控 Full v2，系统检验图调制上限、辅助表征瓶颈、训练正则与正常校准分数融合；不包含任何单支路消融，不能写入正式五折主结果。",
+  "_selection_rule": "先以正常验证损失排除不稳定候选；仅将通过者扩展到独立 Brand3 folds。DyAD calibration 保持只选阈值/Top-p，最终测试车辆标签不参与阈值或继续调参。",
+  "seeds": [3407],
+  "common_args": {
+    "dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold": 0, "battery_fold_seed": 0,
+    "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel",
+    "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05,
+    "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_score_channels": "response",
+    "epochs": 30, "bs": 64, "lookback": 127, "early_stopping_patience": 0,
+    "model_name": "mtad_gat", "normalize": true, "init_lr": 0.001, "dropout": 0.3,
+    "use_transformer": false, "feature_att_trans": false, "multi_scale_mode": "none", "use_revin": false,
+    "use_learnable_sparse_graph": false, "use_regime_condition": false,
+    "use_cuda": true, "require_cuda": true, "deterministic": true,
+    "num_workers": 2, "predict_num_workers": 0, "persistent_workers": true, "log_tensorboard": false,
+    "physical_graph_dynamic_weight": 1.0, "physical_consistency_encoder_input": "full_window",
+    "physical_consistency_encoder_bidirectional": false, "physical_consistency_kl_weight": 0.0001
+  },
+  "experiments": [
+    {"name": "full_tiny_gate", "runner": "src.runners.train_nc_battery", "args": {"use_physical_graph_bias": true, "physical_graph_bias_weight": 1.0, "physical_graph_gate_scale": 0.4, "use_physical_consistency_head": true, "physical_consistency_hidden_dim": 64, "physical_consistency_latent_dim": 16, "physical_consistency_aux_weight": 0.10, "physical_consistency_score_max_weight": 0.10, "run_id": "dev108_c4_full_tiny_gate"}},
+    {"name": "full_small_bottleneck", "runner": "src.runners.train_nc_battery", "args": {"use_physical_graph_bias": true, "physical_graph_bias_weight": 1.0, "physical_graph_gate_scale": 0.75, "use_physical_consistency_head": true, "physical_consistency_hidden_dim": 32, "physical_consistency_latent_dim": 8, "physical_consistency_aux_weight": 0.10, "physical_consistency_score_max_weight": 0.10, "run_id": "dev108_c4_full_small_bottleneck"}},
+    {"name": "full_representation_only", "runner": "src.runners.train_nc_battery", "args": {"use_physical_graph_bias": true, "physical_graph_bias_weight": 1.0, "physical_graph_gate_scale": 0.75, "use_physical_consistency_head": true, "physical_consistency_hidden_dim": 64, "physical_consistency_latent_dim": 16, "physical_consistency_aux_weight": 0.10, "physical_consistency_score_max_weight": 0.0, "run_id": "dev108_c4_full_representation_only"}},
+    {"name": "full_low_lr", "runner": "src.runners.train_nc_battery", "args": {"init_lr": 0.0005, "use_physical_graph_bias": true, "physical_graph_bias_weight": 1.0, "physical_graph_gate_scale": 0.75, "use_physical_consistency_head": true, "physical_consistency_hidden_dim": 64, "physical_consistency_latent_dim": 16, "physical_consistency_aux_weight": 0.10, "physical_consistency_score_max_weight": 0.10, "run_id": "dev108_c4_full_low_lr"}},
+    {"name": "full_high_dropout", "runner": "src.runners.train_nc_battery", "args": {"dropout": 0.4, "use_physical_graph_bias": true, "physical_graph_bias_weight": 1.0, "physical_graph_gate_scale": 0.75, "use_physical_consistency_head": true, "physical_consistency_hidden_dim": 64, "physical_consistency_latent_dim": 16, "physical_consistency_aux_weight": 0.10, "physical_consistency_score_max_weight": 0.10, "run_id": "dev108_c4_full_high_dropout"}},
+    {"name": "full_heavy_aux_low_score", "runner": "src.runners.train_nc_battery", "args": {"use_physical_graph_bias": true, "physical_graph_bias_weight": 1.0, "physical_graph_gate_scale": 0.75, "use_physical_consistency_head": true, "physical_consistency_hidden_dim": 64, "physical_consistency_latent_dim": 16, "physical_consistency_aux_weight": 0.20, "physical_consistency_score_max_weight": 0.05, "run_id": "dev108_c4_full_heavy_aux_low_score"}},
+    {"name": "full_low_bias", "runner": "src.runners.train_nc_battery", "args": {"use_physical_graph_bias": true, "physical_graph_bias_weight": 0.5, "physical_graph_gate_scale": 1.0, "use_physical_consistency_head": true, "physical_consistency_hidden_dim": 64, "physical_consistency_latent_dim": 16, "physical_consistency_aux_weight": 0.10, "physical_consistency_score_max_weight": 0.10, "run_id": "dev108_c4_full_low_bias"}}
+  ]
+}

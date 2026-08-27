@@ -1,0 +1,188 @@
+{
+  "plan_name": "107_c3_c4_local_validation_seed3407",
+  "_lifecycle": "development_screen_only",
+  "_purpose": "本地候选筛选：C3 在 MSL、干净 SMAP 与 Brand3 fold0 检验较弱 FiLM 和较轻描述辅助约束；C4 仅在有物理语义的 Brand3 fold0 检验保守零中心图门控与轻量响应辅助。所有候选从头训练，seed=3407；不进入正式主表。",
+  "_selection_rule": "候选扩展到正式五折/正式重训前，须先满足正常验证损失不劣于同批 baseline；最终测试指标只作一次保留评估，不用于继续迭代阈值或模型选择。",
+  "seeds": [3407],
+  "common_args": {
+    "model_name": "mtad_gat",
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "score_fusion_mode": "fixed",
+    "use_c3_joint_relation": false,
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+    "log_tensorboard": false
+  },
+  "experiments": [
+    {
+      "name": "c3_baseline_public",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {
+        "epochs": 30, "bs": 128, "lookback": 100, "window_stride": 1,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "use_regime_condition": false, "regime_aux_lambda": 0.0,
+        "use_physical_graph_bias": false, "use_physical_consistency_head": false,
+        "run_id": "dev107_c3_baseline_public"
+      }
+    },
+    {
+      "name": "c3_full_light_aux_public",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {
+        "epochs": 30, "bs": 128, "lookback": 100, "window_stride": 1,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8,
+        "regime_query_dim": 32, "regime_num_prototypes": 6, "regime_query_heads": 4,
+        "regime_temperature": 0.5, "use_regime_condition": true,
+        "regime_film_scale": 0.05, "regime_aux_lambda": 0.01,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "use_physical_graph_bias": false, "use_physical_consistency_head": false,
+        "run_id": "dev107_c3_full_light_aux_public"
+      }
+    },
+    {
+      "name": "c3_full_low_film_public",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {
+        "epochs": 30, "bs": 128, "lookback": 100, "window_stride": 1,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8,
+        "regime_query_dim": 32, "regime_num_prototypes": 6, "regime_query_heads": 4,
+        "regime_temperature": 0.5, "use_regime_condition": true,
+        "regime_film_scale": 0.03, "regime_aux_lambda": 0.05,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "use_physical_graph_bias": false, "use_physical_consistency_head": false,
+        "run_id": "dev107_c3_full_low_film_public"
+      }
+    },
+    {
+      "name": "c3_full_compact_public",
+      "matrix": {"dataset": ["MSL", "SMAP"]},
+      "args": {
+        "epochs": 30, "bs": 128, "lookback": 100, "window_stride": 1,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8,
+        "regime_query_dim": 32, "regime_num_prototypes": 4, "regime_query_heads": 4,
+        "regime_temperature": 0.5, "use_regime_condition": true,
+        "regime_film_scale": 0.05, "regime_aux_lambda": 0.01,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "use_physical_graph_bias": false, "use_physical_consistency_head": false,
+        "run_id": "dev107_c3_full_compact_public"
+      }
+    },
+    {
+      "name": "c3_baseline_brand3_f0",
+      "runner": "src.runners.train_nc_battery",
+      "args": {
+        "dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold": 0, "battery_fold_seed": 0,
+        "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel",
+        "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05,
+        "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_score_channels": "response",
+        "epochs": 30, "bs": 64, "lookback": 127, "early_stopping_patience": 0,
+        "use_regime_condition": false, "regime_aux_lambda": 0.0,
+        "use_physical_graph_bias": false, "use_physical_consistency_head": false,
+        "run_id": "dev107_c3_baseline_brand3_f0"
+      }
+    },
+    {
+      "name": "c3_full_light_aux_brand3_f0",
+      "runner": "src.runners.train_nc_battery",
+      "args": {
+        "dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold": 0, "battery_fold_seed": 0,
+        "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel",
+        "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05,
+        "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_score_channels": "response",
+        "epochs": 30, "bs": 64, "lookback": 127, "early_stopping_patience": 0,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8, "regime_query_dim": 32,
+        "regime_num_prototypes": 6, "regime_query_heads": 4, "regime_temperature": 0.5,
+        "use_regime_condition": true, "regime_film_scale": 0.05, "regime_aux_lambda": 0.01,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "use_physical_graph_bias": false, "use_physical_consistency_head": false,
+        "run_id": "dev107_c3_full_light_aux_brand3_f0"
+      }
+    },
+    {
+      "name": "c3_full_low_film_brand3_f0",
+      "runner": "src.runners.train_nc_battery",
+      "args": {
+        "dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold": 0, "battery_fold_seed": 0,
+        "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel",
+        "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05,
+        "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_score_channels": "response",
+        "epochs": 30, "bs": 64, "lookback": 127, "early_stopping_patience": 0,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8, "regime_query_dim": 32,
+        "regime_num_prototypes": 6, "regime_query_heads": 4, "regime_temperature": 0.5,
+        "use_regime_condition": true, "regime_film_scale": 0.03, "regime_aux_lambda": 0.05,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "use_physical_graph_bias": false, "use_physical_consistency_head": false,
+        "run_id": "dev107_c3_full_low_film_brand3_f0"
+      }
+    },
+    {
+      "name": "c3_full_compact_brand3_f0",
+      "runner": "src.runners.train_nc_battery",
+      "args": {
+        "dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold": 0, "battery_fold_seed": 0,
+        "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel",
+        "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05,
+        "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_score_channels": "response",
+        "epochs": 30, "bs": 64, "lookback": 127, "early_stopping_patience": 0,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8, "regime_query_dim": 32,
+        "regime_num_prototypes": 4, "regime_query_heads": 4, "regime_temperature": 0.5,
+        "use_regime_condition": true, "regime_film_scale": 0.05, "regime_aux_lambda": 0.01,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "use_physical_graph_bias": false, "use_physical_consistency_head": false,
+        "run_id": "dev107_c3_full_compact_brand3_f0"
+      }
+    },
+    {
+      "name": "c4_full_conservative_brand3_f0",
+      "runner": "src.runners.train_nc_battery",
+      "args": {
+        "dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold": 0, "battery_fold_seed": 0,
+        "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel",
+        "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05,
+        "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_score_channels": "response",
+        "epochs": 30, "bs": 64, "lookback": 127, "early_stopping_patience": 0,
+        "use_regime_condition": false, "use_physical_graph_bias": true,
+        "physical_graph_bias_weight": 1.0, "physical_graph_dynamic_weight": 1.0, "physical_graph_gate_scale": 0.75,
+        "use_physical_consistency_head": true, "physical_consistency_encoder_input": "full_window",
+        "physical_consistency_encoder_bidirectional": false, "physical_consistency_hidden_dim": 64,
+        "physical_consistency_latent_dim": 16, "physical_consistency_kl_weight": 0.0001,
+        "physical_consistency_aux_weight": 0.05, "physical_consistency_score_max_weight": 0.05,
+        "run_id": "dev107_c4_full_conservative_brand3_f0"
+      }
+    },
+    {
+      "name": "c4_full_balanced_brand3_f0",
+      "runner": "src.runners.train_nc_battery",
+      "args": {
+        "dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold": 0, "battery_fold_seed": 0,
+        "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel",
+        "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05,
+        "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_score_channels": "response",
+        "epochs": 30, "bs": 64, "lookback": 127, "early_stopping_patience": 0,
+        "use_regime_condition": false, "use_physical_graph_bias": true,
+        "physical_graph_bias_weight": 1.0, "physical_graph_dynamic_weight": 1.0, "physical_graph_gate_scale": 1.0,
+        "use_physical_consistency_head": true, "physical_consistency_encoder_input": "full_window",
+        "physical_consistency_encoder_bidirectional": false, "physical_consistency_hidden_dim": 64,
+        "physical_consistency_latent_dim": 16, "physical_consistency_kl_weight": 0.0001,
+        "physical_consistency_aux_weight": 0.10, "physical_consistency_score_max_weight": 0.10,
+        "run_id": "dev107_c4_full_balanced_brand3_f0"
+      }
+    }
+  ]
+}

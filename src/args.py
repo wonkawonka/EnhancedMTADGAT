@@ -597,6 +597,26 @@ def get_parser():
     parser.add_argument("--bs", type=int, default=256,help="Batch size")
     parser.add_argument("--window_stride", type=int, default=None, help="Sliding window sampling stride; auto-set per dataset if left empty")
     parser.add_argument("--init_lr", type=float, default=1e-3,help="Initial learning rate")
+    parser.add_argument(
+        "--forecast_loss",
+        type=str,
+        default="mse",
+        choices=["mse", "huber", "l1"],
+        help="Training loss for the one-step forecasting branch; default mse preserves MTAD-GAT.",
+    )
+    parser.add_argument(
+        "--recon_loss",
+        type=str,
+        default="mse",
+        choices=["mse", "huber", "l1"],
+        help="Training loss for the reconstruction branch; default mse preserves MTAD-GAT.",
+    )
+    parser.add_argument(
+        "--huber_beta",
+        type=float,
+        default=1.0,
+        help="Smooth-L1 transition width when forecast_loss or recon_loss is huber.",
+    )
     parser.add_argument("--shuffle_dataset", type=str2bool, default=True,help="Whether to shuffle the dataset")
     parser.add_argument("--dropout", type=float, default=0.3)
     parser.add_argument("--use_cuda", type=str2bool, default=True)
@@ -611,9 +631,42 @@ def get_parser():
     parser.add_argument("--log_tensorboard", type=str2bool, default=True,help="Whether to log training to TensorBoard")
     parser.add_argument("--early_stopping_patience", type=int, default=10, help="Validation epochs without improvement before stopping; 0 disables")
     parser.add_argument("--early_stopping_min_delta", type=float, default=1e-4, help="Minimum validation-loss improvement for early stopping")
+    parser.add_argument(
+        "--checkpoint_selection",
+        type=str,
+        default="best_validation",
+        choices=["best_validation", "last_epoch"],
+        help="Which checkpoint is evaluated: best_validation is the leakage-safe default; last_epoch reproduces the source MTAD-GAT wrapper's fixed-epoch behaviour.",
+    )
+    parser.add_argument(
+        "--nasa_validation_protocol",
+        type=str,
+        default="temporal_per_entity",
+        choices=["temporal_per_entity", "legacy_random_window"],
+        help="MSL/SMAP validation split: leakage-safe per-entity temporal holdout or the source wrapper's random window split.",
+    )
+    parser.add_argument(
+        "--nasa_score_calibration",
+        type=str,
+        default="per_segment_minmax",
+        choices=["none", "per_segment_minmax"],
+        help="MSL/SMAP score calibration. per_segment_minmax restores source MTAD-GAT's label-free per-channel normalization and is transductive on each split.",
+    )
 
     # 异常分数参数
-    parser.add_argument("--scale_scores", type=str2bool, default=False, help="Whether to normalize anomaly scores")
+    parser.add_argument(
+        "--nasa_feature_scope",
+        type=str,
+        default="target0",
+        choices=["target0", "all"],
+        help="MSL/SMAP diagnostic scope: target0 keeps the original channel-0 output; all trains and scores every feature.",
+    )
+    parser.add_argument(
+        "--scale_scores",
+        type=str2bool,
+        default=False,
+        help="Whether to feature-wise scale anomaly scores; kept disabled for the formal protocol.",
+    )
     parser.add_argument("--use_mov_av", type=str2bool, default=False,help="Whether to use moving average for anomaly scores")
     parser.add_argument("--gamma", type=float, default=1,help="Weight factor in anomaly score formula, balancing prediction and reconstruction errors")
     parser.add_argument(

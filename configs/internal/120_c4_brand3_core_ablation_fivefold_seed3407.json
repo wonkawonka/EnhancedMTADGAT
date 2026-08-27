@@ -1,0 +1,32 @@
+{
+  "plan_name": "120_c4_brand3_core_ablation_fivefold_seed3407",
+  "_lifecycle": "paper_completion_seed3407",
+  "_purpose": "补齐 C4 Brand3 主消融。118 已按完全相同协议运行 baseline 与 Full；本计划只运行 Graph-only 和 Response-only，避免重复训练。",
+  "_protocol": "严格复用 118：DyAD paper_protocol、battery_fold_seed=0、paper_channel、lookback=127、每片段一个窗口、response 通道评分与带标签 calibration 车辆聚合。",
+  "_selection_rule": "冻结 conservative C4 设置：gate scale=0.75、响应辅助损失=0.05、响应得分最大融合权重=0.05；五折不再调参。",
+  "seeds": [3407],
+  "common_args": {
+    "dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold_seed": 0,
+    "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel",
+    "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05,
+    "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_response_only_training": false,
+    "battery_score_channels": "response", "epochs": 30, "bs": 64, "lookback": 127,
+    "normalize": true, "init_lr": 0.001, "dropout": 0.3,
+    "forecast_loss": "mse", "recon_loss": "mse", "model_name": "mtad_gat",
+    "use_transformer": false, "feature_att_trans": false, "multi_scale_mode": "none",
+    "use_revin": false, "use_learnable_sparse_graph": false, "use_regime_condition": false,
+    "regime_aux_lambda": 0.0, "score_fusion_mode": "fixed", "use_c3_joint_relation": false,
+    "use_relation_change_score": false, "use_condition_residual_calibration": false,
+    "physical_graph_bias_weight": 1.0, "physical_graph_dynamic_weight": 1.0,
+    "physical_graph_gate_scale": 0.75, "physical_consistency_encoder_input": "full_window",
+    "physical_consistency_encoder_bidirectional": false, "physical_consistency_hidden_dim": 64,
+    "physical_consistency_latent_dim": 16, "physical_consistency_kl_weight": 0.0001,
+    "use_cuda": true, "require_cuda": true, "deterministic": true,
+    "num_workers": 2, "predict_num_workers": 0, "persistent_workers": true,
+    "early_stopping_patience": 0, "early_stopping_min_delta": 0.0001, "log_tensorboard": false
+  },
+  "experiments": [
+    {"name": "c4_graph_only", "runner": "src.runners.train_nc_battery", "matrix": {"battery_fold": [0, 1, 2, 3, 4]}, "args": {"use_physical_graph_bias": true, "use_physical_consistency_head": false, "physical_consistency_aux_weight": 0.0, "physical_consistency_score_max_weight": 0.0, "run_id": "local120_c4_graph_only"}},
+    {"name": "c4_response_only", "runner": "src.runners.train_nc_battery", "matrix": {"battery_fold": [0, 1, 2, 3, 4]}, "args": {"use_physical_graph_bias": false, "use_physical_consistency_head": true, "physical_consistency_aux_weight": 0.05, "physical_consistency_score_max_weight": 0.05, "run_id": "local120_c4_response_only"}}
+  ]
+}

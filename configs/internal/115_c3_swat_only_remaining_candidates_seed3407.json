@@ -1,0 +1,101 @@
+{
+  "plan_name": "115_c3_swat_only_remaining_candidates_seed3407",
+  "_lifecycle": "development_screen_only",
+  "_purpose": "WADI 筛选结果接近随机后，仅在 SWAT 完成剩余 C3 调参候选；112 批次中已完成的 SWAT baseline、full-default 与 light-aux 不重复运行。",
+  "_protocol": "seed=3407；正常训练段、独立测试段；lookback=100，window_stride=10；最大 30 epochs，验证早停 patience=3。",
+  "_selection_rule": "候选选择只依据正常验证损失与训练稳定性；测试 AP/AUROC 仅作开发诊断。",
+  "seeds": [3407],
+  "common_args": {
+    "model_name": "mtad_gat",
+    "dataset": "SWAT",
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "score_fusion_mode": "fixed",
+    "use_c3_joint_relation": false,
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_physical_graph_bias": false,
+    "use_physical_consistency_head": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+    "log_tensorboard": false,
+    "epochs": 30,
+    "bs": 64,
+    "lookback": 100,
+    "window_stride": 10,
+    "val_split": 0.1,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.0001,
+    "regime_encoder_type": "prototype_query",
+    "regime_emb_dim": 8,
+    "regime_query_dim": 32,
+    "regime_num_prototypes": 6,
+    "regime_query_heads": 4,
+    "regime_temperature": 0.5,
+    "use_regime_condition": true,
+    "regime_prototype_lambda": 0.0,
+    "regime_condition_shuffle": false
+  },
+  "experiments": [
+    {
+      "name": "c3_tuning_full_low_film_swat",
+      "args": {
+        "regime_film_scale": 0.03,
+        "regime_aux_lambda": 0.05,
+        "run_id": "dev115_c3_tuning_full_low_film_swat"
+      }
+    },
+    {
+      "name": "c3_tuning_full_compact_swat",
+      "args": {
+        "regime_num_prototypes": 4,
+        "regime_film_scale": 0.05,
+        "regime_aux_lambda": 0.01,
+        "run_id": "dev115_c3_tuning_full_compact_swat"
+      }
+    },
+    {
+      "name": "c3_tuning_full_huber_swat",
+      "args": {
+        "regime_film_scale": 0.05,
+        "regime_aux_lambda": 0.01,
+        "forecast_loss": "huber",
+        "recon_loss": "huber",
+        "huber_beta": 0.5,
+        "run_id": "dev115_c3_tuning_full_huber_swat"
+      }
+    },
+    {
+      "name": "c3_tuning_forecast_huber_swat",
+      "args": {
+        "regime_film_scale": 0.05,
+        "regime_aux_lambda": 0.01,
+        "forecast_loss": "huber",
+        "recon_loss": "mse",
+        "huber_beta": 0.5,
+        "run_id": "dev115_c3_tuning_forecast_huber_swat"
+      }
+    },
+    {
+      "name": "c3_tuning_recon_huber_swat",
+      "args": {
+        "regime_film_scale": 0.05,
+        "regime_aux_lambda": 0.01,
+        "forecast_loss": "mse",
+        "recon_loss": "huber",
+        "huber_beta": 0.5,
+        "run_id": "dev115_c3_tuning_recon_huber_swat"
+      }
+    }
+  ]
+}

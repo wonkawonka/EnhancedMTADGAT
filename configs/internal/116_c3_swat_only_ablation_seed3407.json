@@ -1,0 +1,86 @@
+{
+  "plan_name": "116_c3_swat_only_ablation_seed3407",
+  "_lifecycle": "development_ablation_only",
+  "_purpose": "仅在 SWAT 上完成 C3 状态条件与辅助损失的独立机制消融；不与 115 调参候选混用。",
+  "_protocol": "seed=3407；lookback=100，window_stride=10；最大 30 epochs，验证早停 patience=3；所有臂保持相同数据边界和优化器设置。",
+  "_selection_rule": "只用于机制归因，不按测试指标挑选超参数。",
+  "seeds": [3407],
+  "common_args": {
+    "model_name": "mtad_gat",
+    "dataset": "SWAT",
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "score_fusion_mode": "fixed",
+    "use_c3_joint_relation": false,
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_physical_graph_bias": false,
+    "use_physical_consistency_head": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+    "log_tensorboard": false,
+    "epochs": 30,
+    "bs": 64,
+    "lookback": 100,
+    "window_stride": 10,
+    "val_split": 0.1,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.0001,
+    "regime_encoder_type": "prototype_query",
+    "regime_emb_dim": 8,
+    "regime_query_dim": 32,
+    "regime_num_prototypes": 6,
+    "regime_query_heads": 4,
+    "regime_temperature": 0.5,
+    "regime_film_scale": 0.1,
+    "regime_prototype_lambda": 0.0,
+    "regime_condition_shuffle_mode": "farthest"
+  },
+  "experiments": [
+    {
+      "name": "c3_ablation_baseline_swat",
+      "args": {
+        "use_regime_condition": false,
+        "regime_aux_lambda": 0.0,
+        "run_id": "dev116_c3_ablation_baseline_swat"
+      }
+    },
+    {
+      "name": "c3_ablation_full_swat",
+      "args": {
+        "use_regime_condition": true,
+        "regime_condition_shuffle": false,
+        "regime_aux_lambda": 0.05,
+        "run_id": "dev116_c3_ablation_full_swat"
+      }
+    },
+    {
+      "name": "c3_ablation_no_aux_swat",
+      "args": {
+        "use_regime_condition": true,
+        "regime_condition_shuffle": false,
+        "regime_aux_lambda": 0.0,
+        "run_id": "dev116_c3_ablation_no_aux_swat"
+      }
+    },
+    {
+      "name": "c3_ablation_shuffled_state_swat",
+      "args": {
+        "use_regime_condition": true,
+        "regime_condition_shuffle": true,
+        "regime_aux_lambda": 0.05,
+        "run_id": "dev116_c3_ablation_shuffled_state_swat"
+      }
+    }
+  ]
+}

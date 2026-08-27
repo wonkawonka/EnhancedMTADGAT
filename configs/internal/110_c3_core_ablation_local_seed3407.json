@@ -1,0 +1,27 @@
+{
+  "plan_name": "110_c3_core_ablation_local_seed3407",
+  "_lifecycle": "development_ablation_only",
+  "_purpose": "C3 核心机制消融，独立于 C3 调参和 C4 实验：MSL、干净 SMAP 与 Brand3 fold0 各比较 MTAD-GAT baseline、完整 prototype-query C3、去描述辅助损失、打乱状态负对照。",
+  "_selection_rule": "统一模型预算和各数据集协议；这是机制归因实验，不作为损失、FiLM 或原型数调参结果。",
+  "seeds": [3407],
+  "common_args": {
+    "model_name": "mtad_gat", "normalize": true, "init_lr": 0.001, "dropout": 0.3,
+    "use_transformer": false, "feature_att_trans": false, "multi_scale_mode": "none", "use_revin": false,
+    "use_learnable_sparse_graph": false, "use_physical_graph_bias": false, "use_physical_consistency_head": false,
+    "use_cuda": true, "require_cuda": true, "deterministic": true,
+    "num_workers": 2, "predict_num_workers": 0, "persistent_workers": true, "log_tensorboard": false,
+    "regime_encoder_type": "prototype_query", "regime_emb_dim": 8, "regime_query_dim": 32,
+    "regime_num_prototypes": 6, "regime_query_heads": 4, "regime_temperature": 0.5,
+    "regime_film_scale": 0.1, "regime_prototype_lambda": 0.0, "regime_condition_shuffle_mode": "farthest"
+  },
+  "experiments": [
+    {"name": "baseline_public", "matrix": {"dataset": ["MSL", "SMAP"]}, "args": {"epochs": 30, "bs": 128, "lookback": 100, "window_stride": 1, "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001, "use_regime_condition": false, "regime_aux_lambda": 0.0, "run_id": "dev110_c3_baseline_public"}},
+    {"name": "full_public", "matrix": {"dataset": ["MSL", "SMAP"]}, "args": {"epochs": 30, "bs": 128, "lookback": 100, "window_stride": 1, "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001, "use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.05, "run_id": "dev110_c3_full_public"}},
+    {"name": "no_aux_public", "matrix": {"dataset": ["MSL", "SMAP"]}, "args": {"epochs": 30, "bs": 128, "lookback": 100, "window_stride": 1, "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001, "use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.0, "run_id": "dev110_c3_no_aux_public"}},
+    {"name": "shuffled_state_public", "matrix": {"dataset": ["MSL", "SMAP"]}, "args": {"epochs": 30, "bs": 128, "lookback": 100, "window_stride": 1, "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001, "use_regime_condition": true, "regime_condition_shuffle": true, "regime_condition_shuffle_mode": "farthest", "regime_aux_lambda": 0.05, "run_id": "dev110_c3_shuffled_public"}},
+    {"name": "baseline_brand3_f0", "runner": "src.runners.train_nc_battery", "args": {"dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold": 0, "battery_fold_seed": 0, "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel", "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05, "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_score_channels": "response", "epochs": 30, "bs": 64, "lookback": 127, "early_stopping_patience": 0, "use_regime_condition": false, "regime_aux_lambda": 0.0, "run_id": "dev110_c3_baseline_brand3"}},
+    {"name": "full_brand3_f0", "runner": "src.runners.train_nc_battery", "args": {"dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold": 0, "battery_fold_seed": 0, "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel", "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05, "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_score_channels": "response", "epochs": 30, "bs": 64, "lookback": 127, "early_stopping_patience": 0, "use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.05, "run_id": "dev110_c3_full_brand3"}},
+    {"name": "no_aux_brand3_f0", "runner": "src.runners.train_nc_battery", "args": {"dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold": 0, "battery_fold_seed": 0, "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel", "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05, "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_score_channels": "response", "epochs": 30, "bs": 64, "lookback": 127, "early_stopping_patience": 0, "use_regime_condition": true, "regime_condition_shuffle": false, "regime_aux_lambda": 0.0, "run_id": "dev110_c3_no_aux_brand3"}},
+    {"name": "shuffled_state_brand3_f0", "runner": "src.runners.train_nc_battery", "args": {"dataset": "TSINGHUA_EV", "battery_brand": 3, "battery_fold": 0, "battery_fold_seed": 0, "battery_split_protocol": "paper_protocol", "battery_normalization": "paper_channel", "battery_windows_per_snippet": 1, "battery_vehicle_top_ratio": 0.05, "battery_vehicle_top_ratio_mode": "labelled_calibration", "battery_score_channels": "response", "epochs": 30, "bs": 64, "lookback": 127, "early_stopping_patience": 0, "use_regime_condition": true, "regime_condition_shuffle": true, "regime_condition_shuffle_mode": "farthest", "regime_aux_lambda": 0.05, "run_id": "dev110_c3_shuffled_brand3"}}
+  ]
+}

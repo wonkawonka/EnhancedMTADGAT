@@ -137,9 +137,15 @@ if __name__ == "__main__":
     if dataset == "SMD":
         (x_train, _), (x_test, y_test) = get_data(f"machine-{group_index}-{index}", normalize=normalize)
     elif dataset in {"MSL", "SMAP"}:
+        nasa_validation_protocol = str(
+            getattr(model_args, "nasa_validation_protocol", "temporal_per_entity")
+        ).lower()
+        nasa_loader_val_ratio = (
+            val_split if nasa_validation_protocol == "temporal_per_entity" else 0.0
+        )
         x_train, explicit_validation_data, x_test, y_test = get_nasa_telemetry_sequence_data(
             dataset,
-            val_ratio=val_split,
+            val_ratio=nasa_loader_val_ratio,
             normalize=normalize,
         )
     elif dataset in ["NASA_RANDOM_CHARGE", "NASA_RANDOM_DISCHARGE"]:
@@ -337,6 +343,7 @@ if __name__ == "__main__":
         "use_mov_av": args.use_mov_av,
         "gamma": args.gamma,
         "score_fusion_mode": args.score_fusion_mode,
+        "nasa_score_calibration": getattr(model_args, "nasa_score_calibration", "none"),
         "use_physical_response_score": getattr(args, "use_physical_response_score", False),
         "physical_response_config": resolve_physical_state_config(args),
         "physical_response_max_weight": getattr(args, "physical_response_max_weight", 0.35),

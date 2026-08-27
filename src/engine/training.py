@@ -63,6 +63,7 @@ class Trainer:
         regime_prototype_lambda=0.0,
         early_stopping_patience=0,
         early_stopping_min_delta=1e-4,
+        checkpoint_selection="best_validation",
     ):
         self.model = model
         self.optimizer = optimizer
@@ -87,6 +88,12 @@ class Trainer:
         self.regime_prototype_lambda = max(0.0, float(regime_prototype_lambda))
         self.early_stopping_patience = max(0, int(early_stopping_patience))
         self.early_stopping_min_delta = max(0.0, float(early_stopping_min_delta))
+        self.checkpoint_selection = str(checkpoint_selection or "best_validation").lower()
+        if self.checkpoint_selection not in {"best_validation", "last_epoch"}:
+            raise ValueError(
+                "checkpoint_selection must be 'best_validation' or 'last_epoch', got "
+                f"{checkpoint_selection!r}"
+            )
         self.early_stopping_bad_epochs = 0
         self.scaler = _build_grad_scaler(use_cuda)
         self.losses = self._empty_losses()
@@ -205,7 +212,8 @@ class Trainer:
                 if improved:
                     self.best_val_loss = val_values[2]
                     self.early_stopping_bad_epochs = 0
-                    self.save("model.pt")
+                    if self.checkpoint_selection == "best_validation":
+                        self.save("model.pt")
                 else:
                     self.early_stopping_bad_epochs += 1
                     should_stop = (
@@ -224,7 +232,7 @@ class Trainer:
             if should_stop:
                 print(f"Early stopping at epoch {epoch + 1} after {self.early_stopping_bad_epochs} non-improving epochs.")
                 break
-        if val_loader is None:
+        if val_loader is None or self.checkpoint_selection == "last_epoch":
             self.save("model.pt")
         if self.device == "cuda":
             torch.cuda.synchronize()
@@ -248,6 +256,7 @@ class Trainer:
             ),
             "max_epochs": int(self.n_epochs),
             "epochs_completed": int(len(self.epoch_times)),
+            "checkpoint_selection": self.checkpoint_selection,
             "total_train_seconds": float(total_seconds),
             "mean_epoch_seconds": float(np.mean(self.epoch_times)) if self.epoch_times else 0.0,
             "median_epoch_seconds": float(np.median(self.epoch_times)) if self.epoch_times else 0.0,
@@ -376,13 +385,17 @@ class Trainer:
                 self._record("val", val_values)
                 if self.best_val_loss is None or val_values[2] <= self.best_val_loss:
                     self.best_val_loss = val_values[2]
-                    self.save("model.pt")
+                    if self.checkpoint_selection == "best_validation":
+                        self.save("model.pt")
             self.start_epoch = epoch + 1
             elapsed = time.perf_counter() - epoch_start
             self.epoch_times.append(elapsed)
             self.save_checkpoint()
             print(f"Entity: {entity_name} | {self._format_losses(epoch, train_values, val_values, elapsed)}")
-        if all(val_loader is None for _, _, val_loader in loaders):
+        if (
+            all(val_loader is None for _, _, val_loader in loaders)
+            or self.checkpoint_selection == "last_epoch"
+        ):
             self.save("model.pt")
         if self.device == "cuda":
             torch.cuda.synchronize()

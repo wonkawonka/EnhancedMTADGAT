@@ -309,6 +309,11 @@ class DynamicPhysicalGraphBias(nn.Module):
         self.relation_gate_weight = nn.Parameter(torch.zeros(4, 4))
         self.relation_gate_bias = nn.Parameter(torch.zeros(4))
         self.max_modulation = 0.15 * self.dynamic_weight
+        # Read-only inference caches for the paper visualisation pipeline.
+        # They are deliberately not buffers/parameters, so they neither alter
+        # the forward values nor the checkpoint/state_dict layout.
+        self.last_state_strengths = None
+        self.last_relation_gates = None
 
         offset = torch.as_tensor(config.get("physical_data_offset", []), dtype=torch.float32)
         scale = torch.as_tensor(config.get("physical_data_scale", []), dtype=torch.float32)
@@ -389,6 +394,8 @@ class DynamicPhysicalGraphBias(nn.Module):
         gates = self.max_modulation * torch.tanh(
             F.linear(state, self.relation_gate_weight, self.relation_gate_bias)
         )
+        self.last_state_strengths = state.detach()
+        self.last_relation_gates = gates.detach()
         return (
             gates[:, 0, None, None] * self.current_gate_mask
             + gates[:, 1, None, None] * self.voltage_gate_mask

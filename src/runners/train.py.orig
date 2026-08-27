@@ -1008,7 +1008,6 @@ if __name__ == "__main__":
         prediction_args = {
             'dataset': dataset,
             "target_dims": target_dims,
-            "score_dims": score_dims,
             'scale_scores': args.scale_scores,
             "level": level,
             "q": q,

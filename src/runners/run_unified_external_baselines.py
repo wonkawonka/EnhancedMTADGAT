@@ -72,6 +72,19 @@ def _device(args):
     return torch.device("cuda" if args.use_cuda and torch.cuda.is_available() else "cpu")
 
 
+def _parse_feature_dims(value):
+    """Parse an optional comma-separated input scope (e.g. ``0`` or ``0,2``)."""
+    if value is None or not str(value).strip():
+        return None
+    try:
+        indices = [int(item.strip()) for item in str(value).split(",") if item.strip()]
+    except ValueError as exc:
+        raise ValueError(f"feature_dims must be comma-separated integers, got {value!r}") from exc
+    if len(set(indices)) != len(indices) or any(index < 0 for index in indices):
+        raise ValueError(f"feature_dims must be unique non-negative integers, got {indices}")
+    return indices
+
+
 def _window_and_stride(args):
     native_windows = {"tranad": 10, "gdn": 32}
     if args.dataset.upper() == "BRAND3" and args.method in {
@@ -81,7 +94,7 @@ def _window_and_stride(args):
     window = native_windows.get(args.method, int(args.lookback))
     stride = int(args.window_stride)
     if stride <= 0:
-        stride = 10 if args.dataset.upper() == "BMS" else 1
+        stride = 10 if args.dataset.upper() in {"BMS", "SWAT", "WADI"} else 1
     return window, stride
 
 
@@ -447,7 +460,7 @@ def _final_metrics(data, validation_scores, validation_endpoints, test_scores, t
 def parse_args():
     parser = argparse.ArgumentParser(description="Unified formal external baseline runner")
     parser.add_argument("--method", choices=METHODS, required=True)
-    parser.add_argument("--dataset", choices=("MSL", "SMAP", "Brand3", "BMS"), required=True)
+    parser.add_argument("--dataset", choices=("MSL", "SMAP", "SWAT", "WADI", "Brand3", "BMS"), required=True)
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--seed", type=int, default=3407)
     parser.add_argument("--brand_fold", type=int, default=0, choices=range(5))
@@ -466,6 +479,11 @@ def parse_args():
         "--brand_top_ratio_mode",
         choices=("labelled_calibration", "fixed"),
         default="labelled_calibration",
+    )
+    parser.add_argument(
+        "--feature_dims",
+        default="",
+        help="Optional comma-separated input dimensions. Empty keeps all features; use 0 for dim0-only.",
     )
     parser.add_argument("--val_ratio", type=float, default=0.1)
     parser.add_argument("--threshold_quantile", type=float, default=0.99)
@@ -495,6 +513,7 @@ def parse_args():
 
 def main():
     args = parse_args()
+    feature_indices = _parse_feature_dims(args.feature_dims)
     if not args.normalize:
         raise ValueError("The formal unified protocol requires training-only normalization")
     random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
@@ -508,6 +527,7 @@ def main():
         val_ratio=args.val_ratio,
         brand_split_protocol=args.brand_split_protocol,
         brand_fold_seed=args.brand_fold_seed,
+        feature_indices=feature_indices,
         brand_normalization=args.brand_normalization,
     )
     window, stride = _window_and_stride(args)

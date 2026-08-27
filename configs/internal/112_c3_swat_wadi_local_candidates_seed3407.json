@@ -1,0 +1,145 @@
+{
+  "plan_name": "112_c3_swat_wadi_local_candidates_seed3407",
+  "_lifecycle": "development_screen_only",
+  "_purpose": "将前面本地 C3 调参候选迁移到 SWAT/WADI；只用于候选筛选，不替代 99 号正式三 seed 主结果。",
+  "_protocol": "SWAT/WADI 使用当前正常训练段、独立测试段、lookback=100、window_stride=10；所有候选 seed=3407，保持同一训练预算和验证划分。",
+  "_selection_rule": "先查看正常验证损失和训练稳定性，再参考一次性测试 AP/AUROC；测试标签不参与候选选择。",
+  "seeds": [3407],
+  "common_args": {
+    "model_name": "mtad_gat",
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "score_fusion_mode": "fixed",
+    "use_c3_joint_relation": false,
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_physical_graph_bias": false,
+    "use_physical_consistency_head": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+    "log_tensorboard": false
+  },
+  "experiments": [
+    {
+      "name": "c3_tuning_baseline",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "use_regime_condition": false, "regime_aux_lambda": 0.0,
+        "run_id": "dev112_c3_tuning_baseline"
+      }
+    },
+    {
+      "name": "c3_tuning_full_default",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8,
+        "regime_query_dim": 32, "regime_num_prototypes": 6, "regime_query_heads": 4,
+        "regime_temperature": 0.5, "use_regime_condition": true,
+        "regime_film_scale": 0.1, "regime_aux_lambda": 0.05,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "run_id": "dev112_c3_tuning_full_default"
+      }
+    },
+    {
+      "name": "c3_tuning_full_light_aux",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8,
+        "regime_query_dim": 32, "regime_num_prototypes": 6, "regime_query_heads": 4,
+        "regime_temperature": 0.5, "use_regime_condition": true,
+        "regime_film_scale": 0.05, "regime_aux_lambda": 0.01,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "run_id": "dev112_c3_tuning_full_light_aux"
+      }
+    },
+    {
+      "name": "c3_tuning_full_low_film",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8,
+        "regime_query_dim": 32, "regime_num_prototypes": 6, "regime_query_heads": 4,
+        "regime_temperature": 0.5, "use_regime_condition": true,
+        "regime_film_scale": 0.03, "regime_aux_lambda": 0.05,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "run_id": "dev112_c3_tuning_full_low_film"
+      }
+    },
+    {
+      "name": "c3_tuning_full_compact",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8,
+        "regime_query_dim": 32, "regime_num_prototypes": 4, "regime_query_heads": 4,
+        "regime_temperature": 0.5, "use_regime_condition": true,
+        "regime_film_scale": 0.05, "regime_aux_lambda": 0.01,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "run_id": "dev112_c3_tuning_full_compact"
+      }
+    },
+    {
+      "name": "c3_tuning_full_huber",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8,
+        "regime_query_dim": 32, "regime_num_prototypes": 6, "regime_query_heads": 4,
+        "regime_temperature": 0.5, "use_regime_condition": true,
+        "regime_film_scale": 0.05, "regime_aux_lambda": 0.01,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "forecast_loss": "huber", "recon_loss": "huber", "huber_beta": 0.5,
+        "run_id": "dev112_c3_tuning_full_huber"
+      }
+    },
+    {
+      "name": "c3_tuning_forecast_huber",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8,
+        "regime_query_dim": 32, "regime_num_prototypes": 6, "regime_query_heads": 4,
+        "regime_temperature": 0.5, "use_regime_condition": true,
+        "regime_film_scale": 0.05, "regime_aux_lambda": 0.01,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "forecast_loss": "huber", "recon_loss": "mse", "huber_beta": 0.5,
+        "run_id": "dev112_c3_tuning_forecast_huber"
+      }
+    },
+    {
+      "name": "c3_tuning_recon_huber",
+      "matrix": {"dataset": ["SWAT", "WADI"]},
+      "args": {
+        "epochs": 30, "bs": 64, "lookback": 100, "window_stride": 10,
+        "val_split": 0.1, "early_stopping_patience": 3, "early_stopping_min_delta": 0.0001,
+        "regime_encoder_type": "prototype_query", "regime_emb_dim": 8,
+        "regime_query_dim": 32, "regime_num_prototypes": 6, "regime_query_heads": 4,
+        "regime_temperature": 0.5, "use_regime_condition": true,
+        "regime_film_scale": 0.05, "regime_aux_lambda": 0.01,
+        "regime_prototype_lambda": 0.0, "regime_condition_shuffle": false,
+        "forecast_loss": "mse", "recon_loss": "huber", "huber_beta": 0.5,
+        "run_id": "dev112_c3_tuning_recon_huber"
+      }
+    }
+  ]
+}
