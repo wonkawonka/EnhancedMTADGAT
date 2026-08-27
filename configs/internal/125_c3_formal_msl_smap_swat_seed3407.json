@@ -1,0 +1,176 @@
+{
+  "plan_name": "125_c3_formal_msl_smap_swat_seed3407",
+  "_lifecycle": "paper_completion_seed3407",
+  "_purpose": "按冻结协议补齐 C3 在 MSL、SMAP、SWAT 的正式对比与核心消融；不包含任务 07 外部模型。",
+  "_protocol": "MSL/SMAP 使用全通道输入、只预测和评分 dim0（all→0）；SWAT 使用官方多变量输入和联合评分（all→all）。所有内部臂最大 30 epoch、关闭早停，并评估 best_validation checkpoint。",
+  "_selection_rule": "seed=3407；测试标签只用于最终评价，不用于训练、checkpoint 选择或超参数选择。",
+  "seeds": [3407],
+  "common_args": {
+    "model_name": "mtad_gat",
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "forecast_loss": "mse",
+    "recon_loss": "mse",
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "regime_encoder_type": "prototype_query",
+    "regime_emb_dim": 8,
+    "regime_query_dim": 32,
+    "regime_num_prototypes": 6,
+    "regime_query_heads": 4,
+    "regime_temperature": 0.5,
+    "regime_condition_mode": "fusion",
+    "regime_film_scale": 0.1,
+    "regime_prototype_lambda": 0.0,
+    "regime_condition_shuffle_mode": "farthest",
+    "score_fusion_mode": "fixed",
+    "use_c3_joint_relation": false,
+    "use_relation_change_score": false,
+    "use_condition_residual_calibration": false,
+    "use_physical_graph_bias": false,
+    "use_physical_consistency_head": false,
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 2,
+    "predict_num_workers": 0,
+    "persistent_workers": true,
+    "epochs": 30,
+    "bs": 128,
+    "lookback": 100,
+    "window_stride": 1,
+    "val_split": 0.1,
+    "early_stopping_patience": 0,
+    "early_stopping_min_delta": 0.0001,
+    "checkpoint_selection": "best_validation",
+    "nasa_validation_protocol": "temporal_per_entity",
+    "nasa_score_calibration": "none",
+    "nasa_feature_scope": "target0",
+    "log_tensorboard": false
+  },
+  "experiments": [
+    {
+      "name": "baseline_msl",
+      "args": {
+        "dataset": "MSL",
+        "use_regime_condition": false,
+        "regime_aux_lambda": 0.0,
+        "run_id": "c3_formal_baseline_msl_seed3407"
+      }
+    },
+    {
+      "name": "full_c3_msl",
+      "args": {
+        "dataset": "MSL",
+        "use_regime_condition": true,
+        "regime_aux_lambda": 0.05,
+        "run_id": "c3_formal_full_msl_seed3407"
+      }
+    },
+    {
+      "name": "no_aux_msl",
+      "args": {
+        "dataset": "MSL",
+        "use_regime_condition": true,
+        "regime_aux_lambda": 0.0,
+        "run_id": "c3_formal_no_aux_msl_seed3407"
+      }
+    },
+    {
+      "name": "shuffled_state_msl",
+      "args": {
+        "dataset": "MSL",
+        "use_regime_condition": true,
+        "regime_condition_shuffle": true,
+        "regime_aux_lambda": 0.05,
+        "run_id": "c3_formal_shuffled_state_msl_seed3407"
+      }
+    },
+    {
+      "name": "baseline_smap",
+      "args": {
+        "dataset": "SMAP",
+        "use_regime_condition": false,
+        "regime_aux_lambda": 0.0,
+        "run_id": "c3_formal_baseline_smap_seed3407"
+      }
+    },
+    {
+      "name": "full_c3_smap",
+      "args": {
+        "dataset": "SMAP",
+        "use_regime_condition": true,
+        "regime_aux_lambda": 0.05,
+        "run_id": "c3_formal_full_smap_seed3407"
+      }
+    },
+    {
+      "name": "no_aux_smap",
+      "args": {
+        "dataset": "SMAP",
+        "use_regime_condition": true,
+        "regime_aux_lambda": 0.0,
+        "run_id": "c3_formal_no_aux_smap_seed3407"
+      }
+    },
+    {
+      "name": "shuffled_state_smap",
+      "args": {
+        "dataset": "SMAP",
+        "use_regime_condition": true,
+        "regime_condition_shuffle": true,
+        "regime_aux_lambda": 0.05,
+        "run_id": "c3_formal_shuffled_state_smap_seed3407"
+      }
+    },
+    {
+      "name": "baseline_swat",
+      "args": {
+        "dataset": "SWAT",
+        "use_regime_condition": false,
+        "regime_aux_lambda": 0.0,
+        "bs": 64,
+        "window_stride": 10,
+        "run_id": "c3_formal_baseline_swat_seed3407"
+      }
+    },
+    {
+      "name": "full_c3_swat",
+      "args": {
+        "dataset": "SWAT",
+        "use_regime_condition": true,
+        "regime_aux_lambda": 0.05,
+        "bs": 64,
+        "window_stride": 10,
+        "run_id": "c3_formal_full_swat_seed3407"
+      }
+    },
+    {
+      "name": "no_aux_swat",
+      "args": {
+        "dataset": "SWAT",
+        "use_regime_condition": true,
+        "regime_aux_lambda": 0.0,
+        "bs": 64,
+        "window_stride": 10,
+        "run_id": "c3_formal_no_aux_swat_seed3407"
+      }
+    },
+    {
+      "name": "shuffled_state_swat",
+      "args": {
+        "dataset": "SWAT",
+        "use_regime_condition": true,
+        "regime_condition_shuffle": true,
+        "regime_aux_lambda": 0.05,
+        "bs": 64,
+        "window_stride": 10,
+        "run_id": "c3_formal_shuffled_state_swat_seed3407"
+      }
+    }
+  ]
+}

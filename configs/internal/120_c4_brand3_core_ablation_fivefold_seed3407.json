@@ -15,7 +15,7 @@
     "forecast_loss": "mse", "recon_loss": "mse", "model_name": "mtad_gat",
     "use_transformer": false, "feature_att_trans": false, "multi_scale_mode": "none",
     "use_revin": false, "use_learnable_sparse_graph": false, "use_regime_condition": false,
-    "regime_aux_lambda": 0.0, "score_fusion_mode": "fixed", "use_c3_joint_relation": false,
+    "regime_aux_lambda": 1.0, "score_fusion_mode": "fixed", "use_c3_joint_relation": false,
     "use_relation_change_score": false, "use_condition_residual_calibration": false,
     "physical_graph_bias_weight": 1.0, "physical_graph_dynamic_weight": 1.0,
     "physical_graph_gate_scale": 0.75, "physical_consistency_encoder_input": "full_window",

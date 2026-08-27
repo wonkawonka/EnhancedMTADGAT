@@ -29,7 +29,7 @@
     "use_revin": false,
     "use_learnable_sparse_graph": false,
     "use_regime_condition": false,
-    "regime_aux_lambda": 0.0,
+    "regime_aux_lambda": 1.0,
     "score_fusion_mode": "fixed",
     "use_c3_joint_relation": false,
     "use_relation_change_score": false,
