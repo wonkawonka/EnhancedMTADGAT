@@ -1,0 +1,73 @@
+{
+  "purpose": "Frozen-checkpoint C3/C4 attention visualisation",
+  "device": "cpu",
+  "cases": [
+    {
+      "prefix": "c4_brand3_normal",
+      "metadata": {
+        "dataset": "Brand3",
+        "selection": "median-path test snippet, central legal window",
+        "label": 0,
+        "car": "413",
+        "snippet": "/home/chenmj/projects/EnhancedMTADGAT/datasets/TSINGHUA_EV/battery_brand3/data/3198.pkl",
+        "start": 0,
+        "checkpoint": "runs/internal/118_c4_full_conservative_brand3_fivefold_seed3407__local118_c4_full_conservative_seed3407/output/c4_full_conservative_f1_seed3407/model.pt"
+      },
+      "artifacts": [
+        "c4_brand3_normal_feature_attention.png",
+        "c4_brand3_normal_feature_attention.csv",
+        "c4_brand3_normal_physical_bias.png",
+        "c4_brand3_normal_physical_bias.csv",
+        "c4_brand3_normal_relation_gates.png",
+        "c4_brand3_normal_relation_gates.csv",
+        "c4_brand3_normal_state_strengths.csv"
+      ]
+    },
+    {
+      "prefix": "c4_brand3_fault",
+      "metadata": {
+        "dataset": "Brand3",
+        "selection": "median-path test snippet, central legal window",
+        "label": 1,
+        "car": "465",
+        "snippet": "/home/chenmj/projects/EnhancedMTADGAT/datasets/TSINGHUA_EV/battery_brand3/data/28535.pkl",
+        "start": 0,
+        "checkpoint": "runs/internal/118_c4_full_conservative_brand3_fivefold_seed3407__local118_c4_full_conservative_seed3407/output/c4_full_conservative_f1_seed3407/model.pt"
+      },
+      "artifacts": [
+        "c4_brand3_fault_feature_attention.png",
+        "c4_brand3_fault_feature_attention.csv",
+        "c4_brand3_fault_physical_bias.png",
+        "c4_brand3_fault_physical_bias.csv",
+        "c4_brand3_fault_relation_gates.png",
+        "c4_brand3_fault_relation_gates.csv",
+        "c4_brand3_fault_state_strengths.csv"
+      ]
+    }
+  ],
+  "counterfactuals": [
+    {
+      "prefix": "c4_brand3_normal",
+      "intervention": "set use_physical_graph_bias=false for one frozen forward pass",
+      "input_and_checkpoint": "identical to the paired exported case",
+      "artifacts": [
+        "c4_brand3_normal_feature_attention_bias_delta.png",
+        "c4_brand3_normal_feature_attention_bias_delta.csv"
+      ]
+    },
+    {
+      "prefix": "c4_brand3_fault",
+      "intervention": "set use_physical_graph_bias=false for one frozen forward pass",
+      "input_and_checkpoint": "identical to the paired exported case",
+      "artifacts": [
+        "c4_brand3_fault_feature_attention_bias_delta.png",
+        "c4_brand3_fault_feature_attention_bias_delta.csv"
+      ]
+    }
+  ],
+  "notes": [
+    "C3 exports prototype-to-channel cross-attention and Feature-GAT attention.",
+    "C4 exports Feature-GAT attention, additive physical bias and four relation gates.",
+    "External baselines do not expose attention and are intentionally not given synthetic attention plots."
+  ]
+}
