@@ -1,11 +1,11 @@
 {
   "plan_name": "research_09_external_calce",
-  "lifecycle": "blocked_pending_calce_raw_data_and_label_audit",
+  "lifecycle": "data_ready_pending_entity_label_audit",
   "not_for_final_matrix": true,
   "purpose": "在实验室退化数据上确认慢变或微弱异常相关发现。",
   "dataset": "CALCE battery anomaly/degradation data",
   "preconditions": [
-    "raw data available",
+    "raw data integrity verified",
     "entity-level split possible",
     "label granularity documented"
   ],
@@ -32,21 +32,27 @@
   "restriction": "在完成标签审计前，不预设时间点级指标或提前预警结论。",
   "local_data_audit": {
     "date": "2026-09-11",
-    "searched_roots": [
-      "datasets/"
-    ],
-    "patterns": [
-      "*calce*",
-      "*cs2*",
-      "*cx2*"
-    ],
-    "result": "no matching local raw data found; no entity split or label granularity can be audited"
+    "source_page": "https://calce.umd.edu/battery-anomaly-detection-data",
+    "raw_root": "datasets/CALCE_Battery_Data/raw",
+    "extracted_root": "datasets/CALCE_Battery_Data/extracted",
+    "artifacts": {
+      "Dataset1.zip": {
+        "sha256": "e5762b93485ab764cb6433806e7eb6ffd4cb6432369ebac5b5e980208e3a1ff3",
+        "zip_integrity": "passed",
+        "contents": "six qualified-lot and six subsequent-lot normalized capacity trajectories (Excel)"
+      },
+      "Dataset2.zip": {
+        "sha256": "c2225d46e959603e14d3c033806a16a5fc2a8458854aabf97f9e3a64de681af0",
+        "zip_integrity": "passed",
+        "contents": "23 normalized capacity trajectories in Dataset2.mat: cells 1-14 qualified lot; cells 15-23 subsequent lots"
+      }
+    },
+    "result": "official raw data is present and extracted; identifiers and anomaly labels still require a protocol audit"
   },
   "blocking_requirements": [
-    "CALCE raw data",
     "dataset license/source record",
     "entity identifiers",
-    "label granularity documentation"
+    "an auditable mapping from subsequent-lot entities to confirmed anomalies"
   ],
   "nasa_official_download_audit": {
     "source": "https://phm-datasets.s3.amazonaws.com/NASA/5.%20Battery%20Data%20Set.zip",

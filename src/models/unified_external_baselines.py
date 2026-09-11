@@ -161,6 +161,17 @@ class GANFCompat(nn.Module):
 
 
 def build_reference_model(method: str, features: int, window: int):
+    if method == "patchad":
+        directory = PROJECT_ROOT / "external_baselines" / "PatchAD" / "patchad_model"
+        module = _load_relative_module("_unified_patchad", directory, "models")
+        patch_sizes = [size for size in (2, 4, 8) if window % size == 0]
+        if not patch_sizes:
+            raise ValueError(f"PatchAD requires a window divisible by a supported patch size, got {window}")
+        return module.PatchMLPAD(
+            win_size=window, d_model=64, e_layer=3, patch_sizes=patch_sizes,
+            dropout=0.1, activation="gelu", channel=features, norm=None,
+            output_attention=True,
+        )
     if method == "anomaly_transformer":
         directory = PROJECT_ROOT / "external_baselines" / "Anomaly-Transformer" / "model"
         module = _load_relative_module("_unified_anomaly_transformer", directory, "AnomalyTransformer")

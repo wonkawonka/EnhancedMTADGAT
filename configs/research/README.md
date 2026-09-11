@@ -30,10 +30,10 @@ LFP 与 NCM 都有 charge/discharge 文件。`operation` 不能仅凭文件名�
 | 代号 | 模型 | 范式 | 在本研究中的作用 | 当前状态 |
 |---|---|---|---|---|
 | M1 | MTAD-GAT | 图注意力、预测与重构 | 检查变量依赖与固定图结构敏感性 | 已接入；LFP 首个基线已完成 |
-| M2 | TranAD | Transformer 重构 | 标准深度重构路线 | 待接入 CH 样本级适配器 |
-| M3 | DCdetector | 双注意力、对比自监督 | 检验对比学习鲁棒性 | 代码在仓库；待接入 CH 协议 |
-| M4 | PatchAD | 多尺度 patch、MLP-Mixer、对比学习 | 检验时间尺度与局部 patch 建模 | 待接入 CH 样本级适配器 |
-| S1 | Robust PCA 或 Isolation Forest | 非深度基线 | 排除复杂网络并非必要的情况 | 待接入 CH 适配器 |
+| M2 | TranAD | Transformer 重构 | 标准深度重构路线 | 已接入 CH 样本级适配器 |
+| M3 | DCdetector | 双注意力、对比自监督 | 检验对比学习鲁棒性 | 已接入 CH 协议 |
+| M4 | PatchAD | 多尺度 patch、MLP-Mixer、对比学习 | 检验时间尺度与局部 patch 建模 | 已接入；正式三种子基线待完成 |
+| S1 | Robust PCA 或 Isolation Forest | 非深度基线 | 排除复杂网络并非必要的情况 | 已接入 CH 适配器 |
 | B1 | DyAD | 电池条件—响应建模 | 电池领域专用外部强基线 | 仅在 NC Battery/DyAD 协议中比较 |
 
 规则：
@@ -52,7 +52,7 @@ LFP 与 NCM 都有 charge/discharge 文件。`operation` 不能仅凭文件名�
 - 每个模型都保存逐窗口 raw score；第一轮同时比较片段内 `max`、`mean`、`top 5%` 窗口分数聚合。主结果暂使用 top 5%，并以敏感性表检查结论是否依赖该选择。
 - 阈值敏感性同时报告训练正常与验证正常样本校准的 P95/P99；主阈值为训练正常样本分数 P99。
 - 正式验证集只含正常 VIN，不能定义 validation-optimal threshold。若另用标签选择最优阈值，只能标为 oracle diagnostic，不得参与主结果。
-- 筛选阶段使用 `seed=3407`；确认阶段使用 `3407/3408/3409`。
+- 数据划分与训练正常缩放器固定使用 `split_seed=3407`；筛选阶段使用 `model_seed=3407`，确认阶段使用 `model_seed=3407/3408/3409`。模型 seed 不得改变 VIN 划分。此前将同一 seed 同时用于两者的运行仅作为联合扰动筛选诊断。
 - 每个模型保存逐样本分数、VIN、化学体系、工况、故障类别、严重度、片段长度和窗口尺度。
 
 ## 按观察维度执行的实验计划
@@ -145,5 +145,5 @@ P2 只用于筛选，不进入最终论文矩阵。P3 与 P5 完成后，才决�
 
 - P0：LFP/NCM 数据已就绪；LFP 有 10,000 个原始 CSV，NCM 已从官方数据包提取。
 - M1：历史 LFP 80/20 pilot 已完成；现已接入正式统一 runner，尚待正式 70/10/20 运行。
-- P1 进行中：LFP 的 Isolation Forest、TranAD、DCdetector 单 seed 已完成；NCM 的 Isolation Forest、TranAD 单 seed 已完成，DCdetector 正在运行。所有已完成统一运行均保存逐窗口 raw score、三种片段聚合和正常样本 P95/P99 阈值敏感性结果。
-- 下一项：完成 NCM DCdetector，并运行正式 MTAD-GAT；PatchAD 仍未接入，不能伪装为已比较。
+- P1：历史 MTAD-GAT、TranAD、DCdetector 的三 seed 运行同时改变了模型 seed 与 VIN 划分，只能用作联合扰动诊断；固定 VIN 划分的正式确认待补。PatchAD 已接入。
+- 当前项：固定 `split_seed=3407` 的 LFP 正式预处理包已生成并上传 Kaggle；计划 05/06 将以 `model_seed=3407/3408/3409` 重跑。所有统一运行保存逐窗口 raw score、三种片段聚合和正常样本 P95/P99 阈值敏感性结果。

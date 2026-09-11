@@ -581,6 +581,34 @@ def load_ch_battery_research_split(
         "root": str(root), "chemistry": chemistry, "test_chemistry": test_chemistry, "cycle_kind": cycle_kind, "test_cycle_kind": test_cycle_kind, "seed": int(seed),
     }
 
+
+def load_ch_battery_research_preprocessed_split(preprocessed_root, *, seed):
+    """Load a serialized formal 70/10/20 CH-BatteryGen split.
+
+    The bundle is generated from :func:`load_ch_battery_research_split` on a
+    trusted machine with the raw release.  It contains already train-normal
+    scaled sequences and preserves the VIN split and per-sample metadata, so a
+    remote worker does not need the raw CSV archive.
+    """
+    bundle_path = Path(preprocessed_root).resolve() / f"seed{int(seed)}" / "split.pkl"
+    if not bundle_path.is_file():
+        raise FileNotFoundError(f"Formal CH-BatteryGen preprocessed split not found: {bundle_path}")
+    bundle = _read_pickle(bundle_path)
+    if not isinstance(bundle, dict) or bundle.get("format") != "ch_batterygen_formal_70_10_20_v1":
+        raise ValueError(f"Invalid formal CH-BatteryGen preprocessing bundle: {bundle_path}")
+    split = bundle.get("split")
+    required = {
+        "feature_columns", "train", "validation", "test", "train_metadata",
+        "validation_metadata", "test_metadata", "train_vins", "validation_vins",
+        "test_normal_vins", "chemistry", "test_chemistry", "cycle_kind",
+        "test_cycle_kind", "seed",
+    }
+    if not isinstance(split, dict) or required - set(split):
+        raise ValueError(f"Incomplete formal CH-BatteryGen preprocessing bundle: {bundle_path}")
+    if int(split["seed"]) != int(seed):
+        raise ValueError(f"Formal CH-BatteryGen bundle seed mismatch in {bundle_path}")
+    return split
+
 def aggregate_ch_battery_sample_scores(score_df, topk_ratio=CH_BATTERY_DEFAULT_TOPK_RATIO):
     scores = score_df["A_Score_Global"].to_numpy(dtype=np.float32)
     if scores.size == 0:

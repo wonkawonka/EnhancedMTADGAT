@@ -1,6 +1,6 @@
 {
   "plan_name": "research_02_ch_batterygen_indomain_models",
-  "lifecycle": "mtad_gat_tranad_dcdetector_three_seed_complete__patchad_not_integrated",
+  "lifecycle": "historical_joint_split_model_seed_runs_complete__fixed_split_confirmation_and_patchad_pending",
   "not_for_final_matrix": true,
   "purpose": "建立四个主模型和一个非深度基线的 LFP/NCM 域内可比基线。",
   "requires": [

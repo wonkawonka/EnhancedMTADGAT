@@ -28,7 +28,7 @@ from src.models.unified_external_baselines import (
 
 METHODS = (
     "pca_spe", "usad", "isolation_forest", "auto_encoder", "deep_svdd",
-    "lstm_ad", "gdn", "tranad", "mtad_gat", "anomaly_transformer", "dcdetector", "ganf",
+    "lstm_ad", "gdn", "tranad", "mtad_gat", "anomaly_transformer", "dcdetector", "patchad", "ganf",
 )
 SOURCE = {
     "pca_spe": "sklearn IncrementalPCA/SPE", "isolation_forest": "sklearn IsolationForest",
@@ -36,7 +36,7 @@ SOURCE = {
     "lstm_ad": "PyLink88 recurrent AE compatibility port", "gdn": "Deng2021 learned top-k graph compatibility port",
     "usad": "Audibert2020 two-autoencoder implementation", "tranad": "Tuli2022 self-conditioning compatibility port",
     "mtad_gat": "MTAD-GAT forecasting and reconstruction baseline", "anomaly_transformer": "Anomaly Transformer vendored reference model", "dcdetector": "DCdetector vendored reference model",
-    "ganf": "GANF vendored reference model",
+    "patchad": "PatchAD vendored reference model", "ganf": "GANF vendored reference model",
 }
 
 
@@ -143,6 +143,28 @@ def _association_losses(series, prior, window):
     return series_loss / len(prior), prior_loss / len(prior)
 
 
+def _patchad_losses(outputs, values):
+    """Official PatchAD distribution discrepancy plus reconstruction term."""
+    number, size, number_mx, size_mx, reconstruction = outputs
+
+    def discrepancy(left_list, right_list):
+        total = 0.0
+        for left, right in zip(left_list, right_list):
+            left = left.repeat_interleave(values.shape[1] // left.shape[1], dim=1)
+            right = right.repeat_interleave(values.shape[1] // right.shape[1], dim=1)
+            left = left / torch.clamp(left.sum(-1, keepdim=True), min=1e-8)
+            right = right / torch.clamp(right.sum(-1, keepdim=True), min=1e-8)
+            total = total + _kl(left, right.detach()).mean() - _kl(left.detach(), right).mean()
+        return total / max(1, len(left_list))
+
+    return (
+        discrepancy(number, size),
+        discrepancy(number, size_mx) + discrepancy(number_mx, size),
+        nn.functional.mse_loss(reconstruction, values),
+        reconstruction,
+    )
+
+
 def _fit_pca(data, args):
     values = np.concatenate(data.train_sequences)
     if args.train_sample_limit and len(values) > args.train_sample_limit:
@@ -218,7 +240,7 @@ def _fit_torch(data, args, train_loader, window, device):
         ).to(device)
         model.score_dims = args.mtad_score_dims or list(range(features))
         auxiliary = None
-    elif args.method in {"anomaly_transformer", "dcdetector", "ganf"}:
+    elif args.method in {"anomaly_transformer", "dcdetector", "patchad", "ganf"}:
         model = build_reference_model(args.method, features, window).to(device)
         auxiliary = None
     else:
@@ -229,6 +251,9 @@ def _fit_torch(data, args, train_loader, window, device):
         model.train()
         total = 0.0
         batches = 0
+        dcdetector_series_total = 0.0
+        dcdetector_prior_total = 0.0
+        dcdetector_grad_norm_total = 0.0
         for values, _, _ in train_loader:
             values = values.to(device, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
@@ -261,6 +286,9 @@ def _fit_torch(data, args, train_loader, window, device):
                 series, prior = model(values)
                 series_loss, prior_loss = _association_losses(series, prior, window)
                 loss = prior_loss - series_loss
+            elif args.method == "patchad":
+                patch_num_loss, patch_mix_loss, reconstruction_loss, _ = _patchad_losses(model(values), values)
+                loss = patch_num_loss + 0.3 * patch_mix_loss + reconstruction_loss
             elif args.method == "ganf":
                 adjacency = model.adjacency
                 acyclicity = torch.trace(torch.matrix_exp(adjacency * adjacency)) - adjacency.shape[0]
@@ -269,11 +297,28 @@ def _fit_torch(data, args, train_loader, window, device):
             else:
                 loss = nn.functional.mse_loss(model(values), values)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
+            gradient_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
             total += float(loss.detach())
+            if args.method == "dcdetector":
+                # The detached min-max branches have equal forward values, so
+                # their difference rounds to zero while retaining nonzero
+                # gradients. Report both terms and the pre-clip norm instead.
+                dcdetector_series_total += float(series_loss.detach())
+                dcdetector_prior_total += float(prior_loss.detach())
+                dcdetector_grad_norm_total += float(gradient_norm.detach())
             batches += 1
-        print(f"[{args.method}] epoch={epoch + 1}/{args.epochs} loss={total / max(1, batches):.6f}")
+        if args.method == "dcdetector":
+            divisor = max(1, batches)
+            print(
+                f"[dcdetector] epoch={epoch + 1}/{args.epochs} "
+                f"objective={total / divisor:.6f} "
+                f"series_loss={dcdetector_series_total / divisor:.6f} "
+                f"prior_loss={dcdetector_prior_total / divisor:.6f} "
+                f"grad_norm={dcdetector_grad_norm_total / divisor:.6f}"
+            )
+        else:
+            print(f"[{args.method}] epoch={epoch + 1}/{args.epochs} loss={total / max(1, batches):.6f}")
     return model, auxiliary
 
 
@@ -334,6 +379,16 @@ def _batch_scores(method, model, auxiliary, values, window):
             normalized = current_prior / torch.clamp(current_prior.sum(-1, keepdim=True), min=1e-8)
             association = association + _kl(current_series, normalized.detach()) + _kl(normalized, current_series.detach())
         return torch.softmax(-association.mean(dim=1), dim=-1)[:, -1].detach().cpu().numpy()
+    if method == "patchad":
+        number, size, _, _, reconstruction = model(values)
+        discrepancy = 0.0
+        for left, right in zip(number, size):
+            left = left.repeat_interleave(values.shape[1] // left.shape[1], dim=1)
+            right = right.repeat_interleave(values.shape[1] // right.shape[1], dim=1)
+            left = left / torch.clamp(left.sum(-1, keepdim=True), min=1e-8)
+            right = right / torch.clamp(right.sum(-1, keepdim=True), min=1e-8)
+            discrepancy = discrepancy + (_kl(left, right) + _kl(right, left)).mean(1)
+        return (discrepancy / max(1, len(number)) + (reconstruction - values).square().mean((1, 2))).detach().cpu().numpy()
     if method == "ganf":
         return model.score(values).detach().cpu().numpy()
     return (model(values) - values).square().mean((1, 2)).detach().cpu().numpy()
@@ -618,6 +673,10 @@ def parse_args():
                         help="CH-only fixed-stride temporal decimation after scaling; 1 keeps the native sampling.")
     parser.add_argument("--ch_append_mask_indicators", action="store_true",
                         help="CH-only: append binary MAR missingness indicators to each input channel.")
+    parser.add_argument("--ch_formal_preprocessed_root", default=None,
+                        help="CH-only: root containing formal seed*/split.pkl bundles generated from the 70/10/20 VIN protocol.")
+    parser.add_argument("--ch_split_seed", type=int, default=3407,
+                        help="CH-only: fixed VIN split/scaler seed. Keep this constant while varying --seed for model replication.")
     parser.add_argument("--val_ratio", type=float, default=0.1)
     parser.add_argument("--threshold_quantile", type=float, default=0.99)
     parser.add_argument("--vehicle_top_ratio", type=float, default=0.05)
@@ -673,6 +732,9 @@ def main():
         ch_random_mask_ratio=args.ch_random_mask_ratio,
         ch_append_mask_indicators=args.ch_append_mask_indicators,
         ch_resample_factor=args.ch_resample_factor,
+        ch_use_legacy_preprocessed=args.ch_use_legacy_preprocessed,
+        ch_formal_preprocessed_root=args.ch_formal_preprocessed_root,
+        ch_split_seed=args.ch_split_seed,
     )
     window, stride = _window_and_stride(args)
     include_next = args.method == "gdn"
