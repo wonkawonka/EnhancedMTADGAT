@@ -47,5 +47,12 @@
     "dataset license/source record",
     "entity identifiers",
     "label granularity documentation"
-  ]
+  ],
+  "nasa_official_download_audit": {
+    "source": "https://phm-datasets.s3.amazonaws.com/NASA/5.%20Battery%20Data%20Set.zip",
+    "local_artifact": "datasets/NASA_Battery_Data/raw/nasa_battery_data_set.zip",
+    "sha256": "82302a7db4fc1b34e0b6676326610438d43b816bdf11a69d1d012a464ef2f92e",
+    "result": "ZIP integrity passed, but no CALCE/CS2/CX2 members were present; it is not a CALCE substitute."
+  },
+  "data_availability_audit": "runs/internal/research_09_external_calce/DATA_AVAILABILITY_AUDIT.md"
 }
