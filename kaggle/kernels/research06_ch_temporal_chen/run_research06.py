@@ -5,7 +5,11 @@ def run(c): print("$", " ".join(map(str,c)),flush=True); subprocess.run(c,check=
 assert torch.cuda.is_available(), "GPU must be enabled"
 r=Path("/kaggle/working/EnhancedMTADGAT")
 if r.exists(): shutil.rmtree(r)
-run(["git","clone","--depth","1","--branch","main","https://github.com/wonkawonka/EnhancedMTADGAT.git",str(r)])
+source=list(Path("/kaggle/input").rglob("enhancedmtadgat_source.zip"))
+if len(source)==1:
+ r.mkdir(parents=True); shutil.unpack_archive(source[0],r)
+else:
+ run(["git","clone","--depth","1","--branch","main","https://github.com/wonkawonka/EnhancedMTADGAT.git",str(r)])
 os.chdir(r); run([sys.executable,"-m","pip","install","-q","-r","requirements-kaggle-main.txt"])
 formal=list(Path("/kaggle/input").rglob("formal_lfp"))
 if len(formal) != 1:
