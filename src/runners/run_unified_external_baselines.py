@@ -732,7 +732,6 @@ def main():
         ch_random_mask_ratio=args.ch_random_mask_ratio,
         ch_append_mask_indicators=args.ch_append_mask_indicators,
         ch_resample_factor=args.ch_resample_factor,
-        ch_use_legacy_preprocessed=args.ch_use_legacy_preprocessed,
         ch_formal_preprocessed_root=args.ch_formal_preprocessed_root,
         ch_split_seed=args.ch_split_seed,
     )
