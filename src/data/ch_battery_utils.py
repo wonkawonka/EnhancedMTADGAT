@@ -719,3 +719,63 @@ def save_ch_battery_sample_level_reports(
 
     return report_df, summary
 
+
+
+def load_ch_battery_mixed_normal_research_split(
+    root=None, *, target_chemistry="LFP", cycle_kind="discharge",
+    test_cycle_kind=None, seed=3407, train_ratio=0.70, validation_ratio=0.10,
+):
+    """Leakage-safe mixed-LFP/NCM normal training with target-chemistry testing."""
+    root = Path(root or resolve_dataset_root("CH-BATTERY", "CH-BatteryGen")).resolve()
+    if (root / "V1.0").is_dir():
+        root = root / "V1.0"
+    target_chemistry = str(target_chemistry).upper()
+    if target_chemistry not in {"LFP", "NCM"}:
+        raise ValueError(f"Unsupported target chemistry: {target_chemistry}")
+    cycle_kind = str(cycle_kind).lower()
+    test_cycle_kind = str(test_cycle_kind or cycle_kind).lower()
+    if not (0 < train_ratio < 1 and 0 < validation_ratio < 1 and train_ratio + validation_ratio < 1):
+        raise ValueError("train_ratio and validation_ratio must be positive and sum to less than one")
+
+    manifests, partitions = {}, {}
+    for chemistry in ("LFP", "NCM"):
+        manifest = build_ch_battery_manifest(root, chemistry=chemistry, cycle_kind=cycle_kind)
+        normal = manifest.loc[manifest.sample_label == 0].copy()
+        vins = sorted(normal.vin.unique().tolist())
+        rng = np.random.default_rng(int(seed)); rng.shuffle(vins)
+        n_train = int(np.floor(len(vins) * train_ratio))
+        n_val = int(np.floor(len(vins) * validation_ratio))
+        if min(n_train, n_val, len(vins) - n_train - n_val) < 1:
+            raise ValueError(f"Cannot form 70/10/20 VIN split for {chemistry}")
+        partitions[chemistry] = (sorted(vins[:n_train]), sorted(vins[n_train:n_train + n_val]), sorted(vins[n_train + n_val:]))
+        manifests[chemistry] = normal
+
+    train_manifest = pd.concat([manifests[c][manifests[c].vin.isin(partitions[c][0])] for c in ("LFP", "NCM")], ignore_index=True)
+    validation_manifest = pd.concat([manifests[c][manifests[c].vin.isin(partitions[c][1])] for c in ("LFP", "NCM")], ignore_index=True)
+    target_test_manifest = build_ch_battery_manifest(root, chemistry=target_chemistry, cycle_kind=test_cycle_kind)
+    target_normal = target_test_manifest.loc[target_test_manifest.sample_label == 0]
+    target_faults = target_test_manifest.loc[target_test_manifest.sample_label == 1]
+    test_manifest = pd.concat([target_normal[target_normal.vin.isin(partitions[target_chemistry][2])], target_faults], ignore_index=True).sort_values(["sample_label", "fault_type", "vin", "cycle_index", "sample_id"]).reset_index(drop=True)
+
+    features = _resolve_feature_columns(train_manifest.iloc[0].file_path)
+    feature_indices = _resolve_ch_battery_core_feature_indices(features)
+    features = [features[index] for index in feature_indices]
+    def load_partition(manifest):
+        values, metadata = _build_sample_map(manifest, features)
+        return ({f"{metadata[key]['chemistry']}:{key}": value for key, value in values.items()},
+                {f"{meta['chemistry']}:{key}": {**meta, "sample_id": f"{meta['chemistry']}:{key}"} for key, meta in metadata.items()})
+
+    train_raw, train_meta = load_partition(train_manifest)
+    validation_raw, validation_meta = load_partition(validation_manifest)
+    test_raw, test_meta = load_partition(test_manifest)
+    scaler = MinMaxScaler().fit(flatten_sequence_collection(train_raw.values(), dtype=np.float32))
+    transform = lambda mapping: {key: scaler.transform(value).astype(np.float32, copy=False) for key, value in mapping.items()}
+    return {
+        "feature_columns": features, "train": transform(train_raw), "validation": transform(validation_raw), "test": transform(test_raw),
+        "train_metadata": train_meta, "validation_metadata": validation_meta, "test_metadata": test_meta,
+        "train_vins": {c: partitions[c][0] for c in ("LFP", "NCM")}, "validation_vins": {c: partitions[c][1] for c in ("LFP", "NCM")},
+        "test_normal_vins": {target_chemistry: partitions[target_chemistry][2]},
+        "manifest_counts": {"train": len(train_manifest), "validation": len(validation_manifest), "test": len(test_manifest)},
+        "root": str(root), "chemistry": "LFP+NCM", "test_chemistry": target_chemistry,
+        "cycle_kind": cycle_kind, "test_cycle_kind": test_cycle_kind, "seed": int(seed),
+    }

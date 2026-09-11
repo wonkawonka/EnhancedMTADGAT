@@ -584,7 +584,7 @@ def _final_metrics(data, validation_scores, validation_endpoints, test_scores, t
 def parse_args():
     parser = argparse.ArgumentParser(description="Unified formal external baseline runner")
     parser.add_argument("--method", choices=METHODS, required=True)
-    parser.add_argument("--dataset", choices=("MSL", "SMAP", "SWAT", "WADI", "Brand3", "BMS", "CH_LFP_DISCHARGE", "CH_NCM_DISCHARGE", "CH_LFP_CHARGE", "CH_NCM_CHARGE"), required=True)
+    parser.add_argument("--dataset", choices=("MSL", "SMAP", "SWAT", "WADI", "Brand3", "BMS", "CH_LFP_DISCHARGE", "CH_NCM_DISCHARGE", "CH_LFP_CHARGE", "CH_NCM_CHARGE", "CH_MIXED_LFP_DISCHARGE", "CH_MIXED_NCM_DISCHARGE"), required=True)
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--seed", type=int, default=3407)
     parser.add_argument("--brand_fold", type=int, default=0, choices=range(5))
