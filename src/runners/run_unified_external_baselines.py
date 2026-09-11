@@ -21,20 +21,21 @@ from torch.utils.data import DataLoader, Dataset
 from src.data.external_protocol import ExternalProtocolData, load_external_protocol_data
 from src.data.regime_utils import BMS_REGIME_NAMES, derive_bms_regime_labels
 from src.data.utils import BMS_FEATURE_NAMES
+from src.models.mtad_gat import Enhanced_MTADGAT
 from src.models.unified_external_baselines import (
     DeepSVDDAutoEncoder, build_reconstruction_model, build_reference_model,
 )
 
 METHODS = (
     "pca_spe", "usad", "isolation_forest", "auto_encoder", "deep_svdd",
-    "lstm_ad", "gdn", "tranad", "anomaly_transformer", "dcdetector", "ganf",
+    "lstm_ad", "gdn", "tranad", "mtad_gat", "anomaly_transformer", "dcdetector", "ganf",
 )
 SOURCE = {
     "pca_spe": "sklearn IncrementalPCA/SPE", "isolation_forest": "sklearn IsolationForest",
     "auto_encoder": "Zhang2023 AE compatibility port", "deep_svdd": "Zhang2023 Deep-SVDD compatibility port",
     "lstm_ad": "PyLink88 recurrent AE compatibility port", "gdn": "Deng2021 learned top-k graph compatibility port",
     "usad": "Audibert2020 two-autoencoder implementation", "tranad": "Tuli2022 self-conditioning compatibility port",
-    "anomaly_transformer": "Anomaly Transformer vendored reference model", "dcdetector": "DCdetector vendored reference model",
+    "mtad_gat": "MTAD-GAT forecasting and reconstruction baseline", "anomaly_transformer": "Anomaly Transformer vendored reference model", "dcdetector": "DCdetector vendored reference model",
     "ganf": "GANF vendored reference model",
 }
 
@@ -96,6 +97,23 @@ def _window_and_stride(args):
     if stride <= 0:
         stride = 10 if args.dataset.upper() in {"BMS", "SWAT", "WADI"} else 1
     return window, stride
+
+
+def _filter_short_sequences(data, span):
+    """Apply one explicit minimum-length rule before any window scoring."""
+    def keep(sequences, identifiers, labels=None):
+        selected = [index for index, sequence in enumerate(sequences) if len(sequence) >= span]
+        result_sequences = [sequences[index] for index in selected]
+        result_ids = [identifiers[index] for index in selected]
+        result_labels = None if labels is None else [labels[index] for index in selected]
+        return result_sequences, result_ids, result_labels, len(sequences) - len(selected)
+    data.train_sequences, _, _, train_dropped = keep(data.train_sequences, [str(i) for i in range(len(data.train_sequences))])
+    data.validation_sequences, data.validation_entity_ids, data.validation_labels, validation_dropped = keep(data.validation_sequences, data.validation_entity_ids, data.validation_labels)
+    data.test_sequences, data.entity_ids, data.test_labels, test_dropped = keep(data.test_sequences, data.entity_ids, data.test_labels)
+    if not data.train_sequences or not data.validation_sequences or not data.test_sequences:
+        raise ValueError(f"No usable sequences remain after minimum span={span} filtering")
+    data.metadata['minimum_sequence_span'] = int(span)
+    data.metadata['dropped_short_sequences'] = {'train': train_dropped, 'validation': validation_dropped, 'test': test_dropped}
 
 
 def _loaders(data, args, window, stride, include_next=False):
@@ -189,6 +207,17 @@ def _fit_torch(data, args, train_loader, window, device):
         center[(center.abs() < 0.1) & (center < 0)] = -0.1
         center[(center.abs() < 0.1) & (center >= 0)] = 0.1
         auxiliary = center
+    elif args.method == "mtad_gat":
+        model = Enhanced_MTADGAT(
+            n_features=features, window_size=window, out_dim=features,
+            gru_hid_dim=args.hidden_dim, forecast_hid_dim=args.hidden_dim,
+            recon_hid_dim=args.hidden_dim, dropout=0.2,
+            use_regime_condition=args.mtad_use_regime_condition,
+            regime_encoder_type="restricted", regime_emb_dim=args.mtad_regime_emb_dim,
+            regime_control_indices=args.mtad_regime_control_indices,
+        ).to(device)
+        model.score_dims = args.mtad_score_dims or list(range(features))
+        auxiliary = None
     elif args.method in {"anomaly_transformer", "dcdetector", "ganf"}:
         model = build_reference_model(args.method, features, window).to(device)
         auxiliary = None
@@ -218,6 +247,11 @@ def _fit_torch(data, args, train_loader, window, device):
                 first, second = model(values)
                 target = values[:, -1:]
                 loss = 0.5 * nn.functional.mse_loss(first, target) + 0.5 * nn.functional.mse_loss(second, target)
+            elif args.method == "mtad_gat":
+                forecast, reconstruction = model(values)
+                loss = 0.5 * nn.functional.mse_loss(forecast, values[:, -1]) + 0.5 * nn.functional.mse_loss(reconstruction, values)
+                if args.mtad_use_regime_condition:
+                    loss = loss + args.mtad_regime_aux_lambda * model.regime_auxiliary_loss(values)
             elif args.method == "anomaly_transformer":
                 output, series, prior, _ = model(values)
                 series_loss, prior_loss = _association_losses(series, prior, window)
@@ -277,6 +311,14 @@ def _batch_scores(method, model, auxiliary, values, window):
     if method == "tranad":
         _, output = model(values)
         return (output - values[:, -1:]).square().mean((1, 2)).detach().cpu().numpy()
+    if method == "mtad_gat":
+        forecast, reconstruction = model(values)
+        score_dims = getattr(model, "score_dims", None)
+        if score_dims is None:
+            score_dims = list(range(values.shape[-1]))
+        forecast_error = (forecast[:, score_dims] - values[:, -1, score_dims]).square().mean(1)
+        reconstruction_error = (reconstruction[:, :, score_dims] - values[:, :, score_dims]).square().mean((1, 2))
+        return (0.5 * (forecast_error + reconstruction_error)).detach().cpu().numpy()
     if method == "anomaly_transformer":
         output, series, prior, _ = model(values)
         rec = (output - values).square().mean(-1)
@@ -367,7 +409,89 @@ def _brand3_top_ratio(validation_scores, validation_entities, validation_labels,
     return best_percent / 100.0, "labelled_calibration_vehicle_auroc"
 
 
-def _final_metrics(data, validation_scores, validation_endpoints, test_scores, test_endpoints, args):
+def _topk_sample_score(window_scores, ratio=0.05):
+    values = np.asarray(window_scores, dtype=np.float32)
+    if not len(values):
+        raise ValueError("CH-BatteryGen sequence has no valid windows; lower lookback or inspect segment length")
+    count = max(1, int(np.ceil(len(values) * float(ratio))))
+    return float(np.mean(np.partition(values, -count)[-count:])), count
+
+
+def _ch_aggregate_score(window_scores, mode):
+    values = np.asarray(window_scores, dtype=np.float32)
+    if not len(values):
+        raise ValueError("CH-BatteryGen sequence has no valid windows; lower lookback or inspect segment length")
+    if mode == "max":
+        return float(np.max(values))
+    if mode == "mean":
+        return float(np.mean(values))
+    if mode == "top5pct":
+        return _topk_sample_score(values, 0.05)[0]
+    raise ValueError(f"Unknown CH aggregation {mode}")
+
+
+def _ch_sensitivity_rows(data, train_scores, validation_scores, test_scores):
+    """Compare aggregation and normal-only calibration choices without test labels."""
+    labels = np.asarray([int(np.asarray(x).reshape(-1)[0]) for x in data.test_labels], dtype=np.int32)
+    rows = []
+    for aggregation in ("max", "mean", "top5pct"):
+        train = np.asarray([_ch_aggregate_score(x, aggregation) for x in train_scores])
+        validation = np.asarray([_ch_aggregate_score(x, aggregation) for x in validation_scores])
+        test = np.asarray([_ch_aggregate_score(x, aggregation) for x in test_scores])
+        for calibration_set, calibration in (("training_normal", train), ("validation_normal", validation)):
+            for quantile in (0.95, 0.99):
+                threshold = float(np.quantile(calibration, quantile))
+                pred = test >= threshold
+                tp = int(np.sum(pred & (labels == 1))); fp = int(np.sum(pred & (labels == 0)))
+                fn = int(np.sum(~pred & (labels == 1))); tn = int(np.sum(~pred & (labels == 0)))
+                precision = tp / max(1, tp + fp); recall = tp / max(1, tp + fn)
+                rows.append({"aggregation": aggregation, "calibration_set": calibration_set,
+                             "quantile": quantile, "threshold": threshold,
+                             "sample_auroc": float(roc_auc_score(labels, test)),
+                             "sample_auprc": float(average_precision_score(labels, test)),
+                             "precision": precision, "recall": recall,
+                             "f1": 2 * precision * recall / max(1e-8, precision + recall),
+                             "fpr": fp / max(1, fp + tn),
+                             "threshold_status": "normal_only_calibration"})
+    return rows
+
+
+def _ch_sample_metrics(data, train_scores, test_scores, args):
+    ratio = float(data.metadata.get("topk_ratio", 0.05))
+    calibration = np.asarray([_topk_sample_score(values, ratio)[0] for values in train_scores], dtype=np.float32)
+    threshold = float(np.quantile(calibration, args.threshold_quantile))
+    rows = []
+    for sample_id, windows, label_array in zip(data.entity_ids, test_scores, data.test_labels):
+        score, count = _topk_sample_score(windows, ratio)
+        row = dict(data.metadata["sample_metadata"][sample_id])
+        row.update(score_topk_mean=score, window_count=int(len(windows)), topk_count=count,
+                   sample_label=int(np.asarray(label_array).reshape(-1)[0]), prediction=int(score >= threshold))
+        rows.append(row)
+    labels = np.asarray([row["sample_label"] for row in rows], dtype=np.int32)
+    scores = np.asarray([row["score_topk_mean"] for row in rows], dtype=np.float32)
+    prediction = scores >= threshold
+    tp = int(np.sum(prediction & (labels == 1))); fp = int(np.sum(prediction & (labels == 0)))
+    fn = int(np.sum(~prediction & (labels == 1))); tn = int(np.sum(~prediction & (labels == 0)))
+    precision = tp / max(1, tp + fp); recall = tp / max(1, tp + fn)
+    result = {"dataset": data.dataset, "method": args.method, "seed": args.seed,
+              "evaluation_kind": "sample_ranking", "sample_count": int(len(rows)),
+              "threshold": threshold, "threshold_source": f"training_normal_sample_top5pct_q{args.threshold_quantile:.4f}",
+              "sample_auroc": float(roc_auc_score(labels, scores)), "sample_auprc": float(average_precision_score(labels, scores)),
+              "normal_training_p99_precision": precision, "normal_training_p99_recall": recall,
+              "normal_training_p99_f1": 2 * precision * recall / max(1e-8, precision + recall),
+              "normal_training_p99_fpr": fp / max(1, fp + tn),
+              "fault_count": int(np.sum(labels)), "normal_count": int(np.sum(labels == 0)),
+              "topk_ratio": ratio, "_sample_rows": rows}
+    return result
+
+
+def _final_metrics(data, validation_scores, validation_endpoints, test_scores, test_endpoints, args, train_scores=None):
+    if data.evaluation_kind == "sample_ranking":
+        if train_scores is None:
+            raise ValueError("sample-level CH evaluation requires training normal scores")
+        result = _ch_sample_metrics(data, train_scores, test_scores, args)
+        result["_sensitivity_rows"] = _ch_sensitivity_rows(data, train_scores, validation_scores, test_scores)
+        return result
     if data.evaluation_kind == "point_ranking":
         validation_flat = np.concatenate(validation_scores)
         scores = np.concatenate(test_scores)
@@ -460,7 +584,7 @@ def _final_metrics(data, validation_scores, validation_endpoints, test_scores, t
 def parse_args():
     parser = argparse.ArgumentParser(description="Unified formal external baseline runner")
     parser.add_argument("--method", choices=METHODS, required=True)
-    parser.add_argument("--dataset", choices=("MSL", "SMAP", "SWAT", "WADI", "Brand3", "BMS"), required=True)
+    parser.add_argument("--dataset", choices=("MSL", "SMAP", "SWAT", "WADI", "Brand3", "BMS", "CH_LFP_DISCHARGE", "CH_NCM_DISCHARGE", "CH_LFP_CHARGE", "CH_NCM_CHARGE"), required=True)
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--seed", type=int, default=3407)
     parser.add_argument("--brand_fold", type=int, default=0, choices=range(5))
@@ -485,6 +609,15 @@ def parse_args():
         default="",
         help="Optional comma-separated input dimensions. Empty keeps all features; use 0 for dim0-only.",
     )
+    parser.add_argument("--ch_train_cycle_kind", choices=("charge", "discharge"), default=None)
+    parser.add_argument("--ch_test_cycle_kind", choices=("charge", "discharge"), default=None)
+    parser.add_argument("--ch_test_chemistry", choices=("LFP", "NCM"), default=None)
+    parser.add_argument("--ch_random_mask_ratio", type=float, default=0.0,
+                        help="CH-only MAR value-mask ratio after train-normal-only scaling; masked values are zero-imputed.")
+    parser.add_argument("--ch_resample_factor", type=int, default=1,
+                        help="CH-only fixed-stride temporal decimation after scaling; 1 keeps the native sampling.")
+    parser.add_argument("--ch_append_mask_indicators", action="store_true",
+                        help="CH-only: append binary MAR missingness indicators to each input channel.")
     parser.add_argument("--val_ratio", type=float, default=0.1)
     parser.add_argument("--threshold_quantile", type=float, default=0.99)
     parser.add_argument("--vehicle_top_ratio", type=float, default=0.05)
@@ -495,6 +628,11 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--learning_rate", type=float, default=1e-3)
     parser.add_argument("--hidden_dim", type=int, default=64)
+    parser.add_argument("--mtad_use_regime_condition", action="store_true")
+    parser.add_argument("--mtad_regime_emb_dim", type=int, default=8)
+    parser.add_argument("--mtad_regime_aux_lambda", type=float, default=0.05)
+    parser.add_argument("--mtad_regime_control_indices", type=lambda x: [int(v) for v in x.split(',')], default=None)
+    parser.add_argument("--mtad_score_dims", type=lambda x: [int(v) for v in x.split(',')], default=None)
     parser.add_argument("--latent_dim", type=int, default=32)
     parser.add_argument("--pca_components", type=int, default=8)
     parser.add_argument("--isolation_trees", type=int, default=200)
@@ -529,10 +667,18 @@ def main():
         brand_fold_seed=args.brand_fold_seed,
         feature_indices=feature_indices,
         brand_normalization=args.brand_normalization,
+        ch_train_cycle_kind=args.ch_train_cycle_kind,
+        ch_test_cycle_kind=args.ch_test_cycle_kind,
+        ch_test_chemistry=args.ch_test_chemistry,
+        ch_random_mask_ratio=args.ch_random_mask_ratio,
+        ch_append_mask_indicators=args.ch_append_mask_indicators,
+        ch_resample_factor=args.ch_resample_factor,
     )
     window, stride = _window_and_stride(args)
     include_next = args.method == "gdn"
+    _filter_short_sequences(data, window + int(include_next))
     train_loader, validation_loader, test_loader = _loaders(data, args, window, stride, include_next)
+    train_score_loader = DataLoader(WindowDataset(data.train_sequences, window=window, stride=stride, seed=args.seed, include_next=include_next), batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=args.use_cuda)
     load_seconds = time.perf_counter() - started
     training_started = time.perf_counter()
     auxiliary = None
@@ -565,9 +711,31 @@ def main():
     else:
         validation_scores, validation_endpoints = _score_loader(args.method, model, auxiliary, validation_loader, device, len(data.validation_sequences))
         test_scores, test_endpoints = _score_loader(args.method, model, auxiliary, test_loader, device, len(data.test_sequences))
+    train_scores = None
+    if data.evaluation_kind == "sample_ranking":
+        if args.method == "isolation_forest":
+            train_point_scores = _score_isolation_points(model, data.train_sequences)
+            train_scores, _ = _point_scores_to_windows(train_point_scores, window, stride)
+        elif args.method == "pca_spe":
+            train_scores, _ = _score_pca_loader(model, train_score_loader, len(data.train_sequences))
+        else:
+            train_scores, _ = _score_loader(args.method, model, auxiliary, train_score_loader, device, len(data.train_sequences))
     inference_seconds = time.perf_counter() - inference_started
-    metrics = _final_metrics(data, validation_scores, validation_endpoints, test_scores, test_endpoints, args)
+    metrics = _final_metrics(data, validation_scores, validation_endpoints, test_scores, test_endpoints, args, train_scores=train_scores)
+    sample_rows = metrics.pop("_sample_rows", None)
+    sensitivity_rows = metrics.pop("_sensitivity_rows", None)
     output = Path(args.output_dir); output.mkdir(parents=True, exist_ok=True)
+    if sample_rows is not None:
+        import pandas as pd
+        pd.DataFrame(sample_rows).sort_values(["score_topk_mean", "sample_id"], ascending=[False, True]).to_csv(output / "ch_battery_sample_scores.csv", index=False)
+    if sensitivity_rows is not None:
+        import pandas as pd
+        pd.DataFrame(sensitivity_rows).to_csv(output / "aggregation_threshold_sensitivity.csv", index=False)
+        (output / "aggregation_threshold_sensitivity.json").write_text(json.dumps({
+            "purpose": "Aggregation and normal-only calibration sensitivity; not a model-ranking table.",
+            "validation_optimal_threshold": "not computed: validation contains normal VINs only; label-optimized thresholds would be oracle diagnostics.",
+            "rows": sensitivity_rows,
+        }, indent=2, default=lambda value: value.tolist() if hasattr(value, "tolist") else str(value)), encoding="utf-8")
     runtime = {
         "device": str(device), "data_loading_seconds": load_seconds, "training_seconds": training_seconds,
         "inference_seconds": inference_seconds, "model_parameters": int(sum(p.numel() for p in model.parameters())) if isinstance(model, nn.Module) else 0,
@@ -594,6 +762,11 @@ def main():
             np.full(len(scores), int(np.asarray(data.test_labels[index]).reshape(-1)[0]), dtype=np.int32)
             for index, scores in enumerate(test_scores)
         ])
+    if data.evaluation_kind == "sample_ranking":
+        np.savez_compressed(output / "train_scores.npz", scores=np.concatenate(train_scores),
+                            sequence_ids=np.concatenate([np.full(len(x), i, dtype=np.int32) for i, x in enumerate(train_scores)]))
+        np.savez_compressed(output / "validation_scores.npz", scores=np.concatenate(validation_scores),
+                            sequence_ids=np.concatenate([np.full(len(x), i, dtype=np.int32) for i, x in enumerate(validation_scores)]))
     np.savez_compressed(
         output / "scores.npz", scores=np.concatenate(test_scores), endpoints=np.concatenate(test_endpoints),
         sequence_ids=test_sequence_ids, entity_ids=test_entities, labels=score_labels,

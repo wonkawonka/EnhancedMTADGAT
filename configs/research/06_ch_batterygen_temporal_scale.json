@@ -1,0 +1,109 @@
+{
+  "plan_name": "research_06_ch_batterygen_temporal_scale",
+  "lifecycle": "window_stride_resampling_and_observation_length_screening_complete__three_seed_confirmation_pending",
+  "not_for_final_matrix": true,
+  "purpose": "判断窗口尺度、采样尺度和片段观测长度是否系统性影响异常检测。",
+  "label_boundary": "CH-BatteryGen 当前为片段级故障标签；本计划评估观测片段长度，不将其称为故障发生持续时间或检测延迟。",
+  "datasets": [
+    "CH-BatteryGen LFP discharge",
+    "CH-BatteryGen NCM discharge"
+  ],
+  "models": [
+    "M1",
+    "M2",
+    "M3",
+    "M4"
+  ],
+  "cases": {
+    "lookback": [
+      8,
+      16,
+      32,
+      64
+    ],
+    "window_stride": [
+      1,
+      4,
+      8
+    ],
+    "resampling_factor": [
+      1,
+      2,
+      4
+    ],
+    "observation_length_groups": [
+      "short",
+      "medium",
+      "long"
+    ]
+  },
+  "metrics": [
+    "AUROC",
+    "AUPRC",
+    "recall_by_observation_length",
+    "compute_cost"
+  ],
+  "failure_rule": "固定尺度模型在多个设置中对某一观测长度组稳定失效，而多尺度模型不能充分恢复。",
+  "seeds": {
+    "screening": [
+      3407
+    ],
+    "confirmation": [
+      3407,
+      3408,
+      3409
+    ]
+  },
+  "completed_cases": {
+    "isolation_forest": [
+      {
+        "lookback": 8,
+        "stride": 4
+      },
+      {
+        "lookback": 32,
+        "stride": 4
+      },
+      {
+        "lookback": 64,
+        "stride": 4
+      }
+    ],
+    "mtad_gat": [
+      {
+        "lookback": 8,
+        "stride": 4
+      },
+      {
+        "lookback": 32,
+        "stride": 4
+      },
+      {
+        "lookback": 64,
+        "stride": 4
+      },
+      {
+        "lookback": 32,
+        "stride": 1
+      },
+      {
+        "lookback": 32,
+        "stride": 8
+      },
+      {
+        "lookback": 32,
+        "stride": 4,
+        "resample_factor": 2
+      },
+      {
+        "lookback": 32,
+        "stride": 4,
+        "resample_factor": 4
+      }
+    ]
+  },
+  "screening_report": "runs/internal/research_06_ch_batterygen_temporal_scale/lfp/WINDOW_ENDPOINT_SCREENING_REPORT.md",
+  "stride_screening_report": "runs/internal/research_06_ch_batterygen_temporal_scale/lfp/STRIDE_SCREENING_REPORT.md",
+  "resampling_report": "runs/internal/research_06_ch_batterygen_temporal_scale/lfp/RESAMPLING_SCREENING_REPORT.md",
+  "observation_length_report": "runs/internal/research_06_ch_batterygen_temporal_scale/lfp/OBSERVATION_LENGTH_REPORT.md"
+}

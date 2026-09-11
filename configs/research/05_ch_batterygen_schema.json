@@ -1,0 +1,106 @@
+{
+  "plan_name": "research_05_ch_batterygen_schema",
+  "lifecycle": "isolation_forest_all_schema_cases_and_mtad_gat_random_mask_screening_complete__missingness_aware_model_and_three_seed_confirmation_pending",
+  "not_for_final_matrix": true,
+  "purpose": "测量变量缺失与变量职责变化下的检测鲁棒性。",
+  "datasets": [
+    "CH-BatteryGen LFP discharge",
+    "CH-BatteryGen NCM discharge"
+  ],
+  "models": [
+    "M1",
+    "M2",
+    "M3",
+    "M4"
+  ],
+  "base_features": [
+    "SUM_VOLTAGE",
+    "SUM_CURRENT",
+    "SOC",
+    "MAX_CELL_VOLT",
+    "MIN_CELL_VOLT",
+    "MAX_TEMP",
+    "MIN_TEMP"
+  ],
+  "cases": [
+    {
+      "id": "full",
+      "kind": "full_feature_set"
+    },
+    {
+      "id": "controls_only",
+      "keep": [
+        "SUM_CURRENT",
+        "SOC"
+      ]
+    },
+    {
+      "id": "responses_only",
+      "drop": [
+        "SUM_CURRENT",
+        "SOC"
+      ]
+    },
+    {
+      "id": "drop_voltage_extrema",
+      "drop": [
+        "MAX_CELL_VOLT",
+        "MIN_CELL_VOLT"
+      ]
+    },
+    {
+      "id": "drop_temperature_extrema",
+      "drop": [
+        "MAX_TEMP",
+        "MIN_TEMP"
+      ]
+    },
+    {
+      "id": "random_mask_10",
+      "kind": "random_feature_mask",
+      "ratio": 0.1
+    },
+    {
+      "id": "random_mask_25",
+      "kind": "random_feature_mask",
+      "ratio": 0.25
+    },
+    {
+      "id": "random_mask_50",
+      "kind": "random_feature_mask",
+      "ratio": 0.5
+    }
+  ],
+  "metrics": [
+    "AUROC",
+    "AUPRC",
+    "robustness_ratio_AUPRC",
+    "source_P99_FPR"
+  ],
+  "robustness_ratio": "masked AUPRC divided by full-feature AUPRC",
+  "seeds": {
+    "screening": [
+      3407
+    ],
+    "confirmation": [
+      3407,
+      3408,
+      3409
+    ]
+  },
+  "completed_cases": [
+    "full",
+    "controls_only",
+    "responses_only",
+    "drop_voltage_extrema",
+    "drop_temperature_extrema",
+    "random_mask_10",
+    "random_mask_25",
+    "random_mask_50"
+  ],
+  "screening_report": "runs/internal/research_05_ch_batterygen_schema/lfp/ISOLATION_FOREST_DETERMINISTIC_SCREENING_REPORT.md",
+  "adapter_support": "--feature_dims now selects CH-BatteryGen dimensions after training-normal-only scaling; selected names and indices are written to run config metadata.",
+  "random_mask_protocol": "MAR value-level mask after train-normal-only MinMax scaling; independently generated per partition with seed offsets; masked values zero-imputed; no labels used.",
+  "mtad_gat_missingness_report": "runs/internal/research_05_ch_batterygen_schema/lfp/MTAD_GAT_RANDOM_MASK_SCREENING_REPORT.md",
+  "finding": "Response-score MTAD-GAT ranking collapses under 10/25/50% zero-imputed MAR masking, motivating explicit missingness-aware modeling."
+}

@@ -171,7 +171,15 @@ def build_reference_model(method: str, features: int, window: int):
     if method == "dcdetector":
         directory = PROJECT_ROOT / "external_baselines" / "DCdetector" / "model"
         module = _load_relative_module("_unified_dcdetector", directory, "DCdetector")
+        # DCdetector requires every patch size to divide the input window.
+        # Keep the original 5/10/20 scales when possible; use three dyadic
+        # scales for short research windows such as 32 rather than constructing
+        # an empty encoder list.
         patch_sizes = [size for size in (5, 10, 20) if window % size == 0]
+        if not patch_sizes:
+            patch_sizes = [size for size in (4, 8, 16) if window % size == 0]
+        if not patch_sizes:
+            raise ValueError(f"DCdetector requires a window divisible by a supported patch size, got {window}")
         return module.DCdetector(
             win_size=window, enc_in=features, c_out=features, channel=features,
             d_model=256, n_heads=1, e_layers=3, patch_size=patch_sizes,

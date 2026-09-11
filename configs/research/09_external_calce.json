@@ -1,0 +1,51 @@
+{
+  "plan_name": "research_09_external_calce",
+  "lifecycle": "blocked_pending_calce_raw_data_and_label_audit",
+  "not_for_final_matrix": true,
+  "purpose": "在实验室退化数据上确认慢变或微弱异常相关发现。",
+  "dataset": "CALCE battery anomaly/degradation data",
+  "preconditions": [
+    "raw data available",
+    "entity-level split possible",
+    "label granularity documented"
+  ],
+  "models": [
+    "selected_proposed_model",
+    "M1",
+    "M2",
+    "M3",
+    "M4",
+    "S1"
+  ],
+  "metrics_by_label_granularity": {
+    "event_or_timestamp_labels": [
+      "event_recall",
+      "detection_delay",
+      "AUPRC"
+    ],
+    "sequence_labels_only": [
+      "sequence_AUROC",
+      "sequence_AUPRC",
+      "recall_by_observation_length"
+    ]
+  },
+  "restriction": "在完成标签审计前，不预设时间点级指标或提前预警结论。",
+  "local_data_audit": {
+    "date": "2026-09-11",
+    "searched_roots": [
+      "datasets/"
+    ],
+    "patterns": [
+      "*calce*",
+      "*cs2*",
+      "*cx2*"
+    ],
+    "result": "no matching local raw data found; no entity split or label granularity can be audited"
+  },
+  "blocking_requirements": [
+    "CALCE raw data",
+    "dataset license/source record",
+    "entity identifiers",
+    "label granularity documentation"
+  ]
+}

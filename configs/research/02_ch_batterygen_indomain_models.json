@@ -1,0 +1,256 @@
+{
+  "plan_name": "research_02_ch_batterygen_indomain_models",
+  "lifecycle": "mtad_gat_tranad_dcdetector_three_seed_complete__patchad_not_integrated",
+  "not_for_final_matrix": true,
+  "purpose": "建立四个主模型和一个非深度基线的 LFP/NCM 域内可比基线。",
+  "requires": [
+    "CH-BatteryGen unified sample-level adapter",
+    "VIN split manifest shared by all models"
+  ],
+  "datasets": [
+    {
+      "chemistry": "LFP",
+      "cycle_kind": "discharge",
+      "normal_vins": 400,
+      "fault_vins": 100
+    },
+    {
+      "chemistry": "NCM",
+      "cycle_kind": "discharge",
+      "normal_vins": 400,
+      "fault_vins": 100
+    }
+  ],
+  "protocol": {
+    "normal_vin_split": "70 percent train, 10 percent validation, 20 percent test; VIN-disjoint",
+    "train": "normal training VINs only",
+    "validation": "normal validation VINs only; used for early stopping and optional target-normal calibration diagnostics",
+    "test": "held-out normal test VINs plus all fault VINs",
+    "input_features": [
+      "SUM_VOLTAGE",
+      "SUM_CURRENT",
+      "SOC",
+      "MAX_CELL_VOLT",
+      "MIN_CELL_VOLT",
+      "MAX_TEMP",
+      "MIN_TEMP"
+    ],
+    "window_score_aggregation": "top5pct_mean",
+    "metrics": [
+      "AUROC",
+      "AUPRC",
+      "normal_training_P99_precision",
+      "normal_training_P99_recall",
+      "normal_training_P99_FPR"
+    ]
+  },
+  "models": [
+    "M1",
+    "M2",
+    "M3",
+    "M4",
+    "S1"
+  ],
+  "screening_matrix": {
+    "chemistry": [
+      "LFP",
+      "NCM"
+    ],
+    "model": [
+      "M1",
+      "M2",
+      "M3",
+      "M4",
+      "S1"
+    ],
+    "seeds": [
+      3407
+    ]
+  },
+  "confirmation_matrix": {
+    "chemistry": [
+      "LFP",
+      "NCM"
+    ],
+    "model": [
+      "M1",
+      "M2",
+      "M3",
+      "M4"
+    ],
+    "seeds": [
+      3407,
+      3408,
+      3409
+    ]
+  },
+  "outputs": [
+    "sample_scores",
+    "summary",
+    "fault_type_summary",
+    "run_metadata"
+  ],
+  "current_completed_runs": [
+    {
+      "dataset": "CH-BatteryGen LFP discharge",
+      "model": "S1 Isolation Forest",
+      "seed": 3407,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; window=32 stride=4",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/lfp/isolation_forest_seed3407",
+      "note": "Includes raw window scores and aggregation/normal-calibration sensitivity table."
+    },
+    {
+      "dataset": "CH-BatteryGen LFP discharge",
+      "model": "M2 TranAD",
+      "seed": 3407,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; native window=10, stride=4",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/lfp/tranad_seed3407",
+      "note": "GPU run; raw window scores and aggregation/normal-calibration sensitivity table saved."
+    },
+    {
+      "dataset": "CH-BatteryGen LFP discharge",
+      "model": "M3 DCdetector",
+      "seed": 3407,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; window=32, stride=4; patch scales=4/8/16",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/lfp/dcdetector_seed3407",
+      "note": "GPU run. Raw scores have non-zero variance; sensitivity table saved. The near-zero formatted training loss is an implementation diagnostic, not a performance result."
+    },
+    {
+      "dataset": "CH-BatteryGen NCM discharge",
+      "model": "S1 Isolation Forest",
+      "seed": 3407,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; window=32 stride=4",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/ncm/isolation_forest_seed3407",
+      "note": "CPU run; raw window scores and aggregation/normal-calibration sensitivity table saved."
+    },
+    {
+      "dataset": "CH-BatteryGen NCM discharge",
+      "model": "M2 TranAD",
+      "seed": 3407,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; native window=10, stride=4",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/ncm/tranad_seed3407",
+      "note": "GPU run; raw window scores and aggregation/normal-calibration sensitivity table saved."
+    },
+    {
+      "dataset": "CH-BatteryGen NCM discharge",
+      "model": "M3 DCdetector",
+      "seed": 3407,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; window=32, stride=4; patch scales=4/8/16",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/ncm/dcdetector_seed3407",
+      "note": "GPU run; raw scores and aggregation/normal-calibration sensitivity table saved."
+    },
+    {
+      "dataset": "CH-BatteryGen LFP discharge",
+      "model": "M1 MTAD-GAT",
+      "seed": 3407,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; window=32, stride=4; prediction/reconstruction score",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/lfp/mtad_gat_seed3407",
+      "note": "GPU run via the unified adapter; raw window scores and aggregation/normal-calibration sensitivity table saved."
+    },
+    {
+      "dataset": "CH-BatteryGen NCM discharge",
+      "model": "M1 MTAD-GAT",
+      "seed": 3407,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; window=32, stride=4; prediction/reconstruction score",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/ncm/mtad_gat_seed3407",
+      "note": "GPU run via unified adapter; raw window scores and aggregation/normal-calibration sensitivity table saved."
+    },
+    {
+      "dataset": "CH-BatteryGen LFP discharge",
+      "model": "M1 MTAD-GAT",
+      "seed": 3408,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; saved raw window scores; top5pct aggregation and training-normal P99 threshold",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/lfp/mtad_gat_seed3408",
+      "note": "Formal confirmation run."
+    },
+    {
+      "dataset": "CH-BatteryGen LFP discharge",
+      "model": "M1 MTAD-GAT",
+      "seed": 3409,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; saved raw window scores; top5pct aggregation and training-normal P99 threshold",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/lfp/mtad_gat_seed3409",
+      "note": "Formal confirmation run."
+    },
+    {
+      "dataset": "CH-BatteryGen LFP discharge",
+      "model": "M2 TranAD",
+      "seed": 3408,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; saved raw window scores; top5pct aggregation and training-normal P99 threshold",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/lfp/tranad_seed3408",
+      "note": "Formal confirmation run."
+    },
+    {
+      "dataset": "CH-BatteryGen LFP discharge",
+      "model": "M2 TranAD",
+      "seed": 3409,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; saved raw window scores; top5pct aggregation and training-normal P99 threshold",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/lfp/tranad_seed3409",
+      "note": "Formal confirmation run."
+    },
+    {
+      "dataset": "CH-BatteryGen LFP discharge",
+      "model": "M3 DCdetector",
+      "seed": 3408,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; saved raw window scores; top5pct aggregation and training-normal P99 threshold",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/lfp/dcdetector_seed3408",
+      "note": "Formal confirmation run."
+    },
+    {
+      "dataset": "CH-BatteryGen LFP discharge",
+      "model": "M3 DCdetector",
+      "seed": 3409,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; saved raw window scores; top5pct aggregation and training-normal P99 threshold",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/lfp/dcdetector_seed3409",
+      "note": "Formal confirmation run."
+    },
+    {
+      "dataset": "CH-BatteryGen NCM discharge",
+      "model": "M1 MTAD-GAT",
+      "seed": 3408,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; saved raw window scores; top5pct aggregation and training-normal P99 threshold",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/ncm/mtad_gat_seed3408",
+      "note": "Formal confirmation run."
+    },
+    {
+      "dataset": "CH-BatteryGen NCM discharge",
+      "model": "M1 MTAD-GAT",
+      "seed": 3409,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; saved raw window scores; top5pct aggregation and training-normal P99 threshold",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/ncm/mtad_gat_seed3409",
+      "note": "Formal confirmation run."
+    },
+    {
+      "dataset": "CH-BatteryGen NCM discharge",
+      "model": "M2 TranAD",
+      "seed": 3408,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; saved raw window scores; top5pct aggregation and training-normal P99 threshold",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/ncm/tranad_seed3408",
+      "note": "Formal confirmation run."
+    },
+    {
+      "dataset": "CH-BatteryGen NCM discharge",
+      "model": "M2 TranAD",
+      "seed": 3409,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; saved raw window scores; top5pct aggregation and training-normal P99 threshold",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/ncm/tranad_seed3409",
+      "note": "Formal confirmation run."
+    },
+    {
+      "dataset": "CH-BatteryGen NCM discharge",
+      "model": "M3 DCdetector",
+      "seed": 3408,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; saved raw window scores; top5pct aggregation and training-normal P99 threshold",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/ncm/dcdetector_seed3408",
+      "note": "Formal confirmation run."
+    },
+    {
+      "dataset": "CH-BatteryGen NCM discharge",
+      "model": "M3 DCdetector",
+      "seed": 3409,
+      "protocol": "VIN-disjoint 70/10/20; training-normal MinMax; saved raw window scores; top5pct aggregation and training-normal P99 threshold",
+      "output": "runs/internal/research_02_ch_batterygen_indomain_models/ncm/dcdetector_seed3409",
+      "note": "Formal confirmation run."
+    }
+  ],
+  "completion_notes": "M1 MTAD-GAT, M2 TranAD, and M3 DCdetector completed for LFP/NCM seeds 3407/3408/3409 under the fixed protocol. M4 PatchAD is not present in this repository and remains pending; it must not be represented as evaluated."
+}

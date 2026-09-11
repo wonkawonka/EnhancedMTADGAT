@@ -518,6 +518,69 @@ def get_ch_battery_lfp_discharge_data(
     return (train_data_map, None), (test_data_map, None if test_label is None else np.asarray(test_label, dtype=np.int32)), split_meta
 
 
+
+def load_ch_battery_research_split(
+    root=None,
+    *,
+    chemistry="LFP",
+    cycle_kind="discharge",
+    test_cycle_kind=None,
+    test_chemistry=None,
+    seed=3407,
+    train_ratio=0.70,
+    validation_ratio=0.10,
+):
+    """Load the formal CH-BatteryGen split without using fault labels in fitting.
+
+    Normal VINs are randomly partitioned into train/validation/test. All fault
+    VINs appear only in test. Scaling is fitted strictly on train normal VINs.
+    """
+    root = Path(root or resolve_dataset_root("CH-BATTERY", "CH-BatteryGen")).resolve()
+    if (root / "V1.0").is_dir():
+        root = root / "V1.0"
+    chemistry = str(chemistry).upper()
+    test_chemistry = str(test_chemistry or chemistry).upper()
+    cycle_kind = str(cycle_kind).lower()
+    test_cycle_kind = str(test_cycle_kind or cycle_kind).lower()
+    if not (0 < train_ratio < 1 and 0 < validation_ratio < 1 and train_ratio + validation_ratio < 1):
+        raise ValueError("train_ratio and validation_ratio must be positive and sum to less than one")
+    train_manifest_all = build_ch_battery_manifest(root, chemistry=chemistry, cycle_kind=cycle_kind)
+    test_manifest_all = train_manifest_all if test_cycle_kind == cycle_kind and test_chemistry == chemistry else build_ch_battery_manifest(
+        root, chemistry=test_chemistry, cycle_kind=test_cycle_kind
+    )
+    normal = train_manifest_all.loc[train_manifest_all.sample_label == 0].copy()
+    test_normal = test_manifest_all.loc[test_manifest_all.sample_label == 0].copy()
+    faults = test_manifest_all.loc[test_manifest_all.sample_label == 1].copy()
+    vins = sorted(normal.vin.unique().tolist())
+    rng = np.random.default_rng(int(seed)); rng.shuffle(vins)
+    n = len(vins)
+    n_train = int(np.floor(n * train_ratio)); n_val = int(np.floor(n * validation_ratio))
+    if min(n_train, n_val, n - n_train - n_val) < 1:
+        raise ValueError(f"Cannot form 70/10/20 VIN split from {n} normal VINs")
+    train_vins, validation_vins, test_vins = (
+        sorted(vins[:n_train]), sorted(vins[n_train:n_train + n_val]), sorted(vins[n_train + n_val:])
+    )
+    train_manifest = normal[normal.vin.isin(train_vins)].copy()
+    validation_manifest = normal[normal.vin.isin(validation_vins)].copy()
+    test_manifest = pd.concat([test_normal[test_normal.vin.isin(test_vins)], faults], ignore_index=True)
+    test_manifest = test_manifest.sort_values(["sample_label", "fault_type", "vin", "cycle_index", "sample_id"]).reset_index(drop=True)
+    features = _resolve_feature_columns(train_manifest.iloc[0].file_path)
+    train_map_raw, train_meta = _build_sample_map(train_manifest, features)
+    feature_indices = _resolve_ch_battery_core_feature_indices(features)
+    features = [features[idx] for idx in feature_indices]
+    train_map = _slice_sample_map_features(train_map_raw, feature_indices)
+    validation_map, validation_meta = _build_sample_map(validation_manifest, features)
+    test_map, test_meta = _build_sample_map(test_manifest, features)
+    scaler = MinMaxScaler().fit(flatten_sequence_collection(train_map.values(), dtype=np.float32))
+    transform = lambda mapping: {k: scaler.transform(v).astype(np.float32, copy=False) for k, v in mapping.items()}
+    return {
+        "feature_columns": features, "train": transform(train_map), "validation": transform(validation_map), "test": transform(test_map),
+        "train_metadata": train_meta, "validation_metadata": validation_meta, "test_metadata": test_meta,
+        "train_vins": train_vins, "validation_vins": validation_vins, "test_normal_vins": test_vins,
+        "manifest_counts": {"train": len(train_manifest), "validation": len(validation_manifest), "test": len(test_manifest)},
+        "root": str(root), "chemistry": chemistry, "test_chemistry": test_chemistry, "cycle_kind": cycle_kind, "test_cycle_kind": test_cycle_kind, "seed": int(seed),
+    }
+
 def aggregate_ch_battery_sample_scores(score_df, topk_ratio=CH_BATTERY_DEFAULT_TOPK_RATIO):
     scores = score_df["A_Score_Global"].to_numpy(dtype=np.float32)
     if scores.size == 0:
@@ -550,14 +613,45 @@ def _best_f1_from_scores(labels, scores):
     f1_values = (2.0 * precision[:-1] * recall[:-1]) / np.clip(precision[:-1] + recall[:-1], 1e-8, None)
     best_index = int(np.nanargmax(f1_values))
     return {
-        "best_f1": float(f1_values[best_index]),
-        "best_threshold": float(thresholds[best_index]),
-        "best_precision": float(precision[best_index]),
-        "best_recall": float(recall[best_index]),
+        "oracle_best_f1": float(f1_values[best_index]),
+        "oracle_best_threshold": float(thresholds[best_index]),
+        "oracle_best_precision": float(precision[best_index]),
+        "oracle_best_recall": float(recall[best_index]),
     }
 
 
-def save_ch_battery_sample_level_reports(save_path, sample_rows, score_field="score_topk_mean"):
+def _normal_calibrated_metrics(labels, scores, normal_calibration_scores, quantile=0.99):
+    """Evaluate a frozen normal-only threshold without consulting test labels."""
+    normal_calibration_scores = np.asarray(normal_calibration_scores, dtype=np.float32)
+    if normal_calibration_scores.size == 0:
+        return {}
+    threshold = float(np.quantile(normal_calibration_scores, quantile))
+    predictions = np.asarray(scores >= threshold, dtype=np.int32)
+    labels = np.asarray(labels, dtype=np.int32)
+    positives = predictions == 1
+    true_positive = int(np.sum(positives & (labels == 1)))
+    false_positive = int(np.sum(positives & (labels == 0)))
+    false_negative = int(np.sum((predictions == 0) & (labels == 1)))
+    true_negative = int(np.sum((predictions == 0) & (labels == 0)))
+    precision = true_positive / max(true_positive + false_positive, 1)
+    recall = true_positive / max(true_positive + false_negative, 1)
+    return {
+        "normal_calibration": "training_normal_samples_only",
+        "normal_calibration_quantile": float(quantile),
+        "normal_calibration_threshold": threshold,
+        "normal_calibrated_precision": float(precision),
+        "normal_calibrated_recall": float(recall),
+        "normal_calibrated_f1": float(2.0 * precision * recall / max(precision + recall, 1e-8)),
+        "normal_calibrated_fpr": float(false_positive / max(false_positive + true_negative, 1)),
+    }
+
+
+def save_ch_battery_sample_level_reports(
+    save_path,
+    sample_rows,
+    score_field="score_topk_mean",
+    normal_calibration_scores=None,
+):
     save_path = Path(save_path)
     save_path.mkdir(parents=True, exist_ok=True)
 
@@ -583,6 +677,8 @@ def save_ch_battery_sample_level_reports(save_path, sample_rows, score_field="sc
         summary["sample_auroc"] = float(roc_auc_score(labels, scores))
         summary["sample_auprc"] = float(average_precision_score(labels, scores))
         summary.update(_best_f1_from_scores(labels, scores))
+    if normal_calibration_scores is not None:
+        summary.update(_normal_calibrated_metrics(labels, scores, normal_calibration_scores))
 
     fault_type_summary = (
         report_df.groupby("fault_type")[["sample_label", "score_max", "score_p95", "score_topk_mean"]]
@@ -611,10 +707,15 @@ def save_ch_battery_sample_level_reports(save_path, sample_rows, score_field="sc
     if "sample_auroc" in summary:
         lines.append(f"- sample_auroc: {summary['sample_auroc']:.4f}")
         lines.append(f"- sample_auprc: {summary['sample_auprc']:.4f}")
-        lines.append(f"- best_f1: {summary['best_f1']:.4f}")
-        lines.append(f"- best_threshold: {summary['best_threshold']:.6f}")
+        lines.append(f"- oracle_best_f1 (test labels, diagnostic only): {summary['oracle_best_f1']:.4f}")
+        lines.append(f"- oracle_best_threshold (test labels, diagnostic only): {summary['oracle_best_threshold']:.6f}")
+    if "normal_calibration_threshold" in summary:
+        lines.append(f"- normal_training_p99_threshold: {summary['normal_calibration_threshold']:.6f}")
+        lines.append(f"- normal_calibrated_precision: {summary['normal_calibrated_precision']:.4f}")
+        lines.append(f"- normal_calibrated_recall: {summary['normal_calibrated_recall']:.4f}")
+        lines.append(f"- normal_calibrated_f1: {summary['normal_calibrated_f1']:.4f}")
+        lines.append(f"- normal_calibrated_fpr: {summary['normal_calibrated_fpr']:.4f}")
     (save_path / "ch_battery_sample_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     return report_df, summary
-
 

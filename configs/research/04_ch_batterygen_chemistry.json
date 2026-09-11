@@ -1,0 +1,86 @@
+{
+  "plan_name": "research_04_ch_batterygen_chemistry",
+  "lifecycle": "isolation_forest_and_ratc_cross_chemistry_screening_complete__three_seed_and_deep_baseline_confirmation_pending",
+  "not_for_final_matrix": true,
+  "purpose": "区分化学体系变化造成的排序失效与阈值校准失效。",
+  "datasets": [
+    "CH-BatteryGen LFP discharge",
+    "CH-BatteryGen NCM discharge"
+  ],
+  "models": [
+    "M1",
+    "M2",
+    "M3",
+    "M4"
+  ],
+  "matrix": [
+    {
+      "train_chemistry": "LFP",
+      "test_chemistry": "LFP",
+      "role": "in_domain"
+    },
+    {
+      "train_chemistry": "LFP",
+      "test_chemistry": "NCM",
+      "role": "cross_domain"
+    },
+    {
+      "train_chemistry": "NCM",
+      "test_chemistry": "NCM",
+      "role": "in_domain"
+    },
+    {
+      "train_chemistry": "NCM",
+      "test_chemistry": "LFP",
+      "role": "cross_domain"
+    },
+    {
+      "train_chemistry": "LFP+NCM",
+      "test_chemistry": "LFP",
+      "role": "mixed_normal"
+    },
+    {
+      "train_chemistry": "LFP+NCM",
+      "test_chemistry": "NCM",
+      "role": "mixed_normal"
+    }
+  ],
+  "metrics": [
+    "AUROC",
+    "AUPRC",
+    "delta_AUPRC",
+    "source_P99_FPR",
+    "worst_domain_metric"
+  ],
+  "interpretation": {
+    "ranking_stable_fpr_fails": "threshold calibration shift",
+    "ranking_and_fpr_fail": "chemistry-sensitive representation"
+  },
+  "seeds": {
+    "screening": [
+      3407
+    ],
+    "confirmation": [
+      3407,
+      3408,
+      3409
+    ]
+  },
+  "completed_runs": [
+    {
+      "model": "Isolation Forest",
+      "transfer": "LFP→NCM",
+      "seed": 3407,
+      "output": "runs/internal/research_04_ch_batterygen_chemistry/lfp_to_ncm/isolation_forest_seed3407"
+    },
+    {
+      "model": "Isolation Forest",
+      "transfer": "NCM→LFP",
+      "seed": 3407,
+      "output": "runs/internal/research_04_ch_batterygen_chemistry/ncm_to_lfp/isolation_forest_seed3407"
+    }
+  ],
+  "screening_report": "runs/internal/research_04_ch_batterygen_chemistry/ISOLATION_FOREST_SCREENING_REPORT.md",
+  "ratc_cross_chemistry_report": "runs/internal/research_04_ch_batterygen_chemistry/RATC_CROSS_CHEMISTRY_REPORT.md",
+  "finding": "Target-normal calibration repairs alarm-rate shift but cannot repair LFP-to-NCM near-random ranking; cross-chemistry representation adaptation remains required."
+}

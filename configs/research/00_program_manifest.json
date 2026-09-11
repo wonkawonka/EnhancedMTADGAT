@@ -1,0 +1,38 @@
+{
+  "plan_name": "battery_anomaly_problem_discovery",
+  "lifecycle": "active_research_plan",
+  "not_for_final_matrix": true,
+  "objective": "在电池数据上比较不同范式异常检测模型，识别可复现的失效模式，再决定模型设计。",
+  "execution_order": [
+    "01_ch_batterygen_lfp_mtadgat_baseline.json",
+    "02_ch_batterygen_indomain_models.json",
+    "03_ch_batterygen_condition.json",
+    "04_ch_batterygen_chemistry.json",
+    "05_ch_batterygen_schema.json",
+    "06_ch_batterygen_temporal_scale.json",
+    "07_ch_batterygen_fault_severity_calibration.json",
+    "08_external_nc_battery_dyad.json",
+    "09_external_calce.json",
+    "10_ess_normal_stability.json"
+  ],
+  "shared_contract": {
+    "training": "normal_only",
+    "split_unit": "vin",
+    "normal_vin_split": "formal unified adapter uses 70/10/20 train/validation/test VINs; faults test only. Plan 01 is a historical 80/20 pilot.",
+    "scaler_fit": "normal_train_only",
+    "sample_score": "mean of top 5 percent window scores",
+    "primary_ranking_metrics": ["AUROC", "AUPRC"],
+    "deployment_threshold": "normal_training_P99",
+    "oracle_metric_policy": "test-label-selected threshold is diagnostic only",
+    "screening_seeds": [3407],
+    "confirmation_seeds": [3407, 3408, 3409]
+  },
+  "core_models": [
+    {"id": "M1", "name": "MTAD-GAT", "family": "graph_prediction_reconstruction", "adapter_status": "ready"},
+    {"id": "M2", "name": "TranAD", "family": "transformer_reconstruction", "adapter_status": "pending_ch_adapter"},
+    {"id": "M3", "name": "DCdetector", "family": "contrastive_dual_attention", "adapter_status": "pending_ch_adapter"},
+    {"id": "M4", "name": "PatchAD", "family": "multiscale_patch_contrastive", "adapter_status": "pending_ch_adapter"},
+    {"id": "S1", "name": "Robust PCA or Isolation Forest", "family": "non_neural_sanity_baseline", "adapter_status": "pending_ch_adapter"}
+  ],
+  "battery_reference": {"name": "DyAD", "dataset": "NC Battery", "role": "external_domain_specific_reference"}
+}

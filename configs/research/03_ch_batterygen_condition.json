@@ -1,0 +1,105 @@
+{
+  "plan_name": "research_03_ch_batterygen_condition",
+  "lifecycle": "mtad_gat_and_tranad_three_seed_confirmation_complete__dcdetector_single_seed_low_sensitivity_diagnostic_complete",
+  "not_for_final_matrix": true,
+  "purpose": "判断模型是否将未见的正常充放电工况误判为异常。",
+  "precondition": "先审计 charge/discharge 文件与 CHARGE_STATUS；operation 仅在可形成独立、可靠样本组时加入。",
+  "datasets": [
+    "CH-BatteryGen LFP",
+    "CH-BatteryGen NCM"
+  ],
+  "condition_groups": [
+    "charge",
+    "discharge"
+  ],
+  "models": [
+    "M1",
+    "M2",
+    "M3",
+    "M4"
+  ],
+  "matrix": [
+    {
+      "train_normal_condition": "charge",
+      "test_condition": "charge",
+      "role": "same_condition"
+    },
+    {
+      "train_normal_condition": "charge",
+      "test_condition": "discharge",
+      "role": "cross_condition"
+    },
+    {
+      "train_normal_condition": "discharge",
+      "test_condition": "discharge",
+      "role": "same_condition"
+    },
+    {
+      "train_normal_condition": "discharge",
+      "test_condition": "charge",
+      "role": "cross_condition"
+    }
+  ],
+  "metrics": [
+    "AUROC",
+    "AUPRC",
+    "source_P99_FPR",
+    "delta_FPR_cross_minus_same",
+    "normal_score_distribution_shift"
+  ],
+  "failure_rule": "跨工况正常样本分数向故障分布移动，且多个模型的 delta_FPR 显著为正。",
+  "seeds": {
+    "screening": [
+      3407
+    ],
+    "confirmation": [
+      3407,
+      3408,
+      3409
+    ]
+  },
+  "current_completed_runs": [
+    {
+      "model": "Isolation Forest",
+      "transfer": "LFP charge→charge",
+      "seed": 3407,
+      "output": "runs/internal/research_03_ch_batterygen_condition/lfp/isolation_forest_charge_to_charge_seed3407"
+    },
+    {
+      "model": "Isolation Forest",
+      "transfer": "LFP charge→discharge",
+      "seed": 3407,
+      "output": "runs/internal/research_03_ch_batterygen_condition/lfp/isolation_forest_charge_to_discharge_seed3407"
+    },
+    {
+      "model": "TranAD",
+      "transfer": "LFP charge→charge",
+      "seed": 3407,
+      "output": "runs/internal/research_03_ch_batterygen_condition/lfp/tranad_charge_to_charge_seed3407",
+      "note": "short samples filtered"
+    },
+    {
+      "model": "TranAD",
+      "transfer": "LFP charge→discharge",
+      "seed": 3407,
+      "output": "runs/internal/research_03_ch_batterygen_condition/lfp/tranad_charge_to_discharge_seed3407"
+    },
+    {
+      "model": "MTAD-GAT",
+      "transfer": "LFP charge→charge",
+      "seed": 3407,
+      "output": "runs/internal/research_03_ch_batterygen_condition/lfp/mtad_gat_charge_to_charge_seed3407",
+      "note": "short samples filtered"
+    },
+    {
+      "model": "MTAD-GAT",
+      "transfer": "LFP charge→discharge",
+      "seed": 3407,
+      "output": "runs/internal/research_03_ch_batterygen_condition/lfp/mtad_gat_charge_to_discharge_seed3407"
+    }
+  ],
+  "protocol_update": "All runs save raw scores and max/mean/top5pct with train/validation normal P95/P99 sensitivity. No test-label optimal threshold is used.",
+  "screening_finding": "For TranAD and MTAD-GAT, source-normal P99 FPR is about 1–2% in charge→charge and 89–99% in charge→discharge while ranking AUPRC does not collapse. This is a calibration-shift candidate, not a completed conclusion; confirm seeds 3408/3409 and DCdetector required.",
+  "dcdetector_diagnostic": "runs/internal/research_03_ch_batterygen_condition/lfp/DCDETECTOR_CONDITION_DIAGNOSTIC.md",
+  "finding_boundary": "DCdetector has low sensitivity in both same and cross condition; exclude it from directional cross-condition calibration claims unless a validated implementation change restores meaningful score variance."
+}

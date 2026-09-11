@@ -971,7 +971,27 @@ def _build_dataset_summary(bundle: DatasetBundle, output_dir: Path) -> dict:
 
     }
 
-    summary.update(bundle.extra_metadata)
+    # ``split_meta`` may retain pandas manifests for downstream plotting.  Those
+    # objects are useful in memory but cannot be written into the JSON summary.
+    # Keep the report self-contained by recording only its scalar split facts.
+    extra_metadata = dict(bundle.extra_metadata)
+    split_meta = extra_metadata.pop("split_meta", None)
+    if split_meta is not None:
+        train_manifest = split_meta.get("train_manifest")
+        test_manifest = split_meta.get("test_manifest")
+        extra_metadata["split_summary"] = {
+            "data_source": split_meta.get("data_source"),
+            "preprocessed_dir": split_meta.get("preprocessed_dir"),
+            "train_normal_vin_count": len(split_meta.get("train_vins", [])),
+            "test_normal_vin_count": len(split_meta.get("test_normal_vins", [])),
+            "train_sample_count": None if train_manifest is None else int(len(train_manifest)),
+            "test_sample_count": None if test_manifest is None else int(len(test_manifest)),
+            "test_fault_sample_count": None
+            if test_manifest is None or "sample_label" not in test_manifest
+            else int(test_manifest["sample_label"].sum()),
+        }
+
+    summary.update(extra_metadata)
 
     return summary
 

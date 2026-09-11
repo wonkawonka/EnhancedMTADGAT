@@ -125,6 +125,7 @@ def run_light_predict(model_dir, batch_size=128, num_workers=0, pin_memory=True,
         return rows
 
     rows = score_collection(test_tensors, split_meta["test_metadata"])
+    train_rows = None
     # Only C4 checkpoints expose the independent physical residual.  Its scale is
     # aligned on normal *training* samples only; test labels are never read here.
     if getattr(model, "use_physical_consistency_head", False):
@@ -142,8 +143,13 @@ def run_light_predict(model_dir, batch_size=128, num_workers=0, pin_memory=True,
         (model_dir / "physical_consistency_fusion.json").write_text(
             json.dumps(calibration, indent=2), encoding="utf-8"
         )
+    if train_rows is None:
+        train_rows = score_collection(train_tensors)
     _, summary = save_ch_battery_sample_level_reports(
-        model_dir, rows, score_field=args.ch_battery_sample_score
+        model_dir,
+        rows,
+        score_field=args.ch_battery_sample_score,
+        normal_calibration_scores=[row[args.ch_battery_sample_score] for row in train_rows],
     )
     print(f"[CH-BATTERY] sample-level summary: {summary}")
     return summary

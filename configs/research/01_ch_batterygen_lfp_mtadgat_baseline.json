@@ -1,0 +1,58 @@
+{
+  "plan_name": "research_01_ch_batterygen_lfp_mtadgat_baseline",
+  "_role": "问题发现预实验 Phase 1：CH-BatteryGen LFP 放电片段的 VIN 隔离 normal-only MTAD-GAT 基线。",
+  "_protocol": "训练只使用正常 VIN；正常 VIN 按 80/20 划分训练和留出测试；故障 VIN 仅参与测试。所有阈值和缩放统计均来自训练正常数据。样本级分数为 top 5% 窗口分数均值，连续分数的 AUROC/AUPRC 为主指标。",
+  "_not_for_final_matrix": true,
+  "common_env": {
+    "PYTHONIOENCODING": "utf-8",
+    "MPLCONFIGDIR": "/tmp/matplotlib"
+  },
+  "common_args": {
+    "dataset": "CH_BATTERY_LFP_DISCHARGE",
+    "ch_battery_root": "datasets/CH-BatteryGen/V1.0",
+    "ch_battery_preprocessed_dir": "datasets/CH-BatteryGen/V1.0/processed/lfp_discharge",
+    "ch_battery_train_ratio": 0.8,
+    "ch_battery_sample_score": "score_topk_mean",
+    "ch_battery_topk_ratio": 0.05,
+    "model_name": "mtad_gat",
+    "epochs": 15,
+    "bs": 96,
+    "lookback": 8,
+    "window_stride": 8,
+    "val_split": 0.1,
+    "normalize": true,
+    "init_lr": 0.001,
+    "dropout": 0.3,
+    "use_transformer": false,
+    "feature_att_trans": false,
+    "multi_scale_mode": "none",
+    "use_revin": false,
+    "use_learnable_sparse_graph": false,
+    "use_regime_condition": false,
+    "use_relation_change_score": false,
+    "use_physical_consistency_head": false,
+    "use_physical_state_encoding": false,
+    "use_physical_regularization": false,
+    "use_physical_response_features": false,
+    "use_control_response_decoder": false,
+    "score_fusion_mode": "fixed",
+    "use_cuda": true,
+    "require_cuda": true,
+    "deterministic": true,
+    "num_workers": 0,
+    "predict_num_workers": 0,
+    "persistent_workers": false,
+    "early_stopping_patience": 4,
+    "early_stopping_min_delta": 0.0001,
+    "log_tensorboard": false,
+    "seed": 3407
+  },
+  "experiments": [
+    {
+      "name": "mtad_gat_seed3407",
+      "args": {
+        "run_id": "research01_lfp_mtadgat_seed3407"
+      }
+    }
+  ]
+}

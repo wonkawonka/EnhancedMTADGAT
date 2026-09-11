@@ -1,0 +1,41 @@
+{
+  "plan_name": "research_10_ess_normal_stability",
+  "lifecycle": "isolation_forest_and_mtad_gat_normal_stability_complete__selected_proposed_model_pending",
+  "not_for_final_matrix": true,
+  "purpose": "在已确认正常的 ESS 调频数据中检查分数和阈值稳定性。",
+  "dataset": "private ESS/BMS",
+  "label_granularity": "no fault labels",
+  "models": [
+    "selected_proposed_model",
+    "M1",
+    "best_external_baseline"
+  ],
+  "groups": [
+    "battery_cluster",
+    "current_direction",
+    "current_magnitude",
+    "SOC_bin",
+    "time_block"
+  ],
+  "metrics": [
+    "alarm_rate",
+    "alarms_per_10k_windows",
+    "worst_group_excess_FPR",
+    "score_to_threshold_stability"
+  ],
+  "restriction": "只在测试段被工程确认正常时将报警率描述为经验误报；不报告故障 Recall、F1 或跨任务泛化。",
+  "completed_runs": [
+    {
+      "model": "Isolation Forest",
+      "seed": 3407,
+      "output": "runs/internal/research_10_ess_normal_stability/isolation_forest_seed3407"
+    },
+    {
+      "model": "MTAD-GAT",
+      "seed": 3407,
+      "output": "runs/internal/research_10_ess_normal_stability/mtad_gat_seed3407"
+    }
+  ],
+  "stability_report": "runs/internal/research_10_ess_normal_stability/stability_summary/README.md",
+  "protocol_validation": "normal-only metrics audited: alarm rate, alarms per 10k, group excess alarm rate; fault recall/F1 are absent."
+}

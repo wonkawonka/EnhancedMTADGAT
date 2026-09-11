@@ -479,7 +479,11 @@ def main():
 
         output_dir = resolve_plan_output_dir(batch_root, name)
 
-        plan_extra_env = {"PLAN_OUTPUT_DIR": str(output_dir)}
+        plan_extra_env = {
+            **{str(key): str(value) for key, value in plan.get("common_env", {}).items()},
+            **{str(key): str(value) for key, value in experiment.get("env", {}).items()},
+            "PLAN_OUTPUT_DIR": str(output_dir),
+        }
 
         checkpoint_path = resolve_checkpoint_path(output_dir)
 

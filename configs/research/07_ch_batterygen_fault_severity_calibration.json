@@ -1,0 +1,99 @@
+{
+  "plan_name": "research_07_ch_batterygen_fault_severity_calibration",
+  "lifecycle": "fault_morphology_and_mtad_gat_recalibration_complete__severity_blocked_on_missing_official_metadata",
+  "not_for_final_matrix": true,
+  "purpose": "将故障类别、严重度和阈值迁移作为预实验的解释层，不额外使用故障标签训练。",
+  "datasets": [
+    "CH-BatteryGen LFP",
+    "CH-BatteryGen NCM"
+  ],
+  "models": [
+    "M1",
+    "M2",
+    "M3",
+    "M4"
+  ],
+  "fault_morphology": {
+    "groups": [
+      "high_resistance",
+      "low_capacity",
+      "self_discharge"
+    ],
+    "metrics": [
+      "per_type_AUPRC",
+      "per_type_recall_at_training_P99",
+      "score_distribution"
+    ]
+  },
+  "severity": {
+    "dataset": "LFP only unless NCM official severity metadata becomes available",
+    "groups": [
+      "official_level_1",
+      "official_level_2",
+      "official_level_3"
+    ],
+    "precondition": "audit non-empty groups and report sample counts before comparison",
+    "metrics": [
+      "recall_at_training_P99",
+      "mean_score",
+      "AUPRC_if_valid"
+    ]
+  },
+  "calibration": [
+    {
+      "id": "source_fixed",
+      "information": "source training normal samples only"
+    },
+    {
+      "id": "target_normal_recalibration",
+      "information": "separate target-domain normal calibration VINs only"
+    },
+    {
+      "id": "oracle_diagnostic",
+      "information": "test labels; excluded from primary results"
+    }
+  ],
+  "calibration_metrics": [
+    "threshold_shift",
+    "threshold_coefficient_of_variation",
+    "FPR",
+    "recall",
+    "AUPRC"
+  ],
+  "evidence": {
+    "model": "MTAD-GAT",
+    "source": "LFP charge",
+    "target": "LFP discharge",
+    "seeds": [
+      3407,
+      3408,
+      3409
+    ],
+    "target_normal_protocol": "40 target normal VIN calibration; disjoint 40 target normal VINs plus all faults evaluation",
+    "source_fixed_fpr": [
+      0.8975,
+      0.9325,
+      0.93875
+    ],
+    "target_recalibrated_fpr": [
+      0.0175,
+      0.015,
+      0.0075
+    ],
+    "target_recalibrated_recall": [
+      0.102,
+      0.074,
+      0.077
+    ]
+  },
+  "completed_components": {
+    "fault_morphology": "complete: 8 completed P1 runs x 3 fault types; report uses saved top-5% scores and training-normal P99 only",
+    "target_normal_recalibration": "complete: MTAD-GAT LFP charge-to-discharge, seeds 3407/3408/3409",
+    "severity": "not evaluable: all current LFP/NCM score records have empty severity and fault_value; see fault_morphology/severity_metadata_audit.csv"
+  },
+  "artifacts": {
+    "fault_morphology_report": "runs/internal/research_07_ch_batterygen_fault_severity_calibration/fault_morphology/README.md",
+    "per_fault_type_csv": "runs/internal/research_07_ch_batterygen_fault_severity_calibration/fault_morphology/per_fault_type_training_p99.csv",
+    "severity_audit_csv": "runs/internal/research_07_ch_batterygen_fault_severity_calibration/fault_morphology/severity_metadata_audit.csv"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "plan_name": "research_11_conditioned_score_calibration",
+  "lifecycle": "ratc_cross_condition_three_seed_and_mratc_10pct_matched_three_seed_complete__integrated_validation_pending",
+  "not_for_final_matrix": true,
+  "problem": "不同正常工况产生模型相关且方向不固定的异常分数尺度偏移，使源域固定阈值不可迁移。",
+  "method": "Condition-aware Tail Calibration (CATC)",
+  "components": [
+    "condition encoder: 从可观测工况标签或控制变量得到条件 c",
+    "backbone anomaly scorer: 任意正常样本训练的时间序列检测器",
+    "condition-specific normal score calibrator: 仅拟合独立正常 VIN 的条件尾分布",
+    "tail-probability anomaly score: -log survival(score | c)，用统一正常尾概率阈值报警"
+  ],
+  "training_constraint": "不使用故障标签训练或选阈值；目标工况校准 VIN 与评价正常 VIN 必须 VIN 隔离。",
+  "baselines": [
+    "source-fixed P99",
+    "target-normal raw-score P99",
+    "CATC empirical tail probability"
+  ],
+  "evaluation": [
+    "same/cross condition FPR",
+    "Recall",
+    "AUPRC",
+    "threshold stability",
+    "three seeds",
+    "external NC Battery/DyAD"
+  ],
+  "design_decision_gate": "只有 CATC 在至少两个骨干和三 seed 下稳定降低跨工况 FPR，且保留或改善正常重校准 Recall，才将其升级为端到端条件化评分网络。",
+  "control_response_ablation_report": "runs/internal/research_11_conditioned_calibration/lfp/CONDITIONED_MODEL_ABLATION_REPORT.md",
+  "conclusion": "Control-response conditional encoder did not improve over response-only scoring on seed 3407; do not promote it as proposed method.",
+  "candidate_method": "RATC: response-aware (voltage/temperature) MTAD-GAT scoring plus target-normal empirical tail calibration; control variables excluded from anomaly score.",
+  "three_seed_report": "runs/internal/research_11_conditioned_calibration/lfp/RATC_THREE_SEED_REPORT.md",
+  "negative_control": "Control-response conditional encoder did not outperform response-only scoring; retained as negative control.",
+  "mratc_candidate": "M-RATC: response-only score, target-normal tail calibration when target normal VINs are available, and appended binary missingness indicators under value masking.",
+  "mratc_missingness_report": "runs/internal/research_11_conditioned_calibration/lfp/MRATC_MISSINGNESS_SCREENING_REPORT.md",
+  "mratc_validation_pending": [
+    "cross-condition with missingness",
+    "cross-chemistry",
+    "NC vehicle-level adapter",
+    "ESS normal-only stability"
+  ],
+  "mratc_three_seed_report": "runs/internal/research_11_conditioned_calibration/lfp/MRATC_10PCT_THREE_SEED_REPORT.md",
+  "mratc_matched_three_seed_report": "runs/internal/research_11_conditioned_calibration/lfp/MRATC_10PCT_MATCHED_THREE_SEED_REPORT.md"
+}
