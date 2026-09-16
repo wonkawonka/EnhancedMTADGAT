@@ -1640,6 +1640,16 @@ def main():
         writer = csv.writer(handle)
         writer.writerow(["car", "label", "score"])
         writer.writerows(zip(cars, labels.tolist(), scores.tolist()))
+    # 保存主评分变体的逐 snippet/window 原始分数，避免车辆聚合掩盖模型行为。
+    # ``test_errors`` 与 ``primary_window_scores`` 由同一冻结 test loader 产生，
+    # 顺序一一对应；标签只用于最终评价和离线审计。
+    np.savez_compressed(
+        output_dir / "scores.npz",
+        scores=np.asarray(primary_window_scores, dtype=np.float64),
+        entity_ids=np.asarray(test_errors["cars"], dtype=str),
+        snippet_ids=np.asarray(test_errors["snippets"], dtype=str),
+        labels=np.asarray(test_errors["labels"], dtype=np.int32),
+    )
     # 同一冻结模型的所有评分变体均保存车辆数组，便于事后做固定召回FPR配对审计；
     # 这些数组不参与原型拟合或超参数选择。
     for variant_name, (variant_scores, variant_labels, variant_cars, _) in variant_arrays.items():

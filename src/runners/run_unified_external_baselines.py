@@ -14,7 +14,7 @@ import numpy as np
 import torch
 from sklearn.decomposition import IncrementalPCA
 from sklearn.ensemble import IsolationForest
-from sklearn.metrics import average_precision_score, f1_score, precision_score, recall_score, roc_auc_score
+from sklearn.metrics import average_precision_score, f1_score, precision_score, recall_score, roc_auc_score, roc_curve
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
@@ -28,15 +28,16 @@ from src.models.unified_external_baselines import (
 
 METHODS = (
     "pca_spe", "usad", "isolation_forest", "auto_encoder", "deep_svdd",
-    "lstm_ad", "gdn", "tranad", "mtad_gat", "anomaly_transformer", "dcdetector", "patchad", "ganf",
+    "lstm_ad", "gdn", "tranad", "mtad_gat", "mtad_gat_c3", "mtad_gat_c4", "anomaly_transformer", "dcdetector", "patchad", "ganf", "dyad_ch",
 )
 SOURCE = {
     "pca_spe": "sklearn IncrementalPCA/SPE", "isolation_forest": "sklearn IsolationForest",
     "auto_encoder": "Zhang2023 AE compatibility port", "deep_svdd": "Zhang2023 Deep-SVDD compatibility port",
     "lstm_ad": "PyLink88 recurrent AE compatibility port", "gdn": "Deng2021 learned top-k graph compatibility port",
     "usad": "Audibert2020 two-autoencoder implementation", "tranad": "Tuli2022 self-conditioning compatibility port",
-    "mtad_gat": "MTAD-GAT forecasting and reconstruction baseline", "anomaly_transformer": "Anomaly Transformer vendored reference model", "dcdetector": "DCdetector vendored reference model",
+    "mtad_gat": "MTAD-GAT forecasting and reconstruction baseline", "mtad_gat_c3": "C3 prototype-query state-conditioned MTAD-GAT", "mtad_gat_c4": "C4 physical graph plus response-consistency MTAD-GAT", "anomaly_transformer": "Anomaly Transformer vendored reference model", "dcdetector": "DCdetector vendored reference model",
     "patchad": "PatchAD vendored reference model", "ganf": "GANF vendored reference model",
+    "dyad_ch": "DyAD-style CH adapter: DynamicVAE with CURRENT/SOC conditions and five response channels",
 }
 
 
@@ -61,6 +62,33 @@ class WindowDataset(Dataset):
         sequence_index, start = self.references[index]
         values = self.sequences[sequence_index][start:start + self.span]
         return torch.from_numpy(np.asarray(values, dtype=np.float32)), sequence_index, start + self.span - 1
+
+
+class DyADCH(nn.Module):
+    """DynamicVAE adapted to CH's documented control/response variables."""
+    def __init__(self, n_features: int, control_indices=(1, 2), hidden_size=256, latent_size=16):
+        super().__init__()
+        if n_features != 7 or tuple(control_indices) != (1, 2):
+            raise ValueError("dyad_ch requires the seven CH features and control indices CURRENT=1,SOC=2")
+        self.order = tuple(control_indices) + tuple(i for i in range(n_features) if i not in control_indices)
+        self.control_count = len(control_indices)
+        self.encoder = nn.GRU(n_features, hidden_size, bidirectional=True, batch_first=True)
+        self.to_mean = nn.Linear(hidden_size * 2, latent_size)
+        self.to_logvar = nn.Linear(hidden_size * 2, latent_size)
+        self.to_hidden = nn.Linear(latent_size, hidden_size * 2)
+        self.decoder = nn.GRU(self.control_count, hidden_size, bidirectional=True, batch_first=True)
+        self.output = nn.Linear(hidden_size * 2, n_features - self.control_count)
+
+    def _ordered(self, x): return x[:, :, self.order]
+    def target(self, x): return self._ordered(x)[:, :, self.control_count:]
+    def forward(self, x):
+        ordered = self._ordered(x); _, h = self.encoder(ordered)
+        flat = h.transpose(0, 1).contiguous().view(x.shape[0], -1)
+        mean, logvar = self.to_mean(flat), self.to_logvar(flat)
+        z = mean + torch.randn_like(mean) * torch.exp(0.5 * logvar) * 0.01 if self.training else mean
+        h0 = self.to_hidden(z).view(x.shape[0], 2, -1).transpose(0, 1).contiguous()
+        decoded, _ = self.decoder(ordered[:, :, :self.control_count], h0)
+        return self.output(decoded), mean, logvar
 
 
 def _device(args):
@@ -229,14 +257,36 @@ def _fit_torch(data, args, train_loader, window, device):
         center[(center.abs() < 0.1) & (center < 0)] = -0.1
         center[(center.abs() < 0.1) & (center >= 0)] = 0.1
         auxiliary = center
-    elif args.method == "mtad_gat":
+    elif args.method == "dyad_ch":
+        model = DyADCH(features, control_indices=tuple(args.dyad_control_indices), hidden_size=args.dyad_hidden_dim, latent_size=args.latent_dim).to(device)
+        auxiliary = None
+    elif args.method in {"mtad_gat", "mtad_gat_c3", "mtad_gat_c4"}:
+        columns = list(data.metadata.get("feature_columns", []))
+        # C4 is only defined for the complete CH seven-channel semantics.
+        c4 = args.method == "mtad_gat_c4"
+        if c4 and columns != ["SUM_VOLTAGE", "SUM_CURRENT", "SOC", "MAX_CELL_VOLT", "MIN_CELL_VOLT", "MAX_TEMP", "MIN_TEMP"]:
+            raise ValueError("mtad_gat_c4 requires the complete ordered CH seven-channel input; P5 controls-only/responses-only subsets are not physically identifiable")
+        physical = None
+        if c4:
+            physical = {"dataset_name": "CH_BATTERY", "current_index": 1, "soc_index": 2,
+                        "consistency_current_index": 1, "consistency_soc_index": 2,
+                        "consistency_response_dims": [0, 3, 4, 5, 6], "response_score_dims": list(range(features)),
+                        "physical_graph_roles": {"voltage": [0], "current": [1], "soc": [2], "voltage_max": [3], "voltage_min": [4], "temperature_max": [5], "temperature_min": [6]}}
         model = Enhanced_MTADGAT(
             n_features=features, window_size=window, out_dim=features,
             gru_hid_dim=args.hidden_dim, forecast_hid_dim=args.hidden_dim,
             recon_hid_dim=args.hidden_dim, dropout=0.2,
-            use_regime_condition=args.mtad_use_regime_condition,
-            regime_encoder_type="restricted", regime_emb_dim=args.mtad_regime_emb_dim,
-            regime_control_indices=args.mtad_regime_control_indices,
+            use_regime_condition=args.method == "mtad_gat_c3",
+            regime_encoder_type="prototype_query" if args.method == "mtad_gat_c3" else "restricted", regime_emb_dim=args.mtad_regime_emb_dim,
+            regime_control_indices=list(range(features)) if args.method == "mtad_gat_c3" else args.mtad_regime_control_indices,
+            regime_film_scale=args.c3_regime_film_scale, regime_query_dim=args.c3_regime_query_dim,
+            regime_num_prototypes=args.c3_regime_num_prototypes, regime_query_heads=args.c3_regime_query_heads,
+            regime_temperature=args.c3_regime_temperature,
+            use_physical_consistency_head=c4, physical_consistency_hidden_dim=args.c4_consistency_hidden_dim,
+            physical_consistency_latent_dim=args.c4_consistency_latent_dim, physical_consistency_aux_weight=args.c4_consistency_aux_weight,
+            use_physical_graph_bias=c4, physical_graph_bias_weight=args.c4_graph_bias_weight,
+            physical_graph_gate_scale=args.c4_graph_gate_scale,
+            physical_state_config=physical,
         ).to(device)
         model.score_dims = args.mtad_score_dims or list(range(features))
         auxiliary = None
@@ -272,11 +322,19 @@ def _fit_torch(data, args, train_loader, window, device):
                 first, second = model(values)
                 target = values[:, -1:]
                 loss = 0.5 * nn.functional.mse_loss(first, target) + 0.5 * nn.functional.mse_loss(second, target)
-            elif args.method == "mtad_gat":
+            elif args.method == "dyad_ch":
+                response, mean, logvar = model(values)
+                rec = nn.functional.smooth_l1_loss(response, model.target(values))
+                kl = -0.5 * torch.mean(1 + logvar - mean.square() - logvar.exp())
+                loss = 10.0 * rec + 0.01 * min(1.0, (epoch + 1) / max(1, int(args.epochs))) * kl
+            elif args.method in {"mtad_gat", "mtad_gat_c3", "mtad_gat_c4"}:
                 forecast, reconstruction = model(values)
                 loss = 0.5 * nn.functional.mse_loss(forecast, values[:, -1]) + 0.5 * nn.functional.mse_loss(reconstruction, values)
-                if args.mtad_use_regime_condition:
-                    loss = loss + args.mtad_regime_aux_lambda * model.regime_auxiliary_loss(values)
+                if args.method == "mtad_gat_c3":
+                    loss = loss + args.c3_regime_aux_lambda * model.regime_auxiliary_loss(values)
+                    loss = loss + args.c3_regime_prototype_lambda * model.regime_prototype_loss()
+                elif args.method == "mtad_gat_c4":
+                    loss = loss + model.regime_auxiliary_loss(values)
             elif args.method == "anomaly_transformer":
                 output, series, prior, _ = model(values)
                 series_loss, prior_loss = _association_losses(series, prior, window)
@@ -343,7 +401,7 @@ def _score_pca_loader(model, loader, sequence_count):
     return [np.asarray(x) for x in scores], [np.asarray(x, dtype=np.int64) for x in endpoints]
 
 
-def _batch_scores(method, model, auxiliary, values, window):
+def _batch_scores(method, model, auxiliary, values, window, c4_consistency_weight=0.0):
     if method == "isolation_forest":
         return -model.score_samples(values.flatten(1).numpy())
     if method == "deep_svdd":
@@ -356,14 +414,30 @@ def _batch_scores(method, model, auxiliary, values, window):
     if method == "tranad":
         _, output = model(values)
         return (output - values[:, -1:]).square().mean((1, 2)).detach().cpu().numpy()
-    if method == "mtad_gat":
+    if method == "dyad_ch":
+        response, _, _ = model(values)
+        return (response - model.target(values)).square().mean((1, 2)).detach().cpu().numpy()
+    if method in {"mtad_gat", "mtad_gat_c3", "mtad_gat_c4"}:
         forecast, reconstruction = model(values)
         score_dims = getattr(model, "score_dims", None)
         if score_dims is None:
             score_dims = list(range(values.shape[-1]))
         forecast_error = (forecast[:, score_dims] - values[:, -1, score_dims]).square().mean(1)
         reconstruction_error = (reconstruction[:, :, score_dims] - values[:, :, score_dims]).square().mean((1, 2))
-        return (0.5 * (forecast_error + reconstruction_error)).detach().cpu().numpy()
+        backbone_score = 0.5 * (forecast_error + reconstruction_error)
+        # C4's response head is trained against an independently specified
+        # control-conditioned response target.  Keep the frozen 5% fusion
+        # deliberately small: it supplies physical-consistency evidence without
+        # silently replacing the original MTAD-GAT score.
+        if method == "mtad_gat_c4" and c4_consistency_weight > 0.0:
+            prediction = getattr(model, "_physical_consistency_prediction", None)
+            target_dims = getattr(model, "physical_consistency_target_dims", None)
+            if prediction is None or target_dims is None:
+                raise RuntimeError("C4 score fusion requires a physical consistency prediction")
+            physical_error = (prediction - values[:, :, target_dims]).square().mean((1, 2))
+            weight = float(np.clip(c4_consistency_weight, 0.0, 1.0))
+            backbone_score = (1.0 - weight) * backbone_score + weight * physical_error
+        return backbone_score.detach().cpu().numpy()
     if method == "anomaly_transformer":
         output, series, prior, _ = model(values)
         rec = (output - values).square().mean(-1)
@@ -394,14 +468,14 @@ def _batch_scores(method, model, auxiliary, values, window):
     return (model(values) - values).square().mean((1, 2)).detach().cpu().numpy()
 
 
-def _score_loader(method, model, auxiliary, loader, device, sequence_count):
+def _score_loader(method, model, auxiliary, loader, device, sequence_count, c4_consistency_weight=0.0):
     scores = [[] for _ in range(sequence_count)]
     endpoints = [[] for _ in range(sequence_count)]
     if isinstance(model, nn.Module): model.eval()
     with torch.no_grad():
         for values, sequence_ids, end_indices in loader:
             source = values if method == "isolation_forest" else values.to(device, non_blocking=True)
-            batch_scores = _batch_scores(method, model, auxiliary, source, values.shape[1] - int(method == "gdn"))
+            batch_scores = _batch_scores(method, model, auxiliary, source, values.shape[1] - int(method == "gdn"), c4_consistency_weight=c4_consistency_weight)
             for score, sequence_id, endpoint in zip(batch_scores, sequence_ids.numpy(), end_indices.numpy()):
                 scores[int(sequence_id)].append(float(score)); endpoints[int(sequence_id)].append(int(endpoint))
     return [np.asarray(x) for x in scores], [np.asarray(x, dtype=np.int64) for x in endpoints]
@@ -419,6 +493,28 @@ def _aggregate_vehicle(scores, entities, labels, ratio):
         entity_scores.append(float(np.mean(values[-count:])))
         entity_labels.append(grouped_labels[entity])
     return np.asarray(entity_scores), np.asarray(entity_labels, dtype=np.int32)
+
+
+def _aggregate_vehicle_rows(scores, entities, labels, ratio):
+    """The same top-ratio aggregation, retaining vehicle IDs for audit output."""
+    grouped = defaultdict(list)
+    grouped_labels = {}
+    for score, entity, label in zip(scores, entities, labels):
+        entity = str(entity)
+        grouped[entity].append(float(np.mean(score)))
+        grouped_labels[entity] = int(np.asarray(label).reshape(-1)[0])
+    rows = []
+    for entity in sorted(grouped):
+        values = np.asarray(grouped[entity], dtype=np.float64)
+        count = max(1, int(np.ceil(len(values) * ratio)))
+        rows.append({
+            "entity": entity,
+            "label": grouped_labels[entity],
+            "score": float(np.mean(np.partition(values, -count)[-count:])),
+            "snippet_count": int(len(values)),
+            "topk_count": int(count),
+        })
+    return rows
 
 
 def _paper_labelled_threshold(scores, labels, granularity=1000):
@@ -519,7 +615,9 @@ def _ch_sample_metrics(data, train_scores, test_scores, args):
     for sample_id, windows, label_array in zip(data.entity_ids, test_scores, data.test_labels):
         score, count = _topk_sample_score(windows, ratio)
         row = dict(data.metadata["sample_metadata"][sample_id])
-        row.update(score_topk_mean=score, window_count=int(len(windows)), topk_count=count,
+        row.update(score_max=_ch_aggregate_score(windows, "max"),
+                   score_mean=_ch_aggregate_score(windows, "mean"),
+                   score_topk_mean=score, window_count=int(len(windows)), topk_count=count,
                    sample_label=int(np.asarray(label_array).reshape(-1)[0]), prediction=int(score >= threshold))
         rows.append(row)
     labels = np.asarray([row["sample_label"] for row in rows], dtype=np.int32)
@@ -633,6 +731,34 @@ def _final_metrics(data, validation_scores, validation_endpoints, test_scores, t
                       auroc=float(roc_auc_score(labels, scores)) if np.unique(labels).size > 1 else None,
                       anomaly_count=int(np.sum(labels > 0)))
         result.update({f"{prefix}{key}_raw": value for key, value in classification.items()})
+        if data.evaluation_kind == "vehicle_ranking":
+            normal = labels == 0
+            normal_count = int(np.sum(normal))
+            false_positive_count = int(np.sum(predictions[normal])) if normal_count else 0
+            calibrated_fpr = false_positive_count / normal_count if normal_count else float("nan")
+            fpr, tpr, _ = roc_curve(labels, scores)
+            result.update(
+                vehicle_auroc=result["auroc"],
+                vehicle_auprc=result["average_precision"],
+                vehicle_pr_auc=result["average_precision"],
+                vehicle_average_precision=result["average_precision"],
+                vehicle_f1_at_calibrated_threshold=classification["f1"],
+                vehicle_precision_at_calibrated_threshold=classification["precision"],
+                vehicle_recall_at_calibrated_threshold=classification["recall"],
+                vehicle_false_positive_rate_at_calibrated_threshold=calibrated_fpr,
+                vehicle_specificity_at_calibrated_threshold=1.0 - calibrated_fpr,
+                vehicle_false_positive_count_at_calibrated_threshold=false_positive_count,
+                vehicle_false_positives_per_10000_at_calibrated_threshold=calibrated_fpr * 10000.0,
+                vehicle_normal_count=normal_count,
+                calibration_threshold=threshold,
+                normal_validation_p99_threshold=threshold,
+                threshold_mode="normal_p99",
+                tpr_at_fpr_1pct=float(np.max(tpr[fpr <= 0.01], initial=0.0)),
+                tpr_at_fpr_5pct=float(np.max(tpr[fpr <= 0.05], initial=0.0)),
+                _vehicle_rows=_aggregate_vehicle_rows(
+                    test_scores, data.entity_ids, data.test_labels, ratio
+                ),
+            )
     return result
 
 
@@ -692,7 +818,24 @@ def parse_args():
     parser.add_argument("--mtad_regime_aux_lambda", type=float, default=0.05)
     parser.add_argument("--mtad_regime_control_indices", type=lambda x: [int(v) for v in x.split(',')], default=None)
     parser.add_argument("--mtad_score_dims", type=lambda x: [int(v) for v in x.split(',')], default=None)
+    # Frozen C3/C4 settings.  They are explicit here so CH counterfactual
+    # runs cannot silently inherit a Brand3-only configuration.
+    parser.add_argument("--c3_regime_aux_lambda", type=float, default=0.05)
+    parser.add_argument("--c3_regime_prototype_lambda", type=float, default=0.01)
+    parser.add_argument("--c3_regime_film_scale", type=float, default=0.10)
+    parser.add_argument("--c3_regime_query_dim", type=int, default=32)
+    parser.add_argument("--c3_regime_num_prototypes", type=int, default=6)
+    parser.add_argument("--c3_regime_query_heads", type=int, default=4)
+    parser.add_argument("--c3_regime_temperature", type=float, default=0.5)
+    parser.add_argument("--c4_consistency_hidden_dim", type=int, default=64)
+    parser.add_argument("--c4_consistency_latent_dim", type=int, default=16)
+    parser.add_argument("--c4_consistency_aux_weight", type=float, default=0.05)
+    parser.add_argument("--c4_graph_bias_weight", type=float, default=1.0)
+    parser.add_argument("--c4_graph_gate_scale", type=float, default=0.75)
+    parser.add_argument("--c4_score_max_weight", type=float, default=0.05)
     parser.add_argument("--latent_dim", type=int, default=32)
+    parser.add_argument("--dyad_hidden_dim", type=int, default=256)
+    parser.add_argument("--dyad_control_indices", type=lambda x: [int(v) for v in x.split(",")], default=[1, 2])
     parser.add_argument("--pca_components", type=int, default=8)
     parser.add_argument("--isolation_trees", type=int, default=200)
     parser.add_argument("--train_sample_limit", type=int, default=100000)
@@ -770,8 +913,8 @@ def main():
         validation_scores, validation_endpoints = _score_pca_loader(model, validation_loader, len(data.validation_sequences))
         test_scores, test_endpoints = _score_pca_loader(model, test_loader, len(data.test_sequences))
     else:
-        validation_scores, validation_endpoints = _score_loader(args.method, model, auxiliary, validation_loader, device, len(data.validation_sequences))
-        test_scores, test_endpoints = _score_loader(args.method, model, auxiliary, test_loader, device, len(data.test_sequences))
+        validation_scores, validation_endpoints = _score_loader(args.method, model, auxiliary, validation_loader, device, len(data.validation_sequences), c4_consistency_weight=args.c4_score_max_weight)
+        test_scores, test_endpoints = _score_loader(args.method, model, auxiliary, test_loader, device, len(data.test_sequences), c4_consistency_weight=args.c4_score_max_weight)
     train_scores = None
     if data.evaluation_kind == "sample_ranking":
         if args.method == "isolation_forest":
@@ -780,11 +923,12 @@ def main():
         elif args.method == "pca_spe":
             train_scores, _ = _score_pca_loader(model, train_score_loader, len(data.train_sequences))
         else:
-            train_scores, _ = _score_loader(args.method, model, auxiliary, train_score_loader, device, len(data.train_sequences))
+            train_scores, _ = _score_loader(args.method, model, auxiliary, train_score_loader, device, len(data.train_sequences), c4_consistency_weight=args.c4_score_max_weight)
     inference_seconds = time.perf_counter() - inference_started
     metrics = _final_metrics(data, validation_scores, validation_endpoints, test_scores, test_endpoints, args, train_scores=train_scores)
     sample_rows = metrics.pop("_sample_rows", None)
     sensitivity_rows = metrics.pop("_sensitivity_rows", None)
+    vehicle_rows = metrics.pop("_vehicle_rows", None)
     output = Path(args.output_dir); output.mkdir(parents=True, exist_ok=True)
     if sample_rows is not None:
         import pandas as pd
@@ -797,6 +941,13 @@ def main():
             "validation_optimal_threshold": "not computed: validation contains normal VINs only; label-optimized thresholds would be oracle diagnostics.",
             "rows": sensitivity_rows,
         }, indent=2, default=lambda value: value.tolist() if hasattr(value, "tolist") else str(value)), encoding="utf-8")
+    if vehicle_rows is not None:
+        import pandas as pd
+        vehicle_frame = pd.DataFrame(vehicle_rows)
+        vehicle_frame["prediction"] = (
+            vehicle_frame["score"] > metrics["calibration_threshold"]
+        ).astype(int)
+        vehicle_frame.to_csv(output / "vehicle_scores.csv", index=False)
     runtime = {
         "device": str(device), "data_loading_seconds": load_seconds, "training_seconds": training_seconds,
         "inference_seconds": inference_seconds, "model_parameters": int(sum(p.numel() for p in model.parameters())) if isinstance(model, nn.Module) else 0,
@@ -809,8 +960,12 @@ def main():
     test_sequence_ids = np.concatenate([
         np.full(len(scores), index, dtype=np.int32) for index, scores in enumerate(test_scores)
     ])
+    # `dtype=str` silently creates a <U1 array in NumPy.  Preserve complete CH
+    # sample IDs so raw window scores remain joinable to fault metadata during P7.
+    entity_width = max(1, *(len(str(entity)) for entity in data.entity_ids))
+    entity_dtype = f"<U{entity_width}"
     test_entities = np.concatenate([
-        np.full(len(scores), data.entity_ids[index], dtype=str) for index, scores in enumerate(test_scores)
+        np.full(len(scores), data.entity_ids[index], dtype=entity_dtype) for index, scores in enumerate(test_scores)
     ])
     if data.test_labels is None:
         score_labels = np.empty(0, dtype=np.int32)
@@ -830,7 +985,8 @@ def main():
                             sequence_ids=np.concatenate([np.full(len(x), i, dtype=np.int32) for i, x in enumerate(validation_scores)]))
     np.savez_compressed(
         output / "scores.npz", scores=np.concatenate(test_scores), endpoints=np.concatenate(test_endpoints),
-        sequence_ids=test_sequence_ids, entity_ids=test_entities, labels=score_labels,
+        sequence_ids=test_sequence_ids, entity_ids=test_entities,
+        sequence_entity_ids=np.asarray(data.entity_ids, dtype=entity_dtype), labels=score_labels,
     )
     if isinstance(model, nn.Module):
         model_filename = "model.pt"

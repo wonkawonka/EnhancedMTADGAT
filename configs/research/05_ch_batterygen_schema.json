@@ -1,6 +1,6 @@
 {
   "plan_name": "research_05_ch_batterygen_schema",
-  "lifecycle": "isolation_forest_all_schema_cases_and_mtad_gat_random_mask_screening_complete__missingness_aware_model_and_three_seed_confirmation_pending",
+  "lifecycle": "legacy_screening_complete__formal_fixed_split_structural_schema_first_round_running__missingness_aware_model_and_three_seed_confirmation_pending",
   "not_for_final_matrix": true,
   "purpose": "测量变量缺失与变量职责变化下的检测鲁棒性。",
   "datasets": [
@@ -87,6 +87,30 @@
       3408,
       3409
     ]
+  },
+  "formal_fixed_split_rerun": {
+    "status": "running_local",
+    "split_seed": 3407,
+    "model_seed": 3407,
+    "dataset": "CH-BatteryGen LFP discharge",
+    "output": "runs/internal/research_05_ch_batterygen_schema/lfp_first_round",
+    "cases": [
+      "full",
+      "controls_only",
+      "responses_only",
+      "drop_voltage_extrema",
+      "drop_temperature_extrema"
+    ],
+    "models": ["TranAD", "DCdetector", "PatchAD"],
+    "required_artifacts": [
+      "metrics.json",
+      "scores.npz",
+      "train_scores.npz",
+      "validation_scores.npz",
+      "aggregation_threshold_sensitivity.csv"
+    ],
+    "acceptance_verifier": "scripts/verify_research05_schema.py",
+    "restriction": "随机掩码是既有 MTAD-GAT screening 的单独缺失机制诊断；在当前统一 runner 支持独立可审计的相同 MAR 掩码前，不将其与本轮 structural schema 结果混合。"
   },
   "completed_cases": [
     "full",

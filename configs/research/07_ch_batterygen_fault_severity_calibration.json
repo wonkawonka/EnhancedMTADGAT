@@ -1,6 +1,6 @@
 {
   "plan_name": "research_07_ch_batterygen_fault_severity_calibration",
-  "lifecycle": "fault_morphology_and_mtad_gat_recalibration_complete__severity_blocked_on_missing_official_metadata",
+  "lifecycle": "fault_morphology_and_mtad_gat_recalibration_complete__lfp_official_severity_complete__ncm_official_severity_unavailable",
   "not_for_final_matrix": true,
   "purpose": "将故障类别、严重度和阈值迁移作为预实验的解释层，不额外使用故障标签训练。",
   "datasets": [
@@ -87,13 +87,15 @@
     ]
   },
   "completed_components": {
-    "fault_morphology": "complete: 8 completed P1 runs x 3 fault types; report uses saved top-5% scores and training-normal P99 only",
+    "fault_morphology": "complete: 10 completed P1 runs (LFP/NCM × five baselines) x 3 fault types; report uses saved top-5% scores and training-normal P99 only",
     "target_normal_recalibration": "complete: MTAD-GAT LFP charge-to-discharge, seeds 3407/3408/3409",
-    "severity": "not evaluable: all current LFP/NCM score records have empty severity and fault_value; see fault_morphology/severity_metadata_audit.csv"
+    "severity": "LFP evaluable: official fault-details workbook was resolved from the parent CH-BatteryGen directory and its Mild/Moderate/Severe labels were joined by VIN to saved score records; NCM remains unavailable because no official severity workbook is present. See fault_morphology/per_severity_training_p99.csv."
   },
   "artifacts": {
+    "raw_score_aggregation_analyzer": "scripts/analyze_ch_raw_score_sensitivity.py",
     "fault_morphology_report": "runs/internal/research_07_ch_batterygen_fault_severity_calibration/fault_morphology/README.md",
     "per_fault_type_csv": "runs/internal/research_07_ch_batterygen_fault_severity_calibration/fault_morphology/per_fault_type_training_p99.csv",
-    "severity_audit_csv": "runs/internal/research_07_ch_batterygen_fault_severity_calibration/fault_morphology/severity_metadata_audit.csv"
+    "severity_audit_csv": "runs/internal/research_07_ch_batterygen_fault_severity_calibration/fault_morphology/severity_metadata_audit.csv",
+    "per_severity_csv": "runs/internal/research_07_ch_batterygen_fault_severity_calibration/fault_morphology/per_severity_training_p99.csv"
   }
 }

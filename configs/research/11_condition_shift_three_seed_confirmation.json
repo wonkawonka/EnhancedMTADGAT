@@ -1,0 +1,29 @@
+{
+  "plan_name": "research_11_condition_shift_three_seed_confirmation",
+  "lifecycle": "ready_to_run_after_p7",
+  "not_for_final_matrix": true,
+  "purpose": "确认 P7 筛出的工况相关正常性与源域阈值失配，并区分排序退化与阈值校准失配。",
+  "frozen_evidence": "runs/research/P7_RAW_SCORE_ANALYSIS/P7_FAILURE_MODE_SCREENING.md",
+  "protocol": {
+    "split_seed": 3407,
+    "model_seeds": [3407, 3408, 3409],
+    "normal_training_only": true,
+    "scaler": "fit on source train-normal VIN only",
+    "aggregation": ["max", "mean", "top5pct"],
+    "thresholds": ["train-normal P95", "train-normal P99", "validation-normal P95", "validation-normal P99"],
+    "test_labels": "report-only; never tune threshold"
+  },
+  "datasets": ["CH_LFP_CHARGE", "CH_NCM_CHARGE"],
+  "models": ["MTAD-GAT", "TranAD", "PatchAD"],
+  "excluded_model": {"DCdetector": "P7 same-condition sensitivity is too low for a directional calibration claim; retain as supplementary diagnostic only."},
+  "condition_matrix": [
+    {"tag": "charge_to_charge", "train_cycle": "charge", "test_cycle": "charge", "role": "source reference"},
+    {"tag": "charge_to_discharge", "train_cycle": "charge", "test_cycle": "discharge", "role": "cross-condition"},
+    {"tag": "discharge_to_discharge", "train_cycle": "discharge", "test_cycle": "discharge", "role": "source reference"},
+    {"tag": "discharge_to_charge", "train_cycle": "discharge", "test_cycle": "charge", "role": "cross-condition"}
+  ],
+  "cells": 72,
+  "primary_confirmation_rule": "For at least two models and both chemistries, cross-condition target-normal P99 FPR must exceed its same-condition reference by >=0.10 in at least two of three model seeds. AUPRC must be reported separately to decide whether the issue is calibration-only or representation failure.",
+  "outputs": ["metrics.json", "scores.npz", "train_scores.npz", "validation_scores.npz", "ch_battery_sample_scores.csv", "aggregation_threshold_sensitivity.csv", "protocol_manifest.json"],
+  "next_gate": "Only after this confirmation may a condition-aware anomaly model be designed and compared with the frozen baselines."
+}

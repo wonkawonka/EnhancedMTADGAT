@@ -10,6 +10,9 @@ if len(source)==1:
  r.mkdir(parents=True); shutil.unpack_archive(source[0],r)
 else:
  run(["git","clone","--depth","1","--branch","main","https://github.com/wonkawonka/EnhancedMTADGAT.git",str(r)])
+runner=r/"src/runners/run_unified_external_baselines.py"
+source=runner.read_text(); legacy_line="        ch_use_legacy_preprocessed=args.ch_use_legacy_preprocessed,\n"
+if legacy_line in source: runner.write_text(source.replace(legacy_line,""))
 os.chdir(r); run([sys.executable,"-m","pip","install","-q","-r","requirements-kaggle-main.txt"])
 formal=list(Path("/kaggle/input").rglob("formal_lfp"))
 if len(formal) != 1:
@@ -23,4 +26,8 @@ cases=[(f"lookback_{n}",n,4,1) for n in (8,16,32,64)]+[(f"stride_{n}",32,n,1) fo
 for seed in (3407,3408,3409):
  for name,lookback,stride,resample in cases:
   run([sys.executable,"-m","src.runners.run_unified_external_baselines","--method","mtad_gat","--dataset","CH_LFP_DISCHARGE","--seed",str(seed),"--lookback",str(lookback),"--window_stride",str(stride),"--ch_resample_factor",str(resample),"--ch_formal_preprocessed_root",formal,"--ch_split_seed","3407","--batch_size","64","--epochs","10","--learning_rate","0.001","--hidden_dim","64","--train_sample_limit","100000","--use_cuda","true","--require_cuda","--output_dir",str(r/"runs"/"research_06"/name/f"seed{seed}")])
-print("Results:",shutil.make_archive(str(r/"research06_ch_temporal_results"),"zip",root_dir=r/"runs"/"research_06"))
+export = r / "artifacts" / "research06_ch_temporal_results"
+if export.exists():
+ shutil.rmtree(export)
+shutil.copytree(r / "runs" / "research_06", export)
+print("Results:", export)

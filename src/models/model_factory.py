@@ -84,7 +84,13 @@ def resolve_physical_state_config(args):
         "physical_data_offset": list(getattr(args, "physical_data_min", []) or []),
         "physical_data_scale": list(getattr(args, "physical_data_scale", []) or []),
     }
-    if dataset == "TSINGHUA_EV":
+    if dataset in {"TSINGHUA_EV", "CH_BATTERY_LFP_DISCHARGE"}:
+        # Both datasets expose the same seven pack-level semantics in the
+        # frozen order: voltage, current, SOC, cell-voltage extrema and
+        # temperature extrema.  CH uses SUM_VOLTAGE at index 0 rather than
+        # Tsinghua's pack-voltage name; the C4 relations are otherwise the
+        # same.  This branch deliberately applies only to the full seven
+        # channel input, never to an arbitrary P5 feature subset.
         return {
             **shared,
             "dataset_name": dataset,

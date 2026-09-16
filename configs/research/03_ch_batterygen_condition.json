@@ -1,6 +1,6 @@
 {
   "plan_name": "research_03_ch_batterygen_condition",
-  "lifecycle": "mtad_gat_and_tranad_three_seed_confirmation_complete__dcdetector_single_seed_low_sensitivity_diagnostic_complete",
+  "lifecycle": "legacy_condition_diagnostics_complete__formal_fixed_split_ncm_first_round_running__lfp_formal_rerun_ready",
   "not_for_final_matrix": true,
   "purpose": "判断模型是否将未见的正常充放电工况误判为异常。",
   "precondition": "先审计 charge/discharge 文件与 CHARGE_STATUS；operation 仅在可形成独立、可靠样本组时加入。",
@@ -57,6 +57,21 @@
       3408,
       3409
     ]
+  },
+  "formal_fixed_split_rerun": {
+    "split_seed": 3407,
+    "model_seed": 3407,
+    "ncm_status": "running_kaggle",
+    "ncm_kernel": "chenmjdaisy/research-p2-ncm-fixed-split",
+    "ncm_dataset": "chenmjdaisy/ch-batterygen-v107-raw",
+    "lfp_status": "running_kaggle",
+    "lfp_kernel": "daisychen2/research-p2-lfp-fixed-split",
+    "lfp_dataset": "daisychen2/ch-batterygen-v107-raw",
+    "settings": ["charge_to_charge", "charge_to_discharge", "discharge_to_charge"],
+    "models": ["MTAD-GAT", "TranAD", "DCdetector", "PatchAD"],
+    "required_artifacts": ["protocol_manifest.json", "metrics.json", "scores.npz", "train_scores.npz", "validation_scores.npz", "aggregation_threshold_sensitivity.csv"],
+    "acceptance_verifier": "scripts/verify_research02_condition.py",
+    "acceptance": "历史联合 seed 运行和旧 Kaggle 组合输出不得代替本轮；仅固定 split_seed=3407 且导出原始评分完整的单元可进入 failure-mode 筛选。"
   },
   "current_completed_runs": [
     {

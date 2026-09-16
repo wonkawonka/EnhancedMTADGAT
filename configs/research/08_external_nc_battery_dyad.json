@@ -1,6 +1,6 @@
 {
   "plan_name": "research_08_external_nc_battery_dyad",
-  "lifecycle": "brand3_five_fold_isolation_forest_and_dyad_complete__selected_proposed_model_and_other_baselines_pending",
+  "lifecycle": "brand3_five_fold_isolation_forest_dyad_tranad_and_mtad_gat_complete__brand2_mtad_gat_first_round_complete__selected_proposed_model_and_other_baselines_pending",
   "not_for_final_matrix": true,
   "purpose": "在真实车辆充电片段上确认 CH-BatteryGen 发现的问题，并与 DyAD 对照。",
   "dataset": "NC Battery / DyAD",
@@ -45,6 +45,51 @@
         3,
         4
       ]
+    },
+    {
+      "model": "TranAD",
+      "brand": 3,
+      "folds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "seed": 3407,
+      "protocol": "strict_normal_validation",
+      "output": "runs/internal/research_08_external_nc_battery_dyad/brand3_tranad_first",
+      "report": "runs/internal/research_08_external_nc_battery_dyad/BRAND3_FIVE_FOLD_REPORT.md"
+    },
+    {
+      "model": "MTAD-GAT",
+      "brand": 3,
+      "folds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "seed": 3407,
+      "protocol": "strict_normal_validation",
+      "output": "runs/internal/research_08_external_nc_battery_dyad/brand3_mtad_gat_first",
+      "report": "runs/internal/research_08_external_nc_battery_dyad/BRAND3_FIVE_FOLD_REPORT.md"
+    },
+    {
+      "model": "MTAD-GAT",
+      "brand": 2,
+      "folds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "seed": 3407,
+      "protocol": "strict_normal_validation",
+      "output": "runs/internal/research_08_external_nc_battery_dyad/brand2_mtad_gat_first",
+      "report": "runs/internal/research_08_external_nc_battery_dyad/BRAND2_MTAD_GAT_FIVE_FOLD_REPORT.md"
     }
   ]
 }

@@ -332,9 +332,10 @@ class Enhanced_MTADGAT(nn.Module):
         """Compatibility name for the frozen C4 consistency objective."""
         return self.regime_auxiliary_loss(x)
 
+    def regime_prototype_loss(self):
+        """Return the C3 routing anti-collapse penalty when enabled."""
         if not self.use_regime_condition:
-            reference = next(self.parameters())
-            return reference.new_tensor(0.0)
+            return next(self.parameters()).new_tensor(0.0)
         collapse_loss = getattr(self.regime_encoder, "routing_collapse_loss", None)
         if collapse_loss is None:
             return self._regime_embedding.new_tensor(0.0)

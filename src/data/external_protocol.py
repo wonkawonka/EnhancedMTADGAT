@@ -86,8 +86,13 @@ def load_external_protocol_data(
         train_cycle = str(ch_train_cycle_kind or native_cycle).lower()
         test_cycle = str(ch_test_cycle_kind or native_cycle).lower()
         if ch_formal_preprocessed_root:
-            if name != "CH_LFP_DISCHARGE" or mixed_normal or train_cycle != "discharge" or test_cycle != "discharge" or ch_test_chemistry:
-                raise ValueError("The current formal CH preprocessing bundle supports LFP discharge in-domain runs only")
+            # A formal bundle already contains its exact train/validation/test
+            # membership and its train-normal scaler.  Its metadata, rather
+            # than the shorthand dataset CLI name, defines the source and
+            # target chemistry/condition.  This makes fixed bundles usable
+            # for charge/discharge and cross-chemistry protocols as well.
+            if mixed_normal:
+                raise ValueError("Mixed-normal CH training needs a dedicated formal bundle and cannot reuse a single-domain bundle")
             split = load_ch_battery_research_preprocessed_split(ch_formal_preprocessed_root, seed=ch_split_seed)
         else:
             split = (load_ch_battery_mixed_normal_research_split(target_chemistry=chemistry, cycle_kind=train_cycle, test_cycle_kind=test_cycle, seed=ch_split_seed, train_ratio=0.70, validation_ratio=0.10) if mixed_normal else load_ch_battery_research_split(chemistry=chemistry, cycle_kind=train_cycle, test_cycle_kind=test_cycle, test_chemistry=ch_test_chemistry, seed=ch_split_seed, train_ratio=0.70, validation_ratio=0.10))

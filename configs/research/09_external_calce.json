@@ -1,6 +1,6 @@
 {
   "plan_name": "research_09_external_calce",
-  "lifecycle": "data_ready_pending_entity_label_audit",
+  "lifecycle": "raw_data_and_label_audit_complete__supervised_anomaly_detection_blocked_on_official_entity_or_onset_labels",
   "not_for_final_matrix": true,
   "purpose": "在实验室退化数据上确认慢变或微弱异常相关发现。",
   "dataset": "CALCE battery anomaly/degradation data",
@@ -54,6 +54,14 @@
     "entity identifiers",
     "an auditable mapping from subsequent-lot entities to confirmed anomalies"
   ],
+  "citation_label_audit": {
+    "date": "2026-09-12",
+    "official_abstract_pages": [
+      "https://web.calce.umd.edu/articles/abstracts/2020/20_Early_detection_of.html",
+      "https://web.calce.umd.edu/articles/abstracts/2020/20_Capacity-fading_behavior_analysis.html"
+    ],
+    "result": "The public abstracts confirm anomalous-degradation research but expose neither anomalous entity identifiers nor onset cycles. Full text is marked for CALCE Consortium Members. No label mapping may be inferred from trajectory shape."
+  },
   "nasa_official_download_audit": {
     "source": "https://phm-datasets.s3.amazonaws.com/NASA/5.%20Battery%20Data%20Set.zip",
     "local_artifact": "datasets/NASA_Battery_Data/raw/nasa_battery_data_set.zip",

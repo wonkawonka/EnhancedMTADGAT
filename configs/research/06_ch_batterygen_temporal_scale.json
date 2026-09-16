@@ -1,6 +1,6 @@
 {
   "plan_name": "research_06_ch_batterygen_temporal_scale",
-  "lifecycle": "window_stride_resampling_and_observation_length_screening_complete__three_seed_confirmation_pending",
+  "lifecycle": "legacy_screening_complete__formal_fixed_split_mtad_gat_temporal_27_cell_rerun_complete__remaining_models_and_confirmation_pending",
   "not_for_final_matrix": true,
   "purpose": "判断窗口尺度、采样尺度和片段观测长度是否系统性影响异常检测。",
   "label_boundary": "CH-BatteryGen 当前为片段级故障标签；本计划评估观测片段长度，不将其称为故障发生持续时间或检测延迟。",
@@ -53,6 +53,75 @@
       3408,
       3409
     ]
+  },
+  "formal_fixed_split_rerun": {
+    "split_seed": 3407,
+    "status": "mtad_gat_27_cell_complete_and_audited",
+    "part_a": {
+      "status": "complete_and_downloaded",
+      "account": "daisychen2",
+      "dataset": "daisychen2/ch-batterygen-lfp-processed",
+      "kernel": "daisychen2/research06-ch-temporal-part-a-v2"
+    },
+    "part_b": {
+      "status": "complete_and_downloaded",
+      "account": "chenmjdaisy",
+      "dataset": "chenmjdaisy/ch-batterygen-lfp-formal-20260912",
+      "kernel": "chenmjdaisy/research06-ch-temporal-part-b"
+    },
+    "part_a_cases": [
+      "lookback_8",
+      "lookback_16",
+      "lookback_32",
+      "lookback_64",
+      "stride_1"
+    ],
+    "part_b_cases": [
+      "stride_4_resample_1",
+      "stride_8",
+      "resample_2",
+      "resample_4"
+    ],
+    "model_seeds": [3407, 3408, 3409],
+    "required_export": [
+      "metrics.json",
+      "scores.npz",
+      "train_scores.npz",
+      "validation_scores.npz",
+      "aggregation_threshold_sensitivity.csv"
+    ],
+    "verifier": "scripts/verify_research06_temporal_parts.py",
+    "remaining_model_batches": {
+      "methods": ["tranad", "dcdetector", "patchad"],
+      "completed": {
+        "tranad_part_a": {
+          "status": "complete_and_audited",
+          "cells": 15,
+          "artifact_root": "runs/internal/research_06_ch_batterygen_temporal_scale/lfp/tranad_part_a",
+          "audit": "runs/internal/research_06_ch_batterygen_temporal_scale/lfp/FORMAL_TEMPORAL_TRANAD_A_15_CELL_AUDIT.json"
+        }
+      },
+      "part_a": {
+        "account": "daisychen2",
+        "dataset": "daisychen2/ch-batterygen-lfp-processed",
+        "kernels": [
+          "daisychen2/research06-ch-temporal-tranad-part-a",
+          "daisychen2/research06-ch-temporal-dcdetector-part-a",
+          "daisychen2/research06-ch-temporal-patchad-part-a"
+        ]
+      },
+      "part_b": {
+        "account": "chenmjdaisy",
+        "dataset": "chenmjdaisy/ch-batterygen-lfp-formal-20260912",
+        "kernels": [
+          "chenmjdaisy/research06-ch-temporal-tranad-part-b",
+          "chenmjdaisy/research06-ch-temporal-dcdetector-part-b",
+          "chenmjdaisy/research06-ch-temporal-patchad-part-b"
+        ]
+      },
+      "verifier": "scripts/verify_research06_temporal_method.py"
+    },
+    "acceptance": "已完成：全部 27 个不重复单元已通过 `scripts/verify_research06_temporal_parts.py`，审计结果为 `runs/internal/research_06_ch_batterygen_temporal_scale/lfp/FORMAL_TEMPORAL_27_CELL_AUDIT.json`。第一版 Part A 的 Kaggle 输出被仓库副本占满，不能验收；v2 与 Part B 在导出后清理工作目录，只保留证据文件。历史 screening 输出不替代本轮。"
   },
   "completed_cases": {
     "isolation_forest": [

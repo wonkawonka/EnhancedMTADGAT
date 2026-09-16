@@ -10,6 +10,9 @@ if len(source)==1:
  r.mkdir(parents=True); shutil.unpack_archive(source[0],r)
 else:
  run(["git","clone","--depth","1","--branch","main","https://github.com/wonkawonka/EnhancedMTADGAT.git",str(r)])
+runner=r/"src/runners/run_unified_external_baselines.py"
+source=runner.read_text(); legacy_line="        ch_use_legacy_preprocessed=args.ch_use_legacy_preprocessed,\n"
+if legacy_line in source: runner.write_text(source.replace(legacy_line,""))
 os.chdir(r); run([sys.executable,"-m","pip","install","-q","-r","requirements-kaggle-main.txt"])
 formal=list(Path("/kaggle/input").rglob("formal_lfp"))
 if len(formal) != 1:
@@ -26,4 +29,8 @@ for seed in (3407,3408,3409):
   c += ["--ch_formal_preprocessed_root",formal,"--ch_split_seed","3407"]
   if dims: c += ["--feature_dims",dims]
   run(c)
-print("Results:",shutil.make_archive(str(r/"research05_ch_schema_results"),"zip",root_dir=r/"runs"/"research_05"))
+export = r / "artifacts" / "research05_ch_schema_results"
+if export.exists():
+ shutil.rmtree(export)
+shutil.copytree(r / "runs" / "research_05", export)
+print("Results:", export)

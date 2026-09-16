@@ -13,7 +13,9 @@
     "07_ch_batterygen_fault_severity_calibration.json",
     "08_external_nc_battery_dyad.json",
     "09_external_calce.json",
-    "10_ess_normal_stability.json"
+    "10_ess_normal_stability.json",
+    "11_condition_shift_three_seed_confirmation.json",
+    "12_dyad_style_ch_p1.json"
   ],
   "shared_contract": {
     "training": "normal_only",
@@ -21,20 +23,58 @@
     "normal_vin_split": "formal unified adapter uses 70/10/20 train/validation/test VINs; faults test only. Plan 01 is a historical 80/20 pilot.",
     "scaler_fit": "normal_train_only",
     "sample_score": "mean of top 5 percent window scores",
-    "primary_ranking_metrics": ["AUROC", "AUPRC"],
+    "primary_ranking_metrics": [
+      "AUROC",
+      "AUPRC"
+    ],
     "deployment_threshold": "normal_training_P99",
     "oracle_metric_policy": "test-label-selected threshold is diagnostic only",
     "split_seed": 3407,
-    "screening_model_seeds": [3407],
-    "confirmation_model_seeds": [3407, 3408, 3409],
+    "screening_model_seeds": [
+      3407
+    ],
+    "confirmation_model_seeds": [
+      3407,
+      3408,
+      3409
+    ],
     "seed_policy": "VIN split and training-normal scaler are fixed at split_seed=3407; model seeds vary only initialization and training randomness. Historical runs that used one seed for both roles are screening diagnostics, not strict seed confirmations."
   },
   "core_models": [
-    {"id": "M1", "name": "MTAD-GAT", "family": "graph_prediction_reconstruction", "adapter_status": "ready"},
-    {"id": "M2", "name": "TranAD", "family": "transformer_reconstruction", "adapter_status": "ready"},
-    {"id": "M3", "name": "DCdetector", "family": "contrastive_dual_attention", "adapter_status": "ready"},
-    {"id": "M4", "name": "PatchAD", "family": "multiscale_patch_contrastive", "adapter_status": "ready; formal three-seed runs pending"},
-    {"id": "S1", "name": "Robust PCA or Isolation Forest", "family": "non_neural_sanity_baseline", "adapter_status": "ready"}
+    {
+      "id": "M1",
+      "name": "MTAD-GAT",
+      "family": "graph_prediction_reconstruction",
+      "adapter_status": "ready"
+    },
+    {
+      "id": "M2",
+      "name": "TranAD",
+      "family": "transformer_reconstruction",
+      "adapter_status": "ready"
+    },
+    {
+      "id": "M3",
+      "name": "DCdetector",
+      "family": "contrastive_dual_attention",
+      "adapter_status": "ready"
+    },
+    {
+      "id": "M4",
+      "name": "PatchAD",
+      "family": "multiscale_patch_contrastive",
+      "adapter_status": "ready; formal three-seed runs pending"
+    },
+    {
+      "id": "S1",
+      "name": "Robust PCA or Isolation Forest",
+      "family": "non_neural_sanity_baseline",
+      "adapter_status": "ready"
+    }
   ],
-  "battery_reference": {"name": "DyAD", "dataset": "NC Battery", "role": "external_domain_specific_reference"}
+  "battery_reference": {
+    "name": "DyAD",
+    "dataset": "NC Battery",
+    "role": "external_domain_specific_reference"
+  }
 }

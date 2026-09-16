@@ -53,7 +53,13 @@ def _parse_cycle_index(file_stem):
 
 
 def _find_fault_detail_file(root, chemistry):
-    matches = sorted(root.glob(f"faults.details.-.*{chemistry}*.xlsx"))
+    root = Path(root)
+    pattern = f"faults.details.-.*{chemistry}*.xlsx"
+    matches = sorted(root.glob(pattern))
+    # The official archive places V1.0/ beside, rather than inside, the
+    # chemistry-specific fault-details workbook.
+    if not matches and root.parent != root:
+        matches = sorted(root.parent.glob(pattern))
     return matches[0] if matches else None
 
 
@@ -560,9 +566,25 @@ def load_ch_battery_research_split(
     train_vins, validation_vins, test_vins = (
         sorted(vins[:n_train]), sorted(vins[n_train:n_train + n_val]), sorted(vins[n_train + n_val:])
     )
+    # Vehicle identifiers are chemistry-local.  A cross-chemistry split must
+    # never apply the source-chemistry VIN list to the target chemistry: that
+    # silently changes (or can empty) the target-normal evaluation set.  Keep
+    # the same registered seed, but partition target normal VINs independently.
+    if test_chemistry != chemistry:
+        target_vins = sorted(test_normal.vin.unique().tolist())
+        target_rng = np.random.default_rng(int(seed))
+        target_rng.shuffle(target_vins)
+        target_n = len(target_vins)
+        target_train_n = int(np.floor(target_n * train_ratio))
+        target_val_n = int(np.floor(target_n * validation_ratio))
+        if min(target_train_n, target_val_n, target_n - target_train_n - target_val_n) < 1:
+            raise ValueError(f"Cannot form target 70/10/20 VIN split from {target_n} normal VINs")
+        target_test_vins = sorted(target_vins[target_train_n + target_val_n:])
+    else:
+        target_test_vins = test_vins
     train_manifest = normal[normal.vin.isin(train_vins)].copy()
     validation_manifest = normal[normal.vin.isin(validation_vins)].copy()
-    test_manifest = pd.concat([test_normal[test_normal.vin.isin(test_vins)], faults], ignore_index=True)
+    test_manifest = pd.concat([test_normal[test_normal.vin.isin(target_test_vins)], faults], ignore_index=True)
     test_manifest = test_manifest.sort_values(["sample_label", "fault_type", "vin", "cycle_index", "sample_id"]).reset_index(drop=True)
     features = _resolve_feature_columns(train_manifest.iloc[0].file_path)
     train_map_raw, train_meta = _build_sample_map(train_manifest, features)
@@ -576,7 +598,7 @@ def load_ch_battery_research_split(
     return {
         "feature_columns": features, "train": transform(train_map), "validation": transform(validation_map), "test": transform(test_map),
         "train_metadata": train_meta, "validation_metadata": validation_meta, "test_metadata": test_meta,
-        "train_vins": train_vins, "validation_vins": validation_vins, "test_normal_vins": test_vins,
+        "train_vins": train_vins, "validation_vins": validation_vins, "test_normal_vins": target_test_vins,
         "manifest_counts": {"train": len(train_manifest), "validation": len(validation_manifest), "test": len(test_manifest)},
         "root": str(root), "chemistry": chemistry, "test_chemistry": test_chemistry, "cycle_kind": cycle_kind, "test_cycle_kind": test_cycle_kind, "seed": int(seed),
     }

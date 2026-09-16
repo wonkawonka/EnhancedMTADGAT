@@ -1,6 +1,6 @@
 {
   "plan_name": "research_02_ch_batterygen_indomain_models",
-  "lifecycle": "historical_joint_split_model_seed_runs_complete__fixed_split_confirmation_and_patchad_pending",
+  "lifecycle": "fixed_split_three_model_seed_confirmation_complete",
   "not_for_final_matrix": true,
   "purpose": "建立四个主模型和一个非深度基线的 LFP/NCM 域内可比基线。",
   "requires": [
@@ -252,5 +252,5 @@
       "note": "Formal confirmation run."
     }
   ],
-  "completion_notes": "M1 MTAD-GAT, M2 TranAD, and M3 DCdetector completed for LFP/NCM seeds 3407/3408/3409 under the fixed protocol. M4 PatchAD is not present in this repository and remains pending; it must not be represented as evaluated."
+  "completion_notes": "M1 MTAD-GAT, M2 TranAD, M3 DCdetector, and M4 PatchAD completed for LFP/NCM seeds 3407/3408/3409 under the fixed protocol. PatchAD reports are runs/internal/research_02_ch_batterygen_indomain_models/lfp/PATCHAD_FIXED_SPLIT_THREE_SEED.md and runs/internal/research_02_ch_batterygen_indomain_models/ncm/PATCHAD_FIXED_SPLIT_THREE_SEED.md. Each run includes raw window scores and aggregation/threshold sensitivity; this remains pre-experiment evidence and must not enter C3/C4."
 }

@@ -143,7 +143,10 @@ P2 只用于筛选，不进入最终论文矩阵。P3 与 P5 完成后，才决�
 
 ## 当前状态
 
-- P0：LFP/NCM 数据已就绪；LFP 有 10,000 个原始 CSV，NCM 已从官方数据包提取。
+- P0：LFP/NCM 数据已就绪；对全部 19,478 个 CSV 的 `CHARGE_STATUS` 审计完成，`charge` 文件均为状态 1、`discharge` 文件均为状态 3，且无读取错误或命名不一致；详见 `runs/internal/research_00_ch_batterygen_data_audit/operation_audit/README.md`。
 - M1：历史 LFP 80/20 pilot 已完成；现已接入正式统一 runner，尚待正式 70/10/20 运行。
-- P1：历史 MTAD-GAT、TranAD、DCdetector 的三 seed 运行同时改变了模型 seed 与 VIN 划分，只能用作联合扰动诊断；固定 VIN 划分的正式确认待补。PatchAD 已接入。
-- 当前项：固定 `split_seed=3407` 的 LFP 正式预处理包已生成并上传 Kaggle；计划 05/06 将以 `model_seed=3407/3408/3409` 重跑。所有统一运行保存逐窗口 raw score、三种片段聚合和正常样本 P95/P99 阈值敏感性结果。
+- P1：固定 `split_seed=3407` 下，MTAD-GAT、TranAD、DCdetector、PatchAD 已完成 LFP/NCM 的 `model_seed=3407/3408/3409` 确认；Isolation Forest 已完成单 seed sanity baseline。单 seed 主基线汇总见 `runs/internal/research_02_ch_batterygen_indomain_models/P1_SINGLE_SEED_REPORT.md`；全部结果仍只服务问题发现，不进入 C3/C4。
+- P2/P3/4/P5 第一轮：两份 Kaggle 原始输出已本地审计，共 63/63 单元完整，均保存 raw/train/validation score、样本映射和固定配置；审计见 `runs/research/FIRST_ROUND_ORIGINAL_ZIP_AUDIT.json`。
+- P6 Temporal：MTAD-GAT、TranAD、DCdetector、PatchAD 已全部完成三 seed 时间尺度比较；四个 27-cell 审计位于 `runs/internal/research_06_ch_batterygen_temporal_scale/lfp/`。
+- P7：153 个可审计运行已完成 raw-score 聚合、P95/P99 阈值和故障形态分层。输入审计及筛选报告位于 `runs/research/P7_RAW_SCORE_ANALYSIS/`。第一候选问题是**工况相关正常性与源域阈值失配**：跨 charge/discharge 时多个深度模型的源域 P99 FPR 升至 0.65–1.00；跨化学体系迁移作为第二候选保留，但须与表征退化分开验证。
+- 当前项：P3 将以固定 `split_seed=3407`，仅改变 `model_seed=3407/3408/3409`，复现工况失配候选；确认后再冻结条件感知模型的设计与外部验证矩阵。

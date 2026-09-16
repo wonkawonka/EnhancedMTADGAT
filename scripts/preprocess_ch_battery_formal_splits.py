@@ -32,6 +32,10 @@ def main():
                         help="VIN partition seeds. Model seeds are applied only at training time.")
     parser.add_argument("--chemistry", default="LFP", choices=("LFP", "NCM"))
     parser.add_argument("--cycle_kind", default="discharge", choices=("charge", "discharge"))
+    parser.add_argument("--test_chemistry", default=None, choices=("LFP", "NCM"),
+                        help="Target chemistry for transfer evaluation; defaults to --chemistry.")
+    parser.add_argument("--test_cycle_kind", default=None, choices=("charge", "discharge"),
+                        help="Target cycle kind for condition-transfer evaluation; defaults to --cycle_kind.")
     args = parser.parse_args()
 
     output_root = Path(args.output_root).resolve()
@@ -39,7 +43,8 @@ def main():
     manifest = {"format": FORMAT, "chemistry": args.chemistry, "cycle_kind": args.cycle_kind, "split_seeds": []}
     for seed in args.split_seeds:
         split = load_ch_battery_research_split(
-            root=args.root, chemistry=args.chemistry, cycle_kind=args.cycle_kind, seed=seed,
+            root=args.root, chemistry=args.chemistry, cycle_kind=args.cycle_kind,
+            test_chemistry=args.test_chemistry, test_cycle_kind=args.test_cycle_kind, seed=seed,
             train_ratio=0.70, validation_ratio=0.10,
         )
         destination = output_root / f"seed{seed}"
