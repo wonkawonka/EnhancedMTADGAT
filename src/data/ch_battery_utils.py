@@ -604,6 +604,49 @@ def load_ch_battery_research_split(
     }
 
 
+def load_ch_battery_mixed_cycle_research_split(
+    root=None, *, chemistry="LFP", seed=3407, train_ratio=0.70, validation_ratio=0.10,
+):
+    """Leakage-safe CH split with normal charge and discharge jointly trained.
+
+    VINs are partitioned once, then both cycle kinds are included for each VIN.
+    Test contains held-out normal VINs plus all labelled faults from both cycles.
+    """
+    root = Path(root or resolve_dataset_root("CH-BATTERY", "CH-BatteryGen")).resolve()
+    if (root / "V1.0").is_dir(): root = root / "V1.0"
+    chemistry = str(chemistry).upper()
+    manifests = {cycle: build_ch_battery_manifest(root, chemistry=chemistry, cycle_kind=cycle)
+                 for cycle in ("charge", "discharge")}
+    normal_all = pd.concat([m[m.sample_label == 0] for m in manifests.values()], ignore_index=True)
+    vins = sorted(normal_all.vin.unique().tolist())
+    rng = np.random.default_rng(int(seed)); rng.shuffle(vins)
+    n_train = int(np.floor(len(vins) * train_ratio)); n_val = int(np.floor(len(vins) * validation_ratio))
+    if min(n_train, n_val, len(vins) - n_train - n_val) < 1:
+        raise ValueError(f"Cannot form mixed-cycle 70/10/20 VIN split from {len(vins)} normal VINs")
+    train_vins = sorted(vins[:n_train]); validation_vins = sorted(vins[n_train:n_train+n_val]); test_vins = sorted(vins[n_train+n_val:])
+    train_manifest = normal_all[normal_all.vin.isin(train_vins)].copy()
+    validation_manifest = normal_all[normal_all.vin.isin(validation_vins)].copy()
+    all_manifest = pd.concat(list(manifests.values()), ignore_index=True)
+    test_normal = all_manifest[(all_manifest.sample_label == 0) & all_manifest.vin.isin(test_vins)]
+    faults = all_manifest[all_manifest.sample_label == 1]
+    test_manifest = pd.concat([test_normal, faults], ignore_index=True).sort_values(["sample_label", "fault_type", "vin", "cycle_kind", "cycle_index", "sample_id"]).reset_index(drop=True)
+    features = _resolve_feature_columns(train_manifest.iloc[0].file_path)
+    feature_indices = _resolve_ch_battery_core_feature_indices(features)
+    features = [features[idx] for idx in feature_indices]
+    train_raw, train_meta = _build_sample_map(train_manifest, features)
+    validation_raw, validation_meta = _build_sample_map(validation_manifest, features)
+    test_raw, test_meta = _build_sample_map(test_manifest, features)
+    scaler = MinMaxScaler().fit(flatten_sequence_collection(train_raw.values(), dtype=np.float32))
+    transform = lambda mapping: {k: scaler.transform(v).astype(np.float32, copy=False) for k, v in mapping.items()}
+    return {
+        "feature_columns": features, "train": transform(train_raw), "validation": transform(validation_raw), "test": transform(test_raw),
+        "train_metadata": train_meta, "validation_metadata": validation_meta, "test_metadata": test_meta,
+        "train_vins": train_vins, "validation_vins": validation_vins, "test_normal_vins": test_vins,
+        "manifest_counts": {"train": len(train_manifest), "validation": len(validation_manifest), "test": len(test_manifest)},
+        "root": str(root), "chemistry": chemistry, "test_chemistry": chemistry, "cycle_kind": "charge+discharge", "test_cycle_kind": "charge+discharge", "seed": int(seed),
+    }
+
+
 def load_ch_battery_research_preprocessed_split(preprocessed_root, *, seed):
     """Load a serialized formal 70/10/20 CH-BatteryGen split.
 

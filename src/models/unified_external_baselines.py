@@ -30,6 +30,62 @@ class FlatAutoEncoder(nn.Module):
         flat = values.flatten(1)
         return self.decoder(self.encoder(flat)).view_as(values)
 
+class OmniAnomalyCompat(nn.Module):
+    """Window-level probabilistic GRU reconstruction adapter."""
+    def __init__(self, features, hidden=32, latent=8):
+        super().__init__(); self.features=features; self.hidden=hidden; self.latent=latent
+        self.gru=nn.GRU(features,hidden,2,batch_first=True)
+        self.mu=nn.Linear(hidden,latent); self.logvar=nn.Linear(hidden,latent)
+        self.decoder=nn.Sequential(nn.Linear(latent,hidden),nn.PReLU(),nn.Linear(hidden,features),nn.Sigmoid())
+    def forward(self, values):
+        h,_=self.gru(values); mu=self.mu(h); logvar=self.logvar(h); z=mu+torch.randn_like(mu)*torch.exp(.5*logvar) if self.training else mu
+        return self.decoder(z),mu,logvar
+
+
+class NewC3ProbabilisticGraphTransformer(nn.Module):
+    """Minimal Condition-Decoupled Multi-scale Graph Probabilistic Transformer AE."""
+    def __init__(self, features: int, window: int, hidden_dim: int = 64, condition_dim: int = 8):
+        super().__init__()
+        self.features, self.window, self.condition_dim = features, window, condition_dim
+        self.condition_encoder = nn.Sequential(
+            nn.Conv1d(features, hidden_dim, 3, padding=1), nn.GELU(),
+            nn.Conv1d(hidden_dim, hidden_dim, 3, padding=1), nn.GELU(),
+            nn.AdaptiveAvgPool1d(1), nn.Flatten(), nn.Linear(hidden_dim, condition_dim),
+        )
+        self.graph_logits = nn.Parameter(torch.zeros(features, features))
+        self.graph_value = nn.Linear(features, hidden_dim, bias=False)
+        self.graph_norm = nn.LayerNorm(hidden_dim)
+        self.scales = (4, 16)
+        self.scale_proj = nn.ModuleList([nn.Linear(hidden_dim, hidden_dim) for _ in self.scales])
+        self.temporal = nn.ModuleList([
+            nn.TransformerEncoder(
+                nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=4, dim_feedforward=hidden_dim * 2, dropout=0.1, batch_first=True, norm_first=True),
+                num_layers=2,
+            ) for _ in self.scales
+        ])
+        self.fusion = nn.Sequential(nn.Linear(hidden_dim * 2, hidden_dim), nn.GELU(), nn.LayerNorm(hidden_dim))
+        self.decoder = nn.Sequential(nn.Linear(hidden_dim + condition_dim, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, features * 2))
+
+    def forward(self, values):
+        # Condition branch explains operating state; graph branch is shared across conditions.
+        condition = self.condition_encoder(values.transpose(1, 2))
+        adjacency = torch.sigmoid(self.graph_logits)
+        adjacency = adjacency / adjacency.sum(-1, keepdim=True).clamp_min(1e-6)
+        graph = torch.einsum('ij,blj->bli', adjacency, values)
+        graph = self.graph_norm(self.graph_value(graph))
+        branches = []
+        for scale, proj, encoder in zip(self.scales, self.scale_proj, self.temporal):
+            n_tokens = max(1, values.shape[1] // scale)
+            pooled = torch.nn.functional.adaptive_avg_pool1d(graph.transpose(1, 2), n_tokens).transpose(1, 2)
+            encoded = encoder(proj(pooled))
+            encoded = torch.nn.functional.interpolate(encoded.transpose(1, 2), size=values.shape[1], mode='linear', align_corners=False).transpose(1, 2)
+            branches.append(encoded)
+        health = self.fusion(torch.cat(branches, dim=-1))
+        decoded = self.decoder(torch.cat([health, condition[:, None, :].expand(-1, values.shape[1], -1)], dim=-1))
+        mu, log_sigma = decoded.chunk(2, dim=-1)
+        log_sigma = torch.clamp(log_sigma, -5.0, 2.0)
+        return mu, log_sigma, condition, health
+
 
 class DeepSVDDEncoder(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int = 128, latent_dim: int = 32):
@@ -119,6 +175,10 @@ def build_reconstruction_model(method: str, features: int, window: int, hidden_d
         return nn.ModuleList((TwoAutoEncoder(input_dim, hidden_dim, latent_dim), TwoAutoEncoder(input_dim, hidden_dim, latent_dim)))
     if method == "tranad":
         return TranADCompat(features, window)
+    if method == "omnianomaly":
+        return OmniAnomalyCompat(features, hidden=32, latent=8)
+    if method == "newc3":
+        return NewC3ProbabilisticGraphTransformer(features, window, hidden_dim=hidden_dim, condition_dim=8)
     raise ValueError(f"No reconstruction model registered for {method}")
 
 

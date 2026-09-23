@@ -15,6 +15,7 @@ import numpy as np
 
 from src.data.ch_battery_utils import (
     load_ch_battery_research_preprocessed_split,
+    load_ch_battery_mixed_cycle_research_split,
     load_ch_battery_research_split,
     load_ch_battery_mixed_normal_research_split,
 )
@@ -79,9 +80,10 @@ def load_external_protocol_data(
 ) -> ExternalProtocolData:
     """Load a supported dataset under one leakage-safe external-baseline contract."""
     name = str(dataset).upper()
-    if name in {"CH_LFP_DISCHARGE", "CH_NCM_DISCHARGE", "CH_LFP_CHARGE", "CH_NCM_CHARGE", "CH_MIXED_LFP_DISCHARGE", "CH_MIXED_NCM_DISCHARGE"}:
+    if name in {"CH_LFP_DISCHARGE", "CH_NCM_DISCHARGE", "CH_LFP_CHARGE", "CH_NCM_CHARGE", "CH_MIXED_LFP_DISCHARGE", "CH_MIXED_NCM_DISCHARGE", "CH_LFP_MIXED_CYCLE"}:
         chemistry = "LFP" if "LFP" in name else "NCM"
         mixed_normal = name.startswith("CH_MIXED_")
+        mixed_cycle = name == "CH_LFP_MIXED_CYCLE"
         native_cycle = "CHARGE" if name.endswith("_CHARGE") else "DISCHARGE"
         train_cycle = str(ch_train_cycle_kind or native_cycle).lower()
         test_cycle = str(ch_test_cycle_kind or native_cycle).lower()
@@ -91,11 +93,11 @@ def load_external_protocol_data(
             # than the shorthand dataset CLI name, defines the source and
             # target chemistry/condition.  This makes fixed bundles usable
             # for charge/discharge and cross-chemistry protocols as well.
-            if mixed_normal:
+            if mixed_normal or mixed_cycle:
                 raise ValueError("Mixed-normal CH training needs a dedicated formal bundle and cannot reuse a single-domain bundle")
             split = load_ch_battery_research_preprocessed_split(ch_formal_preprocessed_root, seed=ch_split_seed)
         else:
-            split = (load_ch_battery_mixed_normal_research_split(target_chemistry=chemistry, cycle_kind=train_cycle, test_cycle_kind=test_cycle, seed=ch_split_seed, train_ratio=0.70, validation_ratio=0.10) if mixed_normal else load_ch_battery_research_split(chemistry=chemistry, cycle_kind=train_cycle, test_cycle_kind=test_cycle, test_chemistry=ch_test_chemistry, seed=ch_split_seed, train_ratio=0.70, validation_ratio=0.10))
+            split = (load_ch_battery_mixed_cycle_research_split(chemistry=chemistry, seed=ch_split_seed, train_ratio=0.70, validation_ratio=0.10) if mixed_cycle else (load_ch_battery_mixed_normal_research_split(target_chemistry=chemistry, cycle_kind=train_cycle, test_cycle_kind=test_cycle, seed=ch_split_seed, train_ratio=0.70, validation_ratio=0.10) if mixed_normal else load_ch_battery_research_split(chemistry=chemistry, cycle_kind=train_cycle, test_cycle_kind=test_cycle, test_chemistry=ch_test_chemistry, seed=ch_split_seed, train_ratio=0.70, validation_ratio=0.10)))
         feature_columns = list(split["feature_columns"])
         if feature_indices is None:
             selected_indices = list(range(len(feature_columns)))
@@ -153,7 +155,7 @@ def load_external_protocol_data(
             validation_labels=[np.asarray([0], dtype=np.int32) for _ in validation_ids],
             test_labels=[np.asarray([split["test_metadata"][key]["sample_label"]], dtype=np.int32) for key in test_ids],
             validation_entity_ids=validation_ids, entity_ids=test_ids, evaluation_kind="sample_ranking",
-            metadata={"protocol": "formal_preprocessed_normal_vin_70_10_20" if ch_formal_preprocessed_root else ("mixed_normal_vin_70_10_20" if mixed_normal else "normal_vin_70_10_20"), "normalization": "serialized_training_normal_vin_minmax" if ch_formal_preprocessed_root else "training_normal_vins_only_minmax",
+            metadata={"protocol": "formal_preprocessed_normal_vin_70_10_20" if ch_formal_preprocessed_root else ("mixed_cycle_normal_vin_70_10_20" if mixed_cycle else ("mixed_normal_vin_70_10_20" if mixed_normal else "normal_vin_70_10_20")), "normalization": "serialized_training_normal_vin_minmax" if ch_formal_preprocessed_root else "training_normal_vins_only_minmax",
                       "feature_columns": feature_columns, "feature_scope": "all" if feature_indices is None else "selected",
                       "feature_indices": selected_indices, "input_feature_dim": len(selected_indices),
                       "random_mask": {"kind": "MAR_value_mask_zero_imputation", "ratio": mask_ratio,

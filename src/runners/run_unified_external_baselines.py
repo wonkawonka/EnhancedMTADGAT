@@ -27,7 +27,7 @@ from src.models.unified_external_baselines import (
 )
 
 METHODS = (
-    "pca_spe", "usad", "isolation_forest", "auto_encoder", "deep_svdd",
+    "pca_spe", "usad", "isolation_forest", "auto_encoder", "deep_svdd", "omnianomaly", "newc3",
     "lstm_ad", "gdn", "tranad", "mtad_gat", "mtad_gat_c3", "mtad_gat_c4", "anomaly_transformer", "dcdetector", "patchad", "ganf", "dyad_ch",
 )
 SOURCE = {
@@ -36,8 +36,8 @@ SOURCE = {
     "lstm_ad": "PyLink88 recurrent AE compatibility port", "gdn": "Deng2021 learned top-k graph compatibility port",
     "usad": "Audibert2020 two-autoencoder implementation", "tranad": "Tuli2022 self-conditioning compatibility port",
     "mtad_gat": "MTAD-GAT forecasting and reconstruction baseline", "mtad_gat_c3": "C3 prototype-query state-conditioned MTAD-GAT", "mtad_gat_c4": "C4 physical graph plus response-consistency MTAD-GAT", "anomaly_transformer": "Anomaly Transformer vendored reference model", "dcdetector": "DCdetector vendored reference model",
-    "patchad": "PatchAD vendored reference model", "ganf": "GANF vendored reference model",
-    "dyad_ch": "DyAD-style CH adapter: DynamicVAE with CURRENT/SOC conditions and five response channels",
+    "patchad": "PatchAD vendored reference model", "ganf": "GANF vendored reference model", "omnianomaly": "OmniAnomaly-compatible probabilistic GRU-VAE",
+    "dyad_ch": "DyAD-style CH adapter: DynamicVAE with CURRENT/SOC conditions and five response channels", "newc3": "Condition-decoupled multi-scale graph probabilistic Transformer AE",
 }
 
 
@@ -322,6 +322,17 @@ def _fit_torch(data, args, train_loader, window, device):
                 first, second = model(values)
                 target = values[:, -1:]
                 loss = 0.5 * nn.functional.mse_loss(first, target) + 0.5 * nn.functional.mse_loss(second, target)
+            elif args.method == "omnianomaly":
+                reconstruction, mu, logvar = model(values)
+                loss = nn.functional.mse_loss(reconstruction, values) + 0.01 * (-0.5 * (1 + logvar - mu.square() - logvar.exp()).mean())
+            elif args.method == "newc3":
+                mu, log_sigma, condition, health = model(values)
+                inv_var = torch.exp(-2.0 * log_sigma)
+                nll = (0.5 * (values - mu).square() * inv_var + log_sigma).mean()
+                centered_c = condition - condition.mean(0, keepdim=True)
+                centered_h = health.mean(1) - health.mean((0, 1), keepdim=False)
+                covariance = centered_c.transpose(0, 1) @ centered_h / max(1, values.shape[0] - 1)
+                loss = nll + 0.01 * covariance.square().mean()
             elif args.method == "dyad_ch":
                 response, mean, logvar = model(values)
                 rec = nn.functional.smooth_l1_loss(response, model.target(values))
@@ -414,6 +425,13 @@ def _batch_scores(method, model, auxiliary, values, window, c4_consistency_weigh
     if method == "tranad":
         _, output = model(values)
         return (output - values[:, -1:]).square().mean((1, 2)).detach().cpu().numpy()
+    if method == "omnianomaly":
+        reconstruction, _, _ = model(values)
+        return (reconstruction-values).square().mean((1,2)).detach().cpu().numpy()
+    if method == "newc3":
+        mu, log_sigma, _, _ = model(values)
+        score = 0.5 * (values - mu).square() * torch.exp(-2.0 * log_sigma) + log_sigma
+        return score.mean((1, 2)).detach().cpu().numpy()
     if method == "dyad_ch":
         response, _, _ = model(values)
         return (response - model.target(values)).square().mean((1, 2)).detach().cpu().numpy()
@@ -765,7 +783,7 @@ def _final_metrics(data, validation_scores, validation_endpoints, test_scores, t
 def parse_args():
     parser = argparse.ArgumentParser(description="Unified formal external baseline runner")
     parser.add_argument("--method", choices=METHODS, required=True)
-    parser.add_argument("--dataset", choices=("MSL", "SMAP", "SWAT", "WADI", "Brand3", "BMS", "CH_LFP_DISCHARGE", "CH_NCM_DISCHARGE", "CH_LFP_CHARGE", "CH_NCM_CHARGE", "CH_MIXED_LFP_DISCHARGE", "CH_MIXED_NCM_DISCHARGE"), required=True)
+    parser.add_argument("--dataset", choices=("MSL", "SMAP", "SWAT", "WADI", "Brand3", "BMS", "CH_LFP_DISCHARGE", "CH_NCM_DISCHARGE", "CH_LFP_CHARGE", "CH_NCM_CHARGE", "CH_MIXED_LFP_DISCHARGE", "CH_MIXED_NCM_DISCHARGE", "CH_LFP_MIXED_CYCLE"), required=True)
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--seed", type=int, default=3407)
     parser.add_argument("--brand_fold", type=int, default=0, choices=range(5))
