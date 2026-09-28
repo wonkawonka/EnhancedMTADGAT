@@ -11,14 +11,6 @@
     "runs/internal/rcr_v1/LFP/reconstruction_only/lite_continuous",
     "runs/internal/rcr_v1/LFP/without_feature_graph/lite_continuous",
     "runs/internal/rcr_v1/LFP/without_feature_graph/net_continuous_mlp",
-    "runs/internal/rcr_v1/NCM/full/lite_continuous",
-    "runs/internal/rcr_v1/NCM/full/lite_cycle",
-    "runs/internal/rcr_v1/NCM/full/lite_none",
-    "runs/internal/rcr_v1/NCM/full/net_continuous_linear",
-    "runs/internal/rcr_v1/NCM/full/net_continuous_mlp",
-    "runs/internal/rcr_v1/NCM/full/net_continuous_none",
-    "runs/internal/rcr_v1/NCM/full/net_cycle_mlp",
-    "runs/internal/rcr_v1/NCM/full/net_none_none",
     "runs/internal/rcr_v1/NCM/graph_only/lite_continuous",
     "runs/internal/rcr_v1/NCM/reconstruction_only/lite_continuous",
     "runs/internal/rcr_v1/NCM/without_feature_graph/lite_continuous",
@@ -30,6 +22,6 @@
     "runs/internal/rcr_v1/references/NCM/patchad",
     "runs/internal/rcr_v1/references/NCM/tranad"
   ],
-  "table_rows": 22,
+  "table_rows": 44,
   "method_success_not_assumed": true
 }

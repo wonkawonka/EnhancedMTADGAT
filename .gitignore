@@ -41,5 +41,6 @@ kaggle/kernels/
 report/analysis/*
 !report/analysis/20260901new
 !report/analysis/rcr
+logs/
 kaggle/
 Capacity-Fading_Behavior_Analysis_for_Early_Detection_of_Unhealthy_Li-Ion_Batteries.pdf

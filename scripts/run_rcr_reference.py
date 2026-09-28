@@ -82,7 +82,7 @@ def main():
             sequence_ids=np.concatenate([np.full(len(s), i, dtype=np.int64) for i, s in enumerate(scores)]),
             end_indices=np.concatenate(endpoints), sample_ids=np.asarray(ids[partition]))
         frames[partition] = pd.DataFrame(dict(sample_id=ids[partition],
-            score=[reference._topk_sample_score(s, .05) for s in scores],
+            score=[reference._topk_sample_score(s, .05)[0] for s in scores],
             label=[split[partition+'_metadata'][k]['sample_label'] for k in ids[partition]]))
         frames[partition].to_csv(root/f'{partition}_samples.csv', index=False)
     rows = []

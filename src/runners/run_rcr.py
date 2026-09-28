@@ -169,7 +169,7 @@ def cache_residuals(model, data, ids, control, root):
             assert record['backbone_hash'] == expected_hash and record['windows'] == len(dataset)
             continue
         n, d = len(dataset), model.variables
-        residual = np.lib.format.open_memmap(directory/'residual.npy', mode='w+', dtype='float32', shape=(n, 32, d))
+        residual = np.lib.format.open_memmap(directory/'residual.npy', mode='w+', dtype='float32', shape=(n, dataset.window, d))
         q = np.lib.format.open_memmap(directory/'condition.npy', mode='w+', dtype='float32', shape=(n, 8))
         references = np.lib.format.open_memmap(directory/'references.npy', mode='w+', dtype='int64', shape=(n, 2))
         offset = 0
