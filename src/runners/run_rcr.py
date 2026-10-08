@@ -78,6 +78,7 @@ def load_experiment(args):
         assert json.loads((root/'mapping.json').read_text()) == mapping, 'Data split changed'
     else:
         atomic_json(root/'mapping.json', mapping)
+    if not (root/'metadata.csv').exists():
         pd.DataFrame(metadata).to_csv(root/'metadata.csv', index=False)
     print(json.dumps(dict(stage='data_ready', windows=mapping['windows'],
                           samples={p: len(v) for p, v in ids.items()})), flush=True)

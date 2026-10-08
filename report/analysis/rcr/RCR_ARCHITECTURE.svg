@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">RCR V1 当前代码的实际架构</title>
+  <desc id="desc">重构骨干先训练并冻结，正常训练残差经线性工况校准后，由互斥的 Lite 固定协方差关系头或 Net 掩码变量关系头评分，最后通过训练正常经验 CDF 等权融合。</desc>
   <style>
     text{font-family:'Noto Sans CJK SC','Microsoft YaHei',Arial,sans-serif;fill:#172b4d}
     .title{font-size:24px;font-weight:700}.label{font-size:17px;font-weight:600}.small{font-size:14px}
@@ -6,19 +8,24 @@
     .arrow{fill:none;stroke:#46556d;stroke-width:2.5;marker-end:url(#head)}
   </style>
   <defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#46556d"/></marker></defs>
-  <text x="30" y="40" class="title">RCR V1：冻结重构骨干 + 条件残差校准 + 掩码变量关系</text>
+  <text x="30" y="40" class="title">RCR V1 当前实现：冻结重构骨干 + 线性工况校准 + 残差关系评分</text>
+  <text x="30" y="65" class="small">不是上图所示的 TCN/GAT 端到端双损失架构；下面各模块均与当前代码对应。</text>
   <rect x="30" y="94" width="132" height="74" class="box"/><text x="55" y="126" class="label">输入窗口 X</text><text x="53" y="151" class="small">L × D 变量</text>
   <rect x="208" y="75" width="243" height="113" class="box"/><text x="235" y="107" class="label">共享重构骨干</text><text x="225" y="133" class="small">变量嵌入 → 全局变量图</text><text x="225" y="158" class="small">→ 2层时间 Transformer → X̂</text>
   <rect x="499" y="94" width="170" height="74" class="box"/><text x="526" y="127" class="label">残差 r = X − X̂</text><text x="526" y="151" class="small">冻结骨干后缓存</text>
   <path d="M162 131 H208" class="arrow"/><path d="M451 131 H499" class="arrow"/>
-  <rect x="207" y="248" width="244" height="96" class="green"/><text x="229" y="282" class="label">工况特征 q（8维）</text><text x="225" y="310" class="small">仅由电流/SOC统计量提取</text>
+  <rect x="207" y="248" width="244" height="96" class="green"/><text x="229" y="282" class="label">工况统计量 q（8维）</text><text x="218" y="310" class="small">电流/SOC统计量；不是学习编码器</text>
   <path d="M98 168 V297 H207" class="arrow"/>
-  <rect x="500" y="248" width="250" height="96" class="green"/><text x="526" y="282" class="label">正常残差校准</text><text x="524" y="310" class="small">μ(q), σ(q)；z=(r−μ)/σ</text>
+  <rect x="500" y="238" width="250" height="116" class="green"/><text x="526" y="272" class="label">线性正常残差校准</text><text x="514" y="299" class="small">OLS 均值 μ(q) + log-RMS 尺度 σ(q)</text><text x="514" y="326" class="small">z=(r−μ)/σ；σ 下限 0.05</text>
   <path d="M583 168 V248" class="arrow"/><path d="M451 296 H500" class="arrow"/>
-  <rect x="800" y="75" width="315" height="113" class="orange"/><text x="833" y="107" class="label">RCR-Lite：固定协方差关系</text><text x="822" y="133" class="small">幅值：mean(z²)</text><text x="822" y="158" class="small">关系：mean(zᵀ Ω z)/D</text>
-  <rect x="800" y="245" width="315" height="112" class="purple"/><text x="834" y="277" class="label">RCR-Net：学习变量关系</text><text x="819" y="302" class="small">逐变量遮蔽 → 变量图 → 注意力</text><text x="819" y="327" class="small">→ 留一预测误差；q 经 FiLM 调制</text>
+  <rect x="800" y="75" width="315" height="113" class="orange"/><text x="833" y="107" class="label">RCR-Lite：固定统计关系头</text><text x="822" y="133" class="small">幅值：mean(z²)</text><text x="822" y="158" class="small">关系：Ledoit–Wolf，mean(zᵀ Ω z)/D</text>
+  <rect x="800" y="235" width="315" height="132" class="purple"/><text x="824" y="267" class="label">RCR-Net：共享掩码变量关系头</text><text x="819" y="292" class="small">训练随机遮蔽30%；推理逐变量留一</text><text x="819" y="317" class="small">共享变量图 → 1层变量注意力 → MSE</text><text x="819" y="342" class="small">q 经 MLP-FiLM 调制共享隐藏通道</text>
   <path d="M750 280 H774 V131 H800" class="arrow"/><path d="M750 306 H800" class="arrow"/>
-  <rect x="800" y="423" width="315" height="102" class="box"/><text x="831" y="455" class="label">统一评分与检测</text><text x="819" y="481" class="small">训练正常 CDF：幅值/关系各映射分位</text><text x="819" y="505" class="small">α=0.5 融合；正常验证 P95 阈值</text>
-  <path d="M957 188 V423" class="arrow"/><path d="M985 357 V423" class="arrow"/>
-  <text x="30" y="562" class="small">实线为实际实现的数据流；Lite 与 Net 是互斥的关系分支，共用同一重构骨干与残差校准。Net 不含概率解码器或多尺度 Transformer。</text>
+  <rect x="800" y="433" width="315" height="102" class="box"/><text x="831" y="465" class="label">统一评分与检测</text><text x="819" y="491" class="small">训练正常 CDF：幅值/关系各映射分位</text><text x="819" y="515" class="small">α=0.5 融合；正常验证 P95/P99 阈值</text>
+  <path d="M957 188 V433" class="arrow"/><path d="M985 367 V433" class="arrow"/>
+  <rect x="30" y="570" width="1085" height="102" class="box"/>
+  <text x="50" y="601" class="label">实际训练顺序（分阶段，不是端到端联合训练）</text>
+  <text x="50" y="628" class="small">① 正常窗口用 Huber 重构损失训练骨干，按正常验证损失选权重，然后冻结骨干并缓存残差。</text>
+  <text x="50" y="652" class="small">② 仅用正常训练残差拟合线性校准与 Lite；Net 单独用掩码 MSE 训练。③ 测试阶段只推理、CDF 融合和阈值判定。</text>
+  <text x="30" y="695" class="small">Lite 与 Net 是互斥关系分支，共用幅值分数；当前实现没有 TCN、概率解码器、多尺度 Transformer、掩码邻接损失或 L_rec+λL_mask 联合目标。</text>
 </svg>

@@ -211,15 +211,17 @@ class MaskedResidualGraphNet(nn.Module):
     Controls must be training-standardized fixed q, not response embeddings.
     """
     def __init__(self, variables, hidden=32, node_dim=8, condition_mode='mlp',
-                 condition_dim=8, dropout=0.1):
+                 condition_dim=8, dropout=0.1, feature_graph=True,
+                 variable_attention=True):
         super().__init__()
         if condition_mode not in {'none', 'linear', 'mlp'}:
             raise ValueError(condition_mode)
         self.variables, self.condition_mode = variables, condition_mode
+        self.feature_graph, self.variable_attention = bool(feature_graph), bool(variable_attention)
         self.value = nn.Linear(1, hidden)
         self.variable_embedding = nn.Parameter(torch.randn(variables, hidden)*.02)
         self.mask_embedding = nn.Parameter(torch.randn(hidden)*.02)
-        self.graph = VariableGraph(variables, hidden, node_dim)
+        self.graph = VariableGraph(variables, hidden, node_dim) if feature_graph else nn.Identity()
         if condition_mode == 'mlp':
             self.condition = nn.Sequential(nn.Linear(condition_dim, 16), nn.GELU(), nn.Linear(16, 16))
             self.film = nn.Linear(16, 2*hidden)
@@ -230,7 +232,8 @@ class MaskedResidualGraphNet(nn.Module):
             nn.init.zeros_(self.film.weight)
             nn.init.zeros_(self.film.bias)
         layer = nn.TransformerEncoderLayer(hidden, 2, 64, dropout, activation='gelu', batch_first=True)
-        self.attention = nn.TransformerEncoder(layer, 1, enable_nested_tensor=False)
+        self.attention = (nn.TransformerEncoder(layer, 1, enable_nested_tensor=False)
+                          if variable_attention else nn.Identity())
         self.output = nn.Linear(hidden, 1)
 
     def forward(self, z, q, mask):
@@ -249,6 +252,67 @@ class MaskedResidualGraphNet(nn.Module):
         mask = torch.rand(z.shape, device=z.device, generator=generator) < mask_ratio
         empty = ~mask.any(1)
         # Avoid a zero-denominator batch without always exposing a fixed channel.
+        chosen = torch.randint(self.variables, (int(empty.sum()),), device=z.device, generator=generator)
+        mask[empty, chosen] = True
+        prediction = self(z, q, mask)
+        return (prediction-z.detach()).square()[mask].mean()
+
+    @torch.no_grad()
+    def leave_one_out(self, z, q):
+        if self.training:
+            raise RuntimeError('Call eval() before deterministic leave-one-out scoring')
+        prediction = torch.empty_like(z)
+        for i in range(self.variables):
+            mask = torch.zeros_like(z, dtype=torch.bool)
+            mask[:, i] = True
+            prediction[:, i] = self(z, q, mask)[:, i]
+        return prediction
+
+
+class MaskedResidualMLP(nn.Module):
+    """Dense masked predictor used as a non-graph/non-attention control.
+
+    It retains the same value/variable/mask embeddings and condition FiLM as
+    :class:`MaskedResidualGraphNet`, but mixes all variable tokens with an MLP.
+    Thus it can use other variables when predicting a masked coordinate without
+    receiving either the learned graph or variable self-attention mechanism.
+    """
+    def __init__(self, variables, hidden=32, condition_mode='mlp',
+                 condition_dim=8, dropout=0.1):
+        super().__init__()
+        if condition_mode not in {'none', 'linear', 'mlp'}:
+            raise ValueError(condition_mode)
+        self.variables, self.condition_mode = variables, condition_mode
+        self.value = nn.Linear(1, hidden)
+        self.variable_embedding = nn.Parameter(torch.randn(variables, hidden)*.02)
+        self.mask_embedding = nn.Parameter(torch.randn(hidden)*.02)
+        if condition_mode == 'mlp':
+            self.condition = nn.Sequential(nn.Linear(condition_dim, 16), nn.GELU(), nn.Linear(16, 16))
+            self.film = nn.Linear(16, 2*hidden)
+        elif condition_mode == 'linear':
+            self.condition = nn.Identity()
+            self.film = nn.Linear(condition_dim, 2*hidden)
+        if condition_mode != 'none':
+            nn.init.zeros_(self.film.weight)
+            nn.init.zeros_(self.film.bias)
+        self.mixer = nn.Sequential(nn.Linear(variables*hidden, 64), nn.GELU(),
+                                   nn.Dropout(dropout), nn.Linear(64, variables))
+
+    def forward(self, z, q, mask):
+        if z.ndim != 2 or mask.shape != z.shape or mask.dtype != torch.bool:
+            raise ValueError('Expected residual points [N,D] and boolean same-shape mask')
+        h = self.value(z.masked_fill(mask, 0).unsqueeze(-1)) + self.variable_embedding
+        h = h + mask.unsqueeze(-1)*self.mask_embedding
+        if self.condition_mode != 'none':
+            gamma, beta = (.1*self.film(self.condition(q)).tanh()).chunk(2, dim=-1)
+            h = (1+gamma[:, None])*h+beta[:, None]
+        return self.mixer(h.flatten(1))
+
+    def masked_loss(self, z, q, mask_ratio=.3, generator=None):
+        if not 0 < mask_ratio < 1:
+            raise ValueError('mask_ratio must be in (0,1)')
+        mask = torch.rand(z.shape, device=z.device, generator=generator) < mask_ratio
+        empty = ~mask.any(1)
         chosen = torch.randint(self.variables, (int(empty.sum()),), device=z.device, generator=generator)
         mask[empty, chosen] = True
         prediction = self(z, q, mask)

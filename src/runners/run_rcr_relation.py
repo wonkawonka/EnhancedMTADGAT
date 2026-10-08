@@ -10,7 +10,7 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from src.models.rcr import MaskedResidualGraphNet, EmpiricalCDF, RCRLite
+from src.models.rcr import MaskedResidualGraphNet, MaskedResidualMLP, EmpiricalCDF, RCRLite
 from src.runners.run_rcr import atomic_json, atomic_checkpoint, state_hash
 from src.runners.run_rcr_lite import SCORE_NAMES
 
@@ -42,12 +42,29 @@ def file_hash(path):
     return digest.hexdigest()
 
 
+def build_model(architecture, variables, condition_mode, condition_dim):
+    if architecture == 'dense_mlp':
+        return MaskedResidualMLP(variables, condition_mode=condition_mode,
+                                 condition_dim=condition_dim)
+    settings = {
+        'graph_only': (True, False),
+        'transformer_only': (False, True),
+        'full': (True, True),
+    }
+    if architecture not in settings:
+        raise ValueError(architecture)
+    graph, attention = settings[architecture]
+    return MaskedResidualGraphNet(variables, condition_mode=condition_mode,
+                                  condition_dim=condition_dim, feature_graph=graph,
+                                  variable_attention=attention)
+
+
 def train(args, output, datasets, device):
     torch.manual_seed(args.seed)
     if device == 'cuda':
         torch.cuda.manual_seed_all(args.seed)
     d, qdim = datasets['train'].z.shape[-1], datasets['train'].q.shape[-1]
-    model = MaskedResidualGraphNet(d, condition_mode=args.modulation, condition_dim=qdim).to(device)
+    model = build_model(args.architecture, d, args.modulation, qdim).to(device)
     generator = torch.Generator().manual_seed(args.seed)
     train_loader = DataLoader(datasets['train'], batch_size=128, shuffle=True, generator=generator)
     validation = DataLoader(datasets['validation'], batch_size=128, shuffle=False)
@@ -113,7 +130,7 @@ def train(args, output, datasets, device):
     return model.eval()
 
 
-def infer(model, datasets, output, lite_root, device):
+def infer(model, datasets, output, lite_root, device, save_errors):
     head_hash = state_hash(model)
     for partition, dataset in datasets.items():
         directory = output/partition
@@ -122,7 +139,9 @@ def infer(model, datasets, output, lite_root, device):
         if done.exists():
             assert json.loads(done.read_text())['head_hash'] == head_hash
             continue
-        error = np.lib.format.open_memmap(directory/'loo_squared_error.npy', mode='w+', dtype='float32', shape=dataset.z.shape)
+        error = (np.lib.format.open_memmap(directory/'loo_squared_error.npy', mode='w+',
+                                           dtype='float32', shape=dataset.z.shape)
+                 if save_errors else None)
         score = np.lib.format.open_memmap(directory/'scores.npy', mode='w+', dtype='float64', shape=(len(dataset), 6))
         source = np.load(lite_root/partition/'scores.npy', mmap_mode='r')
         score[:, :2] = source[:, :2]  # Same magnitude/raw branch for Lite and Net.
@@ -135,14 +154,18 @@ def infer(model, datasets, output, lite_root, device):
                 stop = offset+len(errors)
                 if not np.isfinite(errors).all():
                     raise FloatingPointError('Nonfinite LOO prediction error')
-                error[offset:stop] = errors
+                if error is not None:
+                    error[offset:stop] = errors
                 score[offset:stop, 2] = errors.mean((1, 2), dtype=np.float64)
                 offset = stop
                 if step % 1000 == 0:
                     print('RELATION INFERENCE', partition, offset, '/', len(dataset), flush=True)
         assert offset == len(dataset)
-        error.flush(); score.flush()
-        atomic_json(done, dict(head_hash=head_hash, windows=len(dataset)))
+        if error is not None:
+            error.flush()
+        score.flush()
+        atomic_json(done, dict(head_hash=head_hash, windows=len(dataset),
+                              loo_squared_error_saved=bool(save_errors)))
     lite = RCRLite.load(lite_root)
     train_scores = np.load(output/'train/scores.npy', mmap_mode='r')
     relation_cdf = EmpiricalCDF().fit(train_scores[:, 2])
@@ -166,7 +189,11 @@ def main():
     parser.add_argument('--root', required=True)
     parser.add_argument('--condition', choices=['continuous', 'none', 'cycle'], default='continuous')
     parser.add_argument('--modulation', choices=['mlp', 'linear', 'none'], default='mlp')
+    parser.add_argument('--architecture', choices=['dense_mlp', 'graph_only',
+                        'transformer_only', 'full'], default='full')
     parser.add_argument('--epochs', type=int, default=30)
+    parser.add_argument('--output-unit', help='Independent single-directory unit name, e.g. head_B1_seed3408')
+    parser.add_argument('--no-save-errors', action='store_true', help='Save scores/mapping without the large per-coordinate LOO error array')
     parser.add_argument('--seed', type=int, default=3407)
     parser.add_argument('--device', choices=['cuda', 'cpu'], default='cuda', help='CPU only permitted for smoke cache')
     args = parser.parse_args()
@@ -179,23 +206,35 @@ def main():
         raise RuntimeError('CUDA required; run outside sandbox')
     lite_root = root/('lite_'+args.condition)
     assert (lite_root/'complete.json').exists(), 'Complete Lite before relation training'
-    output = root/f'net_{args.condition}_{args.modulation}'
+    output = (root/f'net_{args.condition}_{args.modulation}' if args.architecture == 'full'
+              else root/f'net_ablation_{args.architecture}_{args.condition}_{args.modulation}')
+    if args.output_unit:
+        if Path(args.output_unit).name != args.output_unit or args.output_unit in {'.', '..'}:
+            raise ValueError('--output-unit must be one directory name')
+        output = root/args.output_unit
     output.mkdir(exist_ok=True)
     signatures = {str(p): file_hash(p) for p in [root/'backbone_best.pt', lite_root/'calibration.npz', lite_root/'lite.npz']}
     protocol = dict(condition=args.condition, modulation=args.modulation, epochs=args.epochs,
                     seed=args.seed, frozen_sources=signatures, mask_probability=.3, alpha=.5,
                     lr=.001, weight_decay=.0001, batch_windows=128, patience=8,
                     device=args.device, smoke=base_protocol['smoke'])
+    if args.architecture != 'full':
+        protocol['architecture'] = args.architecture
+        protocol['loo_squared_error_saved'] = False
+    if args.no_save_errors:
+        protocol['loo_squared_error_saved'] = False
     if (output/'protocol.json').exists():
         assert json.loads((output/'protocol.json').read_text()) == protocol, 'Changed relation protocol/source'
     else:
         atomic_json(output/'protocol.json', protocol)
     datasets = {p: ResidualWindows(lite_root/p) for p in ['train', 'validation', 'test']}
     model = train(args, output, datasets, args.device)
-    infer(model, datasets, output, lite_root, args.device)
+    infer(model, datasets, output, lite_root, args.device,
+          save_errors=args.architecture == 'full' and not args.no_save_errors)
     assert all(file_hash(p) == h for p, h in signatures.items()), 'Frozen source changed'
     atomic_json(output/'complete.json', dict(head_hash=state_hash(model), frozen_sources_unchanged=True,
-                condition=args.condition, modulation=args.modulation, no_fault_training=True))
+                condition=args.condition, modulation=args.modulation,
+                architecture=args.architecture, no_fault_training=True))
     print('RCR RELATION COMPLETE', output, flush=True)
 
 
