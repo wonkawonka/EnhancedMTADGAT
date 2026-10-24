@@ -116,7 +116,7 @@ def _parse_feature_dims(value):
 
 def _window_and_stride(args):
     native_windows = {"tranad": 10, "gdn": 32}
-    if args.dataset.upper() == "BRAND3" and args.method in {
+    if args.dataset.upper() in {"BRAND2", "BRAND3"} and args.method in {
         "isolation_forest", "auto_encoder", "deep_svdd", "lstm_ad"
     }:
         native_windows[args.method] = 128
@@ -769,8 +769,9 @@ def _final_metrics(data, validation_scores, validation_endpoints, test_scores, t
                 vehicle_false_positives_per_10000_at_calibrated_threshold=calibrated_fpr * 10000.0,
                 vehicle_normal_count=normal_count,
                 calibration_threshold=threshold,
-                normal_validation_p99_threshold=threshold,
-                threshold_mode="normal_p99",
+                **{f"normal_validation_p{int(round(args.threshold_quantile*100))}_threshold": threshold},
+                normal_validation_threshold_quantile=float(args.threshold_quantile),
+                threshold_mode=f"normal_p{int(round(args.threshold_quantile*100))}",
                 tpr_at_fpr_1pct=float(np.max(tpr[fpr <= 0.01], initial=0.0)),
                 tpr_at_fpr_5pct=float(np.max(tpr[fpr <= 0.05], initial=0.0)),
                 _vehicle_rows=_aggregate_vehicle_rows(
@@ -783,7 +784,7 @@ def _final_metrics(data, validation_scores, validation_endpoints, test_scores, t
 def parse_args():
     parser = argparse.ArgumentParser(description="Unified formal external baseline runner")
     parser.add_argument("--method", choices=METHODS, required=True)
-    parser.add_argument("--dataset", choices=("MSL", "SMAP", "SWAT", "WADI", "Brand3", "BMS", "CH_LFP_DISCHARGE", "CH_NCM_DISCHARGE", "CH_LFP_CHARGE", "CH_NCM_CHARGE", "CH_MIXED_LFP_DISCHARGE", "CH_MIXED_NCM_DISCHARGE", "CH_LFP_MIXED_CYCLE"), required=True)
+    parser.add_argument("--dataset", choices=("MSL", "SMAP", "SWAT", "WADI", "Brand2", "Brand3", "BMS", "CH_LFP_DISCHARGE", "CH_NCM_DISCHARGE", "CH_LFP_CHARGE", "CH_NCM_CHARGE", "CH_MIXED_LFP_DISCHARGE", "CH_MIXED_NCM_DISCHARGE", "CH_LFP_MIXED_CYCLE"), required=True)
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--seed", type=int, default=3407)
     parser.add_argument("--brand_fold", type=int, default=0, choices=range(5))
@@ -1009,6 +1010,8 @@ def main():
     if isinstance(model, nn.Module):
         model_filename = "model.pt"
         torch.save(model.state_dict(), output / model_filename)
+        if args.method == 'deep_svdd':
+            torch.save(auxiliary.detach().cpu(), output / 'center.pt')
     else:
         model_filename = "model.pkl"
         with (output / model_filename).open("wb") as handle:

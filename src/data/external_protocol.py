@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 import pickle
+from pathlib import Path
 
 import numpy as np
 
@@ -20,6 +21,7 @@ from src.data.ch_battery_utils import (
     load_ch_battery_mixed_normal_research_split,
 )
 from src.data.nc_battery import (
+    FEATURE_NAMES,
     PaperChannelNormalizer,
     StreamingMinMaxScaler,
     build_index,
@@ -68,6 +70,7 @@ def load_external_protocol_data(
     brand_split_protocol: str = "paper_protocol",
     brand_fold_seed: int = 0,
     brand_normalization: str = "paper_channel",
+    brand_progress: bool = False,
     feature_indices: Optional[list[int]] = None,
     ch_train_cycle_kind: Optional[str] = None,
     ch_test_cycle_kind: Optional[str] = None,
@@ -301,14 +304,17 @@ def load_external_protocol_data(
             metadata={"normalization": "training_only_maxabs", "split": "per_cluster_temporal_80_20", "seed": int(seed)},
         )
 
-    if name == "BRAND3":
+    if name in {"BRAND2", "BRAND3"}:
+        brand = int(name[-1])
         protocol = str(brand_split_protocol).strip().lower()
         if protocol not in {"paper_protocol", "strict_normal_validation"}:
-            raise ValueError(f"Unsupported Brand3 split protocol: {brand_split_protocol}")
+            raise ValueError(f"Unsupported Brand{brand} split protocol: {brand_split_protocol}")
         normalization = str(brand_normalization).strip().lower()
         if normalization not in {"paper_channel", "minmax"}:
-            raise ValueError(f"Unsupported Brand3 normalization: {brand_normalization}")
-        records = build_index(resolve_dataset_root("TSINGHUA-EV", "TSINGHUA_EV"), 3)
+            raise ValueError(f"Unsupported Brand{brand} normalization: {brand_normalization}")
+        records = build_index(resolve_dataset_root("TSINGHUA-EV", "TSINGHUA_EV"), brand)
+        if brand_progress:
+            print(f'BRAND{brand} INDEX_READY snippets={len(records)}', flush=True)
         splits = split_vehicle_folds(
             records,
             int(brand_fold),
@@ -320,15 +326,28 @@ def load_external_protocol_data(
             splits["calibration"] if protocol == "paper_protocol" else splits["validation"]
         )
         test_records = splits["test"]
+        if protocol == 'strict_normal_validation':
+            assert all(record.label == 0 for record in train_records + validation_records)
+            car_sets = [{record.car for record in selected}
+                        for selected in (train_records, validation_records, test_records)]
+            assert not (car_sets[0] & car_sets[1] or car_sets[0] & car_sets[2] or car_sets[1] & car_sets[2])
+        if brand_progress:
+            print(f'BRAND{brand} FIT_TRAIN_NORMAL_SCALER snippets={len(train_records)} normalization={normalization}', flush=True)
         scaler = (
             PaperChannelNormalizer(train_records)
             if normalization == "paper_channel"
             else StreamingMinMaxScaler().fit_records(train_records)
         )
-        load_values = lambda record: scaler.transform(load_snippet(record.path)[0])
-        train_values = [load_values(record) for record in train_records]
-        validation_values = [load_values(record) for record in validation_records]
-        test_values = [load_values(record) for record in test_records]
+        def load_partition(partition, selected):
+            values = []
+            for index, record in enumerate(selected, 1):
+                values.append(scaler.transform(load_snippet(record.path)[0]))
+                if brand_progress and (index % 10000 == 0 or index == len(selected)):
+                    print(f'BRAND{brand} LOAD {partition} {index}/{len(selected)}', flush=True)
+            return values
+        train_values = load_partition('train', train_records)
+        validation_values = load_partition('validation', validation_records)
+        test_values = load_partition('test', test_records)
         validation_labels = [np.asarray([int(record.label)], dtype=np.int32) for record in validation_records]
         labels = [np.asarray([int(record.label)], dtype=np.int32) for record in test_records]
         validation_entities = [str(record.car) for record in validation_records]
@@ -344,12 +363,26 @@ def load_external_protocol_data(
             entity_ids=entities,
             evaluation_kind="vehicle_ranking",
             metadata={
-                "brand": 3,
+                "brand": brand,
                 "fold": int(brand_fold),
                 "fold_seed": int(brand_fold_seed),
                 "protocol": protocol,
                 "normalization": scaler.state_dict(),
                 "seed": int(seed),
+                "feature_columns": list(FEATURE_NAMES),
+                "sample_ids": {
+                    partition: [f"{record.car}:{Path(record.path).parent.name}/{Path(record.path).name}"
+                                for record in selected]
+                    for partition, selected in {
+                        "train": train_records, "validation": validation_records, "test": test_records
+                    }.items()
+                },
+                "vehicle_ids": {
+                    partition: sorted({str(record.car) for record in selected})
+                    for partition, selected in {
+                        "train": train_records, "validation": validation_records, "test": test_records
+                    }.items()
+                },
             },
         )
 

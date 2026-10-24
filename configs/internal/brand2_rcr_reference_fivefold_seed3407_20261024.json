@@ -1,0 +1,415 @@
+{
+  "plan_name": "brand2_rcr_reference_fivefold_seed3407_20261024",
+  "brand": 2,
+  "model_seed": 3407,
+  "fold_seed": 0,
+  "split": "strict_normal_validation",
+  "normalization": "minmax",
+  "threshold_quantiles": [
+    0.95,
+    0.99
+  ],
+  "vehicle_top_ratio": 0.05,
+  "expected_result_cells": 75,
+  "expected_snippets": 194245,
+  "expected_normal_vehicles": 33,
+  "expected_fault_vehicles": 16,
+  "label_csv_note": "Label CSV has 34 normal IDs, but ID230 has no snippets. Splits use 33 represented normal vehicles and 16 faulty vehicles.",
+  "feature_columns": [
+    "pack_voltage",
+    "current",
+    "soc",
+    "max_cell_voltage",
+    "min_cell_voltage",
+    "max_temperature",
+    "min_temperature"
+  ],
+  "rcr_arms": [
+    "raw",
+    "scale",
+    "lite",
+    "net",
+    "net_no_condition",
+    "raw_no_feature_graph",
+    "raw_no_temporal"
+  ],
+  "reference_methods": [
+    "mtad_gat",
+    "tranad",
+    "anomaly_transformer",
+    "dcdetector",
+    "patchad",
+    "omnianomaly",
+    "isolation_forest",
+    "deep_svdd"
+  ],
+  "rcr_budget": {
+    "backbone_max_epochs": 50,
+    "relation_max_epochs": 30,
+    "patience": 8,
+    "full_normal_training": true
+  },
+  "reference_budget": {
+    "epochs": 10,
+    "train_window_limit": 100000,
+    "deep_svdd_pretrain_epochs": 5,
+    "epoch_selection": "fixed_final"
+  },
+  "native_windows": {
+    "rcr": 127,
+    "mtad_gat": 127,
+    "tranad": 10,
+    "anomaly_transformer": 127,
+    "dcdetector": 128,
+    "patchad": 128,
+    "omnianomaly": 127,
+    "isolation_forest": 128,
+    "deep_svdd": 128
+  },
+  "excluded": [
+    "wavelet_decomposition",
+    "signal_mae_mse_backfill",
+    "fine_grained_film_or_onehot_ablations"
+  ],
+  "weight_note": "Scheduling heuristic only; not measured runtime or a completion promise.",
+  "shards": {
+    "daisy_a": {
+      "account": "daisychen2",
+      "dataset_source": "daisychen2/tsinghua-ev",
+      "jobs": [
+        {
+          "kind": "rcr",
+          "fold": 0,
+          "unit": "rcr/fold0",
+          "estimated_weight_minutes": 60
+        },
+        {
+          "kind": "rcr",
+          "fold": 4,
+          "unit": "rcr/fold4",
+          "estimated_weight_minutes": 60
+        },
+        {
+          "kind": "reference",
+          "method": "anomaly_transformer",
+          "fold": 1,
+          "unit": "references/anomaly_transformer/fold1",
+          "estimated_weight_minutes": 25
+        },
+        {
+          "kind": "reference",
+          "method": "anomaly_transformer",
+          "fold": 3,
+          "unit": "references/anomaly_transformer/fold3",
+          "estimated_weight_minutes": 25
+        },
+        {
+          "kind": "reference",
+          "method": "dcdetector",
+          "fold": 3,
+          "unit": "references/dcdetector/fold3",
+          "estimated_weight_minutes": 15
+        },
+        {
+          "kind": "reference",
+          "method": "mtad_gat",
+          "fold": 2,
+          "unit": "references/mtad_gat/fold2",
+          "estimated_weight_minutes": 10
+        },
+        {
+          "kind": "reference",
+          "method": "tranad",
+          "fold": 1,
+          "unit": "references/tranad/fold1",
+          "estimated_weight_minutes": 8
+        },
+        {
+          "kind": "reference",
+          "method": "deep_svdd",
+          "fold": 0,
+          "unit": "references/deep_svdd/fold0",
+          "estimated_weight_minutes": 5
+        },
+        {
+          "kind": "reference",
+          "method": "deep_svdd",
+          "fold": 4,
+          "unit": "references/deep_svdd/fold4",
+          "estimated_weight_minutes": 5
+        },
+        {
+          "kind": "reference",
+          "method": "omnianomaly",
+          "fold": 3,
+          "unit": "references/omnianomaly/fold3",
+          "estimated_weight_minutes": 5
+        },
+        {
+          "kind": "reference",
+          "method": "isolation_forest",
+          "fold": 3,
+          "unit": "references/isolation_forest/fold3",
+          "estimated_weight_minutes": 3
+        }
+      ],
+      "estimated_weight_minutes": 221
+    },
+    "daisy_b": {
+      "account": "daisychen2",
+      "dataset_source": "daisychen2/tsinghua-ev",
+      "jobs": [
+        {
+          "kind": "rcr",
+          "fold": 1,
+          "unit": "rcr/fold1",
+          "estimated_weight_minutes": 60
+        },
+        {
+          "kind": "reference",
+          "method": "patchad",
+          "fold": 0,
+          "unit": "references/patchad/fold0",
+          "estimated_weight_minutes": 45
+        },
+        {
+          "kind": "reference",
+          "method": "patchad",
+          "fold": 3,
+          "unit": "references/patchad/fold3",
+          "estimated_weight_minutes": 45
+        },
+        {
+          "kind": "reference",
+          "method": "anomaly_transformer",
+          "fold": 4,
+          "unit": "references/anomaly_transformer/fold4",
+          "estimated_weight_minutes": 25
+        },
+        {
+          "kind": "reference",
+          "method": "mtad_gat",
+          "fold": 0,
+          "unit": "references/mtad_gat/fold0",
+          "estimated_weight_minutes": 10
+        },
+        {
+          "kind": "reference",
+          "method": "mtad_gat",
+          "fold": 3,
+          "unit": "references/mtad_gat/fold3",
+          "estimated_weight_minutes": 10
+        },
+        {
+          "kind": "reference",
+          "method": "tranad",
+          "fold": 2,
+          "unit": "references/tranad/fold2",
+          "estimated_weight_minutes": 8
+        },
+        {
+          "kind": "reference",
+          "method": "deep_svdd",
+          "fold": 1,
+          "unit": "references/deep_svdd/fold1",
+          "estimated_weight_minutes": 5
+        },
+        {
+          "kind": "reference",
+          "method": "omnianomaly",
+          "fold": 0,
+          "unit": "references/omnianomaly/fold0",
+          "estimated_weight_minutes": 5
+        },
+        {
+          "kind": "reference",
+          "method": "omnianomaly",
+          "fold": 4,
+          "unit": "references/omnianomaly/fold4",
+          "estimated_weight_minutes": 5
+        },
+        {
+          "kind": "reference",
+          "method": "isolation_forest",
+          "fold": 4,
+          "unit": "references/isolation_forest/fold4",
+          "estimated_weight_minutes": 3
+        }
+      ],
+      "estimated_weight_minutes": 221
+    },
+    "chen_a": {
+      "account": "chenmjdaisy",
+      "dataset_source": "chenmjdaisy/tsinghua-ev",
+      "jobs": [
+        {
+          "kind": "rcr",
+          "fold": 2,
+          "unit": "rcr/fold2",
+          "estimated_weight_minutes": 60
+        },
+        {
+          "kind": "reference",
+          "method": "patchad",
+          "fold": 1,
+          "unit": "references/patchad/fold1",
+          "estimated_weight_minutes": 45
+        },
+        {
+          "kind": "reference",
+          "method": "patchad",
+          "fold": 4,
+          "unit": "references/patchad/fold4",
+          "estimated_weight_minutes": 45
+        },
+        {
+          "kind": "reference",
+          "method": "dcdetector",
+          "fold": 0,
+          "unit": "references/dcdetector/fold0",
+          "estimated_weight_minutes": 15
+        },
+        {
+          "kind": "reference",
+          "method": "dcdetector",
+          "fold": 2,
+          "unit": "references/dcdetector/fold2",
+          "estimated_weight_minutes": 15
+        },
+        {
+          "kind": "reference",
+          "method": "mtad_gat",
+          "fold": 1,
+          "unit": "references/mtad_gat/fold1",
+          "estimated_weight_minutes": 10
+        },
+        {
+          "kind": "reference",
+          "method": "tranad",
+          "fold": 0,
+          "unit": "references/tranad/fold0",
+          "estimated_weight_minutes": 8
+        },
+        {
+          "kind": "reference",
+          "method": "tranad",
+          "fold": 4,
+          "unit": "references/tranad/fold4",
+          "estimated_weight_minutes": 8
+        },
+        {
+          "kind": "reference",
+          "method": "deep_svdd",
+          "fold": 3,
+          "unit": "references/deep_svdd/fold3",
+          "estimated_weight_minutes": 5
+        },
+        {
+          "kind": "reference",
+          "method": "omnianomaly",
+          "fold": 2,
+          "unit": "references/omnianomaly/fold2",
+          "estimated_weight_minutes": 5
+        },
+        {
+          "kind": "reference",
+          "method": "isolation_forest",
+          "fold": 1,
+          "unit": "references/isolation_forest/fold1",
+          "estimated_weight_minutes": 3
+        }
+      ],
+      "estimated_weight_minutes": 219
+    },
+    "chen_b": {
+      "account": "chenmjdaisy",
+      "dataset_source": "chenmjdaisy/tsinghua-ev",
+      "jobs": [
+        {
+          "kind": "rcr",
+          "fold": 3,
+          "unit": "rcr/fold3",
+          "estimated_weight_minutes": 60
+        },
+        {
+          "kind": "reference",
+          "method": "patchad",
+          "fold": 2,
+          "unit": "references/patchad/fold2",
+          "estimated_weight_minutes": 45
+        },
+        {
+          "kind": "reference",
+          "method": "anomaly_transformer",
+          "fold": 0,
+          "unit": "references/anomaly_transformer/fold0",
+          "estimated_weight_minutes": 25
+        },
+        {
+          "kind": "reference",
+          "method": "anomaly_transformer",
+          "fold": 2,
+          "unit": "references/anomaly_transformer/fold2",
+          "estimated_weight_minutes": 25
+        },
+        {
+          "kind": "reference",
+          "method": "dcdetector",
+          "fold": 1,
+          "unit": "references/dcdetector/fold1",
+          "estimated_weight_minutes": 15
+        },
+        {
+          "kind": "reference",
+          "method": "dcdetector",
+          "fold": 4,
+          "unit": "references/dcdetector/fold4",
+          "estimated_weight_minutes": 15
+        },
+        {
+          "kind": "reference",
+          "method": "mtad_gat",
+          "fold": 4,
+          "unit": "references/mtad_gat/fold4",
+          "estimated_weight_minutes": 10
+        },
+        {
+          "kind": "reference",
+          "method": "tranad",
+          "fold": 3,
+          "unit": "references/tranad/fold3",
+          "estimated_weight_minutes": 8
+        },
+        {
+          "kind": "reference",
+          "method": "deep_svdd",
+          "fold": 2,
+          "unit": "references/deep_svdd/fold2",
+          "estimated_weight_minutes": 5
+        },
+        {
+          "kind": "reference",
+          "method": "omnianomaly",
+          "fold": 1,
+          "unit": "references/omnianomaly/fold1",
+          "estimated_weight_minutes": 5
+        },
+        {
+          "kind": "reference",
+          "method": "isolation_forest",
+          "fold": 0,
+          "unit": "references/isolation_forest/fold0",
+          "estimated_weight_minutes": 3
+        },
+        {
+          "kind": "reference",
+          "method": "isolation_forest",
+          "fold": 2,
+          "unit": "references/isolation_forest/fold2",
+          "estimated_weight_minutes": 3
+        }
+      ],
+      "estimated_weight_minutes": 219
+    }
+  }
+}
