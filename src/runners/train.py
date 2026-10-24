@@ -429,6 +429,9 @@ def train_universal_model(args):
                 "use_mov_av": args.use_mov_av,
                 "gamma": args.gamma,
                 "score_fusion_mode": args.score_fusion_mode,
+                "use_rcr_residual_calibration": getattr(
+                    args, "use_rcr_residual_calibration", False
+                ),
                 "use_physical_response_score": getattr(args, "use_physical_response_score", False),
                 "physical_response_config": resolve_physical_state_config(args),
                 "physical_response_max_weight": getattr(args, "physical_response_max_weight", 0.35),
@@ -1016,6 +1019,9 @@ if __name__ == "__main__":
             "use_mov_av": args.use_mov_av,
             "gamma": args.gamma,
             "score_fusion_mode": args.score_fusion_mode,
+            "use_rcr_residual_calibration": getattr(
+                args, "use_rcr_residual_calibration", False
+            ),
             "nasa_score_calibration": getattr(args, "nasa_score_calibration", "none"),
             "use_physical_response_score": getattr(args, "use_physical_response_score", False),
             "physical_response_config": resolve_physical_state_config(args),

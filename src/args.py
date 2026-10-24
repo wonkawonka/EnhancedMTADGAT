@@ -162,6 +162,12 @@ def get_parser():
         help="C3: calibrate frozen-backbone residuals by normal current/SOC conditions",
     )
     parser.add_argument(
+        "--use_rcr_residual_calibration",
+        type=str2bool,
+        default=False,
+        help="Apply RCR linear conditional mean/scale calibration to frozen MTAD-GAT prediction and reconstruction residuals",
+    )
+    parser.add_argument(
         "--condition_calibration_clusters",
         type=int,
         default=12,
@@ -171,7 +177,7 @@ def get_parser():
         "--condition_calibration_method",
         type=str,
         default="neural_heteroscedastic",
-        choices=("hard_kmeans", "soft_expert", "neural_heteroscedastic"),
+        choices=("hard_kmeans", "soft_expert", "neural_heteroscedastic", "linear_rcr"),
         help="C3 residual model: continuous heteroscedastic calibration (formal), or legacy prototype ablations",
     )
     parser.add_argument(

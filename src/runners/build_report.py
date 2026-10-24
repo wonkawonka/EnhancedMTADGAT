@@ -31,6 +31,7 @@ TRACKED_ABLATION_KEYS = [
     "use_physical_regularization",
     "use_physical_response_score",
     "use_condition_residual_calibration",
+    "use_rcr_residual_calibration",
     "use_physical_consistency_head",
     "physical_consistency_aux_weight",
     "physical_response_terms",

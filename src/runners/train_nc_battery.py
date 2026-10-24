@@ -37,6 +37,7 @@ from src.data.nc_battery import (
     split_vehicle_folds,
 )
 from src.models.model_factory import build_model, resolve_model_args
+from src.models.rcr import LinearResidualCalibration
 from src.project_paths import MANUAL_RUNS_ROOT
 from src.runners.train import build_trainer, maybe_resume_trainer
 
@@ -396,6 +397,18 @@ def _fit_condition_residual_calibration(
     descriptor_names=None,
 ):
     """只用正常校准集拟合连续工况条件下的残差分布，防止测试集参与评分选择。"""
+    if method == "linear_rcr":
+        features = np.asarray(errors["condition"], dtype=np.float64)
+        prediction = LinearResidualCalibration(min_std=0.05).fit(
+            features, np.asarray(errors["pred_signed"], dtype=np.float64)[:, None, :]
+        )
+        reconstruction = LinearResidualCalibration(min_std=0.05).fit(
+            features, np.asarray(errors["recon_signed"], dtype=np.float64)[:, None, :]
+        )
+        return {
+            "method": "linear_rcr", "prediction": prediction,
+            "reconstruction": reconstruction, "descriptor_names": descriptor_names,
+        }
     if method == "neural_heteroscedastic":
         result = _fit_neural_condition_residual_model(errors, seed)
         result["descriptor_names"] = descriptor_names
@@ -487,6 +500,20 @@ def _fit_condition_residual_calibration(
     }
 
 def _apply_condition_residual_calibration(errors, calibration):
+    if calibration["method"] == "linear_rcr":
+        features = np.asarray(errors["condition"], dtype=np.float64)
+        calibrated = dict(errors)
+        calibrated["pred"] = np.abs(
+            calibration["prediction"].transform(
+                features, np.asarray(errors["pred_signed"], dtype=np.float64)[:, None, :]
+            )[:, 0]
+        )
+        calibrated["recon"] = np.abs(
+            calibration["reconstruction"].transform(
+                features, np.asarray(errors["recon_signed"], dtype=np.float64)[:, None, :]
+            )[:, 0]
+        )
+        return calibrated
     if calibration["method"] == "neural_heteroscedastic":
         features = (errors["condition"] - calibration["feature_center"]) / calibration[
             "feature_scale"
@@ -537,7 +564,9 @@ def _apply_condition_residual_calibration(errors, calibration):
 def _condition_calibration_metadata(calibration):
     return {
         "method": (
-            "normal_only_continuous_heteroscedastic_residual_density"
+            "normal_only_linear_rcr_conditional_residual_calibration"
+            if calibration["method"] == "linear_rcr"
+            else "normal_only_continuous_heteroscedastic_residual_density"
             if calibration["method"] == "neural_heteroscedastic"
             else "normal_only_soft_condition_expert_residual_density"
             if calibration["method"] == "soft_expert"
@@ -548,15 +577,15 @@ def _condition_calibration_metadata(calibration):
             "soc_first", "soc_last", "soc_delta",
         ],
         "cluster_count": (
-            None if calibration["method"] == "neural_heteroscedastic"
+            None if calibration["method"] in {"neural_heteroscedastic", "linear_rcr"}
             else int(calibration["estimator"].n_clusters)
         ),
         "cluster_counts": (
-            None if calibration["method"] == "neural_heteroscedastic"
+            None if calibration["method"] in {"neural_heteroscedastic", "linear_rcr"}
             else calibration["profiles"]["pred_signed"]["counts"]
         ),
         "soft_assignment_bandwidth": (
-            None if calibration["method"] == "neural_heteroscedastic"
+            None if calibration["method"] in {"neural_heteroscedastic", "linear_rcr"}
             else calibration["bandwidth"]
         ),
         "fit_labels_used": False,
@@ -567,12 +596,30 @@ def _condition_calibration_metadata(calibration):
 
 def _save_condition_residual_calibration(calibration, output_dir):
     """保存不依赖 sklearn/pickle 对象的 C3 校准参数，供独立推理复用。"""
-    payload = {
-        "method": calibration["method"],
-        "descriptor_names": calibration.get("descriptor_names"),
-        "feature_center": torch.as_tensor(calibration["feature_center"]),
-        "feature_scale": torch.as_tensor(calibration["feature_scale"]),
-    }
+    if calibration["method"] == "linear_rcr":
+        payload = {
+            "method": "linear_rcr",
+            "descriptor_names": calibration.get("descriptor_names"),
+            "min_std": 0.05,
+        }
+        for name, model in (
+            ("prediction", calibration["prediction"]),
+            ("reconstruction", calibration["reconstruction"]),
+        ):
+            payload[name] = {
+                field: torch.as_tensor(getattr(model, field))
+                for field in (
+                    "q_mean", "q_std", "mean_coef", "scale_coef",
+                    "scale_low", "scale_high",
+                )
+            }
+    else:
+        payload = {
+            "method": calibration["method"],
+            "descriptor_names": calibration.get("descriptor_names"),
+            "feature_center": torch.as_tensor(calibration["feature_center"]),
+            "feature_scale": torch.as_tensor(calibration["feature_scale"]),
+        }
     if calibration["method"] == "neural_heteroscedastic":
         payload.update({
             "target_center": torch.as_tensor(calibration["target_center"]),
@@ -580,7 +627,7 @@ def _save_condition_residual_calibration(calibration, output_dir):
             "state_dict": calibration["net"].state_dict(),
             "descriptor_dim": int(calibration["descriptor_dim"]),
         })
-    else:
+    elif calibration["method"] != "linear_rcr":
         payload.update({
             "cluster_centers": torch.as_tensor(
                 calibration["estimator"].cluster_centers_

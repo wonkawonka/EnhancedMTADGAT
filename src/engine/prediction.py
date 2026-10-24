@@ -4,6 +4,7 @@
 import json
 
 import time
+from pathlib import Path
 
 
 from tqdm import tqdm
@@ -14,6 +15,7 @@ from src.data.utils import *
 from src.engine.eval_methods import *
 
 from src.models.physical_response import compute_numpy_physical_response_errors
+from src.models.rcr import LinearResidualCalibration, condition_features
 
 
 def _autocast_context(device):
@@ -96,6 +98,11 @@ class Predictor:
         self.gamma = pred_args["gamma"]
 
         self.score_fusion_mode = pred_args.get("score_fusion_mode", "fixed")
+
+        self.use_rcr_residual_calibration = bool(
+            pred_args.get("use_rcr_residual_calibration", False)
+        )
+        self._rcr_residual_calibration = None
 
         self.use_event_consistency = pred_args.get("use_event_consistency", False)
 
@@ -223,6 +230,92 @@ class Predictor:
     def _aggregate_output_scores(self, values):
 
         return np.mean(self._score_view(values), axis=1)
+
+
+    def _rcr_condition_features(self, x):
+
+        """Return label-free operating context for post-hoc RCR calibration."""
+
+        dataset = str(self.dataset).upper()
+        if dataset in {"TSINGHUA_EV", "CH_BATTERY_LFP_DISCHARGE"} and x.shape[-1] >= 3:
+            return condition_features(x, 1, 2)
+        context = x[..., 1:] if x.shape[-1] > 1 else x
+        delta = context[:, -1] - context[:, 0]
+        mean_abs_diff = context.diff(dim=1).abs().mean(dim=1)
+        descriptors = torch.stack(
+            (context.mean(dim=1), context.std(dim=1, unbiased=False),
+             context.amax(dim=1) - context.amin(dim=1), mean_abs_diff), dim=-1
+        )
+        return torch.cat((descriptors.mean(dim=1), descriptors.amax(dim=1)), dim=1)
+
+
+    @staticmethod
+    def _rcr_columns(frame, prefix):
+
+        return [column for column in frame.columns if column.startswith(prefix)]
+
+
+    def _fit_rcr_residual_calibration(self, frame):
+
+        condition_columns = self._rcr_columns(frame, "RCR_Condition_")
+        output_dims = len(self._rcr_columns(frame, "Forecast_"))
+        forecast_columns = [f"Forecast_{i}" for i in range(output_dims)]
+        reconstruction_columns = [f"Recon_{i}" for i in range(output_dims)]
+        true_columns = [f"True_{i}" for i in range(output_dims)]
+        if not condition_columns or not (
+            len(forecast_columns) == len(reconstruction_columns) == len(true_columns)
+        ):
+            raise RuntimeError("RCR calibration requires aligned conditions and signed residuals")
+        q = frame[condition_columns].to_numpy(dtype=np.float64)
+        truth = frame[true_columns].to_numpy(dtype=np.float64)
+        pred_residual = truth - frame[forecast_columns].to_numpy(dtype=np.float64)
+        recon_residual = truth - frame[reconstruction_columns].to_numpy(dtype=np.float64)
+        prediction = LinearResidualCalibration(min_std=0.05).fit(
+            q, pred_residual[:, None, :]
+        )
+        reconstruction = LinearResidualCalibration(min_std=0.05).fit(
+            q, recon_residual[:, None, :]
+        )
+        self._rcr_residual_calibration = {
+            "prediction": prediction, "reconstruction": reconstruction,
+            "condition_columns": condition_columns,
+        }
+        output = Path(self.save_path)
+        output.mkdir(parents=True, exist_ok=True)
+        prediction.save(output / "rcr_prediction_calibration.npz")
+        reconstruction.save(output / "rcr_reconstruction_calibration.npz")
+        with (output / "rcr_residual_calibration.json").open("w", encoding="utf-8") as handle:
+            json.dump({
+                "fit_split": "normal_train_only", "fit_labels_used": False,
+                "windows": len(frame), "condition_columns": condition_columns,
+                "min_std": 0.05,
+            }, handle, ensure_ascii=False, indent=2)
+
+
+    def _apply_rcr_residual_calibration(self, frame):
+
+        if self._rcr_residual_calibration is None:
+            raise RuntimeError("Fit RCR residual calibration before applying it")
+        calibration = self._rcr_residual_calibration
+        q = frame[calibration["condition_columns"]].to_numpy(dtype=np.float64)
+        output_dims = len(self._rcr_columns(frame, "Forecast_"))
+        truth = frame[[f"True_{i}" for i in range(output_dims)]].to_numpy(dtype=np.float64)
+        pred = truth - frame[[f"Forecast_{i}" for i in range(output_dims)]].to_numpy(dtype=np.float64)
+        recon = truth - frame[[f"Recon_{i}" for i in range(output_dims)]].to_numpy(dtype=np.float64)
+        pred_z = np.abs(calibration["prediction"].transform(q, pred[:, None, :])[:, 0])
+        recon_z = np.abs(calibration["reconstruction"].transform(q, recon[:, None, :])[:, 0])
+        result = frame.copy()
+        scores = np.empty_like(pred_z, dtype=np.float64)
+        for index in range(output_dims):
+            pred_weight = float(result[f"Pred_Weight_{index}"].iloc[0])
+            recon_weight = float(result[f"Recon_Weight_{index}"].iloc[0])
+            scores[:, index] = pred_weight * pred_z[:, index] + recon_weight * recon_z[:, index]
+            result[f"RCR_Pred_Z_{index}"] = pred_z[:, index]
+            result[f"RCR_Recon_Z_{index}"] = recon_z[:, index]
+            result[f"A_Score_{index}"] = scores[:, index]
+        result["A_Score_Global"] = self._aggregate_output_scores(scores)
+        result["RCR_Residual_Calibrated"] = True
+        return result
 
 
     def _apply_nasa_score_calibration(self, score_df, split_name):
@@ -1663,6 +1756,8 @@ class Predictor:
         c3_value_residuals = []
         c3_relation_residuals = []
 
+        rcr_conditions = []
+
         previous_attention = None
 
         batch_latencies = []
@@ -1680,6 +1775,11 @@ class Predictor:
                 x = x.to(device)
 
                 y = y.to(device)
+
+                if self.use_rcr_residual_calibration:
+                    rcr_conditions.append(
+                        self._rcr_condition_features(x).detach().cpu().numpy()
+                    )
 
 
                 with _autocast_context(device):
@@ -1847,6 +1947,11 @@ class Predictor:
 
 
         df = pd.DataFrame(df_dict)
+
+        if self.use_rcr_residual_calibration:
+            conditions = np.concatenate(rcr_conditions, axis=0)
+            for index in range(conditions.shape[1]):
+                df[f"RCR_Condition_{index}"] = conditions[:, index]
 
         if consistency_errors:
             df["Physical_Consistency_Score"] = np.concatenate(consistency_errors).astype(np.float32)
@@ -2353,6 +2458,14 @@ class Predictor:
 
             test_pred_df = self.get_score_for_sequences(test)
             test_scoring_stats = dict(self.last_scoring_stats)
+
+            if self.use_rcr_residual_calibration:
+
+                self._fit_rcr_residual_calibration(train_pred_df)
+
+                train_pred_df = self._apply_rcr_residual_calibration(train_pred_df)
+
+                test_pred_df = self._apply_rcr_residual_calibration(test_pred_df)
 
             if self.use_physical_consistency_score:
 
