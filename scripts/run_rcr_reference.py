@@ -8,6 +8,7 @@ import json
 import random
 import sys
 import time
+import pickle
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np
@@ -22,7 +23,7 @@ from src.runners import run_unified_external_baselines as reference
 from src.runners.run_rcr import atomic_json, atomic_checkpoint
 from scripts.evaluate_rcr import metrics
 
-METHODS = ['mtad_gat', 'tranad', 'anomaly_transformer', 'dcdetector', 'patchad', 'omnianomaly', 'isolation_forest']
+METHODS = ['mtad_gat', 'tranad', 'anomaly_transformer', 'dcdetector', 'patchad', 'omnianomaly', 'isolation_forest', 'deep_svdd']
 COMPONENTS = ['raw', 'A3_trend', 'D3_low', 'D2_mid', 'D1_high']
 
 
@@ -83,6 +84,7 @@ def main():
     parser.add_argument('--component', choices=COMPONENTS, default='raw')
     parser.add_argument('--output', required=True)
     parser.add_argument('--rcr-root', required=True, help='Completed/started full-backbone root with authoritative mapping')
+    parser.add_argument('--split-cache', type=Path, help='Trusted local cache of this same mixed-cycle split')
     cli = parser.parse_args()
     if cli.method != 'isolation_forest' and not torch.cuda.is_available():
         raise RuntimeError('Run CUDA outside sandbox')
@@ -105,7 +107,16 @@ def main():
     window, stride = reference._window_and_stride(args)
     torch.set_num_threads(4)
     torch.manual_seed(3407); torch.cuda.manual_seed_all(3407); np.random.seed(3407); random.seed(3407)
-    split = load_ch_battery_mixed_cycle_research_split(chemistry=cli.chemistry, seed=3407)
+    if cli.split_cache and cli.split_cache.is_file():
+        with cli.split_cache.open('rb') as handle:split=pickle.load(handle)
+        assert split['chemistry']==cli.chemistry and split['seed']==3407
+    else:
+        split = load_ch_battery_mixed_cycle_research_split(chemistry=cli.chemistry, seed=3407)
+        if cli.split_cache:
+            cli.split_cache.parent.mkdir(parents=True,exist_ok=True)
+            temporary=cli.split_cache.with_suffix('.tmp')
+            with temporary.open('wb') as handle:pickle.dump(split,handle,protocol=pickle.HIGHEST_PROTOCOL)
+            temporary.replace(cli.split_cache)
     ids = {p: sorted(k for k, x in split[p].items() if len(x) >= 32) for p in ['train', 'validation', 'test']}
     mapping = json.loads((Path(cli.rcr_root)/'mapping.json').read_text())
     assert ids == mapping['sample_ids']
@@ -137,7 +148,11 @@ def main():
     else:
         model, auxiliary = reference._fit_torch(data, args, train, window, torch.device('cuda'))
         atomic_checkpoint(root/'model.pt', model.state_dict())
-        assert auxiliary is None, 'Unexpected nonserialized baseline auxiliary state'
+        if cli.method=='deep_svdd':
+            assert auxiliary is not None
+            atomic_checkpoint(root/'center.pt', auxiliary.detach().cpu())
+        else:
+            assert auxiliary is None, 'Unexpected nonserialized baseline auxiliary state'
     training_seconds = time.perf_counter() - started
     frames = {}
     for partition, loader in [('validation', validation), ('test', test)]:

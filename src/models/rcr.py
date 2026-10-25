@@ -62,18 +62,24 @@ class RCRBackbone(nn.Module):
         self.temporal = nn.TransformerEncoder(layer, layers, enable_nested_tensor=False) if temporal else nn.Identity()
         self.decoder = nn.Sequential(nn.Linear(hidden, hidden), nn.GELU(), nn.Linear(hidden, variables))
 
-    def forward(self, x):
+    def embed(self, x):
+        """Expose [B,T,H] features before the temporal encoder."""
         if x.shape[-1] != self.variables:
             raise ValueError('Feature schema mismatch')
         h = self.value(x.unsqueeze(-1)) + self.variable_embedding
-        h = self.fusion(self.graph(h).flatten(-2))
+        return self.fusion(self.graph(h).flatten(-2))
+
+    def encode_temporal(self, h):
         position = torch.arange(h.shape[1], device=h.device, dtype=h.dtype)[:, None]
         frequency = torch.exp(torch.arange(0, h.shape[-1], 2, device=h.device,
                                            dtype=h.dtype)*(-math.log(10000)/h.shape[-1]))
         pe = torch.zeros_like(h[0])
         pe[:, 0::2] = torch.sin(position*frequency)
         pe[:, 1::2] = torch.cos(position*frequency)
-        return self.decoder(self.temporal(h+pe))
+        return self.temporal(h+pe)
+
+    def forward(self, x):
+        return self.decoder(self.encode_temporal(self.embed(x)))
 
 
 class LinearResidualCalibration:
