@@ -1,0 +1,16 @@
+{
+  "task": "MCR-PRIORITY5-KAGGLE4-20261025-v1",
+  "root": "runs/internal/mscm_mcr_priority5_20261025_v1",
+  "cache": "runs/internal/mscm_mcr_development_20261025_v2",
+  "epochs": 50,
+  "max_epochs": 100,
+  "patience": 8,
+  "batch": 256,
+  "seeds": [3407, 3408, 3409],
+  "shards": {
+    "chen_a": {"account": "chenmjdaisy", "units": ["NCM"]},
+    "chen_b": {"account": "chenmjdaisy", "units": ["LFP"]},
+    "daisy_a": {"account": "daisychen2", "units": ["Brand3_fold0", "Brand3_fold2", "Brand3_fold4"]},
+    "daisy_b": {"account": "daisychen2", "units": ["Brand3_fold1", "Brand3_fold3"]}
+  }
+}
