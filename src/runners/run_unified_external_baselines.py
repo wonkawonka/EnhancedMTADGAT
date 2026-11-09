@@ -116,7 +116,7 @@ def _parse_feature_dims(value):
 
 def _window_and_stride(args):
     native_windows = {"tranad": 10, "gdn": 32}
-    if args.dataset.upper() in {"BRAND2", "BRAND3"} and args.method in {
+    if args.dataset.upper() in {"BRAND1", "BRAND2", "BRAND3"} and args.method in {
         "isolation_forest", "auto_encoder", "deep_svdd", "lstm_ad"
     }:
         native_windows[args.method] = 128
@@ -784,7 +784,7 @@ def _final_metrics(data, validation_scores, validation_endpoints, test_scores, t
 def parse_args():
     parser = argparse.ArgumentParser(description="Unified formal external baseline runner")
     parser.add_argument("--method", choices=METHODS, required=True)
-    parser.add_argument("--dataset", choices=("MSL", "SMAP", "SWAT", "WADI", "Brand2", "Brand3", "BMS", "CH_LFP_DISCHARGE", "CH_NCM_DISCHARGE", "CH_LFP_CHARGE", "CH_NCM_CHARGE", "CH_MIXED_LFP_DISCHARGE", "CH_MIXED_NCM_DISCHARGE", "CH_LFP_MIXED_CYCLE"), required=True)
+    parser.add_argument("--dataset", choices=("MSL", "SMAP", "SWAT", "WADI", "Brand1", "Brand2", "Brand3", "BMS", "CH_LFP_DISCHARGE", "CH_NCM_DISCHARGE", "CH_LFP_CHARGE", "CH_NCM_CHARGE", "CH_MIXED_LFP_DISCHARGE", "CH_MIXED_NCM_DISCHARGE", "CH_LFP_MIXED_CYCLE"), required=True)
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--seed", type=int, default=3407)
     parser.add_argument("--brand_fold", type=int, default=0, choices=range(5))

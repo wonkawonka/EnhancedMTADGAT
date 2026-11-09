@@ -304,7 +304,7 @@ def load_external_protocol_data(
             metadata={"normalization": "training_only_maxabs", "split": "per_cluster_temporal_80_20", "seed": int(seed)},
         )
 
-    if name in {"BRAND2", "BRAND3"}:
+    if name in {"BRAND1", "BRAND2", "BRAND3"}:
         brand = int(name[-1])
         protocol = str(brand_split_protocol).strip().lower()
         if protocol not in {"paper_protocol", "strict_normal_validation"}:

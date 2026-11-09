@@ -1,0 +1,228 @@
+{
+  "plan_name": "rcr_brand1_revalidation_20261108",
+  "runner": "src.runners.run_rcr_revalidation",
+  "schema_version": 1,
+  "lifecycle": "preregistered_development_revalidation",
+  "purpose": "Brand1全五折从零复验，继承原RCR协议，取消尺度下限敏感性。",
+  "units": [
+    "Brand1_fold0",
+    "Brand1_fold1",
+    "Brand1_fold2",
+    "Brand1_fold3",
+    "Brand1_fold4"
+  ],
+  "seeds": [
+    3407,
+    3408,
+    3409
+  ],
+  "data": {
+    "input_cache": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation/inputs",
+    "split_seed": 3407,
+    "brand_fold_seed": 0,
+    "brand_protocol": "strict_normal_validation",
+    "normalization": "fit normal training only MinMax independently per fold, same method as Brand3",
+    "cohort": "Original public Brand1, all476739 snippets and198 represented vehicles; strict fivefold split with foldseed0",
+    "windows": {
+      "Brand1": 127
+    },
+    "strides": {
+      "Brand1": 127
+    },
+    "training": "all original normal training windows; no 80/20 calibration holdout in this plan",
+    "validation": "original normal validation, checkpoint and threshold only",
+    "test": "original test objects, final metrics only",
+    "feature_count": 7,
+    "control_indices": [
+      1,
+      2
+    ],
+    "preparation_root": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation",
+    "source_paths": {
+      "Brand1_fold0": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation/sources/Brand1_fold0",
+      "Brand1_fold1": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation/sources/Brand1_fold1",
+      "Brand1_fold2": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation/sources/Brand1_fold2",
+      "Brand1_fold3": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation/sources/Brand1_fold3",
+      "Brand1_fold4": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation/sources/Brand1_fold4"
+    },
+    "archive": "datasets/downloads/battery_brand1.tar.gz"
+  },
+  "common_args": {
+    "hidden": 32,
+    "feature_graph": true,
+    "temporal": true,
+    "layers": 2,
+    "heads": 4,
+    "ffn_dim": 64,
+    "dropout": 0.1,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "optimizer": "AdamW",
+    "loss": "Huber delta=1",
+    "batch_size": 128,
+    "epochs": 30,
+    "patience": 8,
+    "checkpoint_selection": "minimum normal-validation Huber; strict improvement",
+    "scheduler": "none, matching original RCR optimizer protocol",
+    "precision": "float32",
+    "tf32": false,
+    "fresh_initialization": true,
+    "resume_interrupted_job_only": true
+  },
+  "scoring": {
+    "primary": "scale",
+    "definition": "signed residual E=X-Xhat; z=(E-mu(current,SOC))/sigma(current,SOC); score=mean(z^2)",
+    "calibration": "original normal-only linear conditional mean and log-RMS scale; all train-normal windows",
+    "min_std": 0.05,
+    "sigma_clipping": "normal-training predicted sigma P5/P95, with min_std floor",
+    "window_to_snippet": "top 5 percent mean, ceil, at least one window",
+    "snippet_to_vehicle": "Brand3 top 5 percent mean, ceil; CH remains snippet level",
+    "threshold_quantile": 0.95,
+    "threshold_partition": "normal validation, at final evaluation object level",
+    "metrics": [
+      "ap",
+      "auroc",
+      "precision",
+      "recall",
+      "f1",
+      "fpr"
+    ],
+    "no_calibration_ablation": "same R1 checkpoint; mean(E^2), separately fitted validation P95 threshold",
+    "additional_score_families": [],
+    "cal_abs": false,
+    "test_based_selection": false
+  },
+  "experiments": [
+    {
+      "name": "R1_full",
+      "stage": "multiseed",
+      "args": {}
+    },
+    {
+      "name": "R4_no_graph",
+      "stage": "ablation",
+      "args": {
+        "feature_graph": false
+      },
+      "seeds": [
+        3407
+      ]
+    },
+    {
+      "name": "R5_no_temporal",
+      "stage": "ablation",
+      "args": {
+        "temporal": false
+      },
+      "seeds": [
+        3407
+      ]
+    }
+  ],
+  "sensitivity": {
+    "seeds": [
+      3407
+    ],
+    "method": "one factor at a time, reuse R1 at default; report all values; no test-score winner selection",
+    "training_axes": [
+      {
+        "name": "P1_lr",
+        "parameter": "lr",
+        "values": [
+          0.0003,
+          0.001,
+          0.003
+        ],
+        "default": 0.001
+      },
+      {
+        "name": "P2_hidden",
+        "parameter": "hidden",
+        "values": [
+          16,
+          32,
+          64
+        ],
+        "default": 32
+      },
+      {
+        "name": "P3_layers",
+        "parameter": "layers",
+        "values": [
+          1,
+          2,
+          3
+        ],
+        "default": 2
+      }
+    ],
+    "scoring_axis": {
+      "name": "P4_min_std",
+      "parameter": "min_std",
+      "values": [
+        0.05
+      ],
+      "default": 0.05,
+      "parent": "R1_full",
+      "seeds": [
+        3407,
+        3408,
+        3409
+      ],
+      "retrain_network": false,
+      "disabled": true
+    }
+  },
+  "evaluation_only": [
+    {
+      "name": "R6_no_calibration",
+      "parent": "R1_full",
+      "seeds": [
+        3407
+      ],
+      "score": "no_calibration",
+      "retrain_network": false
+    }
+  ],
+  "analysis": {
+    "seeds": "Brand1 first average five folds within each seed, then mean and sample std across3407/3408/3409",
+    "paired_comparisons": "R4/R5/R6 seed3407 compared only against R1 seed3407, not R1 three-seed mean",
+    "sensitivity": "lr/hidden/layers seed3407 only; default reused; no scale-floor sensitivity",
+    "brand_fault_correlation": "same fault vehicles repeat across folds; never treat folds or windows as independent fault vehicles",
+    "historical_results": "reference only; do not compare changed-protocol historical checkpoints as paired controls",
+    "external_comparisons": "30-epoch cap fixed; equal cap alone does not prove equality with historical external-model protocols",
+    "final_paper_matrices": "do not modify"
+  },
+  "expected": {
+    "training_jobs": 55,
+    "primary_training_job_scores": 55,
+    "no_calibration_scores": 5,
+    "extra_floor_scores": 0,
+    "total_metric_cells": 60
+  },
+  "execution": {
+    "predecessor": null,
+    "gpu": 0,
+    "max_concurrent_gpu_jobs": 1,
+    "outside_sandbox_cuda": true,
+    "output": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108",
+    "report": "report/analysis/rcr_revalidation/BRAND1_REVALIDATION_20261108.md",
+    "stop_on_failed_job": true,
+    "immutable_plan_and_source_snapshot": true,
+    "additional_sources": [
+      "scripts/prepare_brand1_revalidation.py",
+      "src/data/nc_battery.py",
+      "scripts/build_rcr_revalidation_complete_report.py"
+    ]
+  },
+  "revision": {
+    "parent_plan": "configs/internal/rcr_revalidation_20261107_v2.json",
+    "user_request": "Brand1跑一下，尺度的不要跑",
+    "interpretation": "fullfivefold55training/60evaluation; keep primaryScale .05; skipfloor sensitivity",
+    "data_download": {
+      "url": "https://ndownloader.figshare.com/files/41520222",
+      "bytes": 1191991306,
+      "md5": "8d32af34063c0475587c07f6021861a1"
+    }
+  }
+}

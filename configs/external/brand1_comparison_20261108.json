@@ -1,0 +1,65 @@
+{
+  "plan_name": "brand1_external_comparison_20261108_s3407",
+  "dataset": "Brand1",
+  "methods": [
+    "mtad_gat",
+    "tranad",
+    "anomaly_transformer",
+    "dcdetector",
+    "patchad",
+    "omnianomaly",
+    "isolation_forest",
+    "deep_svdd"
+  ],
+  "seeds": [
+    3407
+  ],
+  "folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "fold_seed": 0,
+  "split": "strict_normal_validation",
+  "normalization": "minmax",
+  "vehicle_top_ratio": 0.05,
+  "threshold_quantile": 0.95,
+  "epochs": 30,
+  "svdd_pretrain_epochs": 5,
+  "train_sample_limit": 0,
+  "evaluation_sample_limit": 0,
+  "batch_size": 64,
+  "learning_rate": 0.001,
+  "checkpoint_selection": "fixed_final_native_training_objective_no_test_selection",
+  "rcr_checkpoint_selection": "best_normal_validation_Huber_patience8",
+  "comparison_note": "Same cohort, scaler, full normal training and30epoch cap; native losses/windows and fixed-final checkpoint differ fromRCR. Do not claim fully identical training protocols.",
+  "native_windows": {
+    "mtad_gat": 127,
+    "tranad": 10,
+    "anomaly_transformer": 127,
+    "dcdetector": 128,
+    "patchad": 128,
+    "omnianomaly": 127,
+    "isolation_forest": 128,
+    "deep_svdd": 128
+  },
+  "native_strides": {
+    "mtad_gat": 127,
+    "tranad": 127,
+    "anomaly_transformer": 127,
+    "dcdetector": 128,
+    "patchad": 128,
+    "omnianomaly": 127,
+    "isolation_forest": 128,
+    "deep_svdd": 128
+  },
+  "predecessor": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108",
+  "expected_jobs": 40,
+  "output": "runs/external/brand1_comparison_20261108_s3407",
+  "report": "report/analysis/rcr_revalidation/BRAND1_EXTERNAL_COMPARISON_20261108.md",
+  "gpu": 0,
+  "concurrent_gpu_jobs": 1,
+  "request": "用户已确认种子3407全五折：8个模型共40组；改为4个Kaggle任务，每个10组；原始数据复用账号自有数据集，五折参考由助手上传；不额外生成计划MD。"
+}

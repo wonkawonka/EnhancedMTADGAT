@@ -1,0 +1,304 @@
+{
+  "plan_name": "brand1_external_four_kaggle_20261109_s3407",
+  "common_plan": "configs/external/brand1_comparison_20261108.json",
+  "expected_jobs": 40,
+  "model_seed": 3407,
+  "folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "cohort_dataset_slug": "brand1-external-cohort-20261109",
+  "shards": {
+    "daisy_a": {
+      "account": "daisychen2",
+      "raw_dataset": "daisychen2/tsinghua-ev",
+      "cohort_dataset": "daisychen2/brand1-external-cohort-20261109",
+      "kernel": "daisychen2/brand1-external-daisy-a-20261109",
+      "methods": [
+        "patchad",
+        "isolation_forest"
+      ],
+      "jobs": [
+        {
+          "method": "patchad",
+          "seed": 3407,
+          "fold": 0,
+          "id": "patchad/seed3407/fold0"
+        },
+        {
+          "method": "isolation_forest",
+          "seed": 3407,
+          "fold": 0,
+          "id": "isolation_forest/seed3407/fold0"
+        },
+        {
+          "method": "patchad",
+          "seed": 3407,
+          "fold": 1,
+          "id": "patchad/seed3407/fold1"
+        },
+        {
+          "method": "isolation_forest",
+          "seed": 3407,
+          "fold": 1,
+          "id": "isolation_forest/seed3407/fold1"
+        },
+        {
+          "method": "patchad",
+          "seed": 3407,
+          "fold": 2,
+          "id": "patchad/seed3407/fold2"
+        },
+        {
+          "method": "isolation_forest",
+          "seed": 3407,
+          "fold": 2,
+          "id": "isolation_forest/seed3407/fold2"
+        },
+        {
+          "method": "patchad",
+          "seed": 3407,
+          "fold": 3,
+          "id": "patchad/seed3407/fold3"
+        },
+        {
+          "method": "isolation_forest",
+          "seed": 3407,
+          "fold": 3,
+          "id": "isolation_forest/seed3407/fold3"
+        },
+        {
+          "method": "patchad",
+          "seed": 3407,
+          "fold": 4,
+          "id": "patchad/seed3407/fold4"
+        },
+        {
+          "method": "isolation_forest",
+          "seed": 3407,
+          "fold": 4,
+          "id": "isolation_forest/seed3407/fold4"
+        }
+      ]
+    },
+    "daisy_b": {
+      "account": "daisychen2",
+      "raw_dataset": "daisychen2/tsinghua-ev",
+      "cohort_dataset": "daisychen2/brand1-external-cohort-20261109",
+      "kernel": "daisychen2/brand1-external-daisy-b-20261109",
+      "methods": [
+        "mtad_gat",
+        "tranad"
+      ],
+      "jobs": [
+        {
+          "method": "mtad_gat",
+          "seed": 3407,
+          "fold": 0,
+          "id": "mtad_gat/seed3407/fold0"
+        },
+        {
+          "method": "tranad",
+          "seed": 3407,
+          "fold": 0,
+          "id": "tranad/seed3407/fold0"
+        },
+        {
+          "method": "mtad_gat",
+          "seed": 3407,
+          "fold": 1,
+          "id": "mtad_gat/seed3407/fold1"
+        },
+        {
+          "method": "tranad",
+          "seed": 3407,
+          "fold": 1,
+          "id": "tranad/seed3407/fold1"
+        },
+        {
+          "method": "mtad_gat",
+          "seed": 3407,
+          "fold": 2,
+          "id": "mtad_gat/seed3407/fold2"
+        },
+        {
+          "method": "tranad",
+          "seed": 3407,
+          "fold": 2,
+          "id": "tranad/seed3407/fold2"
+        },
+        {
+          "method": "mtad_gat",
+          "seed": 3407,
+          "fold": 3,
+          "id": "mtad_gat/seed3407/fold3"
+        },
+        {
+          "method": "tranad",
+          "seed": 3407,
+          "fold": 3,
+          "id": "tranad/seed3407/fold3"
+        },
+        {
+          "method": "mtad_gat",
+          "seed": 3407,
+          "fold": 4,
+          "id": "mtad_gat/seed3407/fold4"
+        },
+        {
+          "method": "tranad",
+          "seed": 3407,
+          "fold": 4,
+          "id": "tranad/seed3407/fold4"
+        }
+      ]
+    },
+    "chen_a": {
+      "account": "chenmjdaisy",
+      "raw_dataset": "chenmjdaisy/tsinghua-ev",
+      "cohort_dataset": "chenmjdaisy/brand1-external-cohort-20261109",
+      "kernel": "chenmjdaisy/brand1-external-chen-a-20261109",
+      "methods": [
+        "anomaly_transformer",
+        "deep_svdd"
+      ],
+      "jobs": [
+        {
+          "method": "anomaly_transformer",
+          "seed": 3407,
+          "fold": 0,
+          "id": "anomaly_transformer/seed3407/fold0"
+        },
+        {
+          "method": "deep_svdd",
+          "seed": 3407,
+          "fold": 0,
+          "id": "deep_svdd/seed3407/fold0"
+        },
+        {
+          "method": "anomaly_transformer",
+          "seed": 3407,
+          "fold": 1,
+          "id": "anomaly_transformer/seed3407/fold1"
+        },
+        {
+          "method": "deep_svdd",
+          "seed": 3407,
+          "fold": 1,
+          "id": "deep_svdd/seed3407/fold1"
+        },
+        {
+          "method": "anomaly_transformer",
+          "seed": 3407,
+          "fold": 2,
+          "id": "anomaly_transformer/seed3407/fold2"
+        },
+        {
+          "method": "deep_svdd",
+          "seed": 3407,
+          "fold": 2,
+          "id": "deep_svdd/seed3407/fold2"
+        },
+        {
+          "method": "anomaly_transformer",
+          "seed": 3407,
+          "fold": 3,
+          "id": "anomaly_transformer/seed3407/fold3"
+        },
+        {
+          "method": "deep_svdd",
+          "seed": 3407,
+          "fold": 3,
+          "id": "deep_svdd/seed3407/fold3"
+        },
+        {
+          "method": "anomaly_transformer",
+          "seed": 3407,
+          "fold": 4,
+          "id": "anomaly_transformer/seed3407/fold4"
+        },
+        {
+          "method": "deep_svdd",
+          "seed": 3407,
+          "fold": 4,
+          "id": "deep_svdd/seed3407/fold4"
+        }
+      ]
+    },
+    "chen_b": {
+      "account": "chenmjdaisy",
+      "raw_dataset": "chenmjdaisy/tsinghua-ev",
+      "cohort_dataset": "chenmjdaisy/brand1-external-cohort-20261109",
+      "kernel": "chenmjdaisy/brand1-external-chen-b-20261109",
+      "methods": [
+        "dcdetector",
+        "omnianomaly"
+      ],
+      "jobs": [
+        {
+          "method": "dcdetector",
+          "seed": 3407,
+          "fold": 0,
+          "id": "dcdetector/seed3407/fold0"
+        },
+        {
+          "method": "omnianomaly",
+          "seed": 3407,
+          "fold": 0,
+          "id": "omnianomaly/seed3407/fold0"
+        },
+        {
+          "method": "dcdetector",
+          "seed": 3407,
+          "fold": 1,
+          "id": "dcdetector/seed3407/fold1"
+        },
+        {
+          "method": "omnianomaly",
+          "seed": 3407,
+          "fold": 1,
+          "id": "omnianomaly/seed3407/fold1"
+        },
+        {
+          "method": "dcdetector",
+          "seed": 3407,
+          "fold": 2,
+          "id": "dcdetector/seed3407/fold2"
+        },
+        {
+          "method": "omnianomaly",
+          "seed": 3407,
+          "fold": 2,
+          "id": "omnianomaly/seed3407/fold2"
+        },
+        {
+          "method": "dcdetector",
+          "seed": 3407,
+          "fold": 3,
+          "id": "dcdetector/seed3407/fold3"
+        },
+        {
+          "method": "omnianomaly",
+          "seed": 3407,
+          "fold": 3,
+          "id": "omnianomaly/seed3407/fold3"
+        },
+        {
+          "method": "dcdetector",
+          "seed": 3407,
+          "fold": 4,
+          "id": "dcdetector/seed3407/fold4"
+        },
+        {
+          "method": "omnianomaly",
+          "seed": 3407,
+          "fold": 4,
+          "id": "omnianomaly/seed3407/fold4"
+        }
+      ]
+    }
+  }
+}

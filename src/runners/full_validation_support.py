@@ -42,7 +42,8 @@ class TrainingSubset:
         return self.original.get(partition, self.indices[index] if partition == 'train' else index)
 
 
-def normal_split(source, output, seed=3407, calibration_fraction=.2):
+def normal_split(source, output, seed=3407, calibration_fraction=.2,
+                 pretrained_weights_reused=False):
     """Split original normal training VINs before ANY backbone optimization."""
     output.mkdir(parents=True, exist_ok=True)
     marker = output / 'normal_split.json'
@@ -67,7 +68,8 @@ def normal_split(source, output, seed=3407, calibration_fraction=.2):
         reconstruction_vins=sorted(set(vins)-set(selected)), calibration_vins=selected,
         reconstruction_windows=len(fit_indices), calibration_windows=len(cal_indices),
         source_mapping_sha256=digest(source / 'mapping.json'),
-        pretrained_weights_reused=False, calibration_used_for_checkpoint_selection=False)
+        pretrained_weights_reused=bool(pretrained_weights_reused),
+        calibration_used_for_checkpoint_selection=False)
     if marker.exists():
         assert json.loads(marker.read_text()) == record
         np.testing.assert_array_equal(np.load(output/'fit_window_indices.npy'), fit_indices)
@@ -225,7 +227,7 @@ def train_network(model, arrays, output, config, stage, teacher=None, relation=F
 
 def ranked_frames(source, mapping, window_values, names):
     metadata = read(source/'metadata.csv').set_index('sample_id')
-    brand = mapping.get('dataset') == 'Brand3'
+    brand = mapping.get('dataset') in {'Brand1', 'Brand2', 'Brand3'}
     if brand: metadata['vin'] = metadata.car.astype(str)
     frames, snippets = {}, {}
     for partition in PARTITIONS:

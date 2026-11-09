@@ -61,6 +61,10 @@ def main():
         external=root/'kaggle_pipeline_status.json'
         if external.exists():
             state['kaggle']=json.loads(external.read_text())
+        diagnostic=root/'brand3_diagnostics/complete.json'
+        state['brand3_diagnostics_complete']=diagnostic.exists()
+        if diagnostic.exists():
+            state['brand3_diagnostics_report']=json.loads(diagnostic.read_text())['report']
         temporary=root/'pipeline_status.json.tmp';temporary.write_text(json.dumps(state,ensure_ascii=False,indent=2))
         temporary.replace(root/'pipeline_status.json')
         lines=['# 五项Memory验证：运行状态','',f'更新时间：{state["updated_at"]}。仅按实际完成标记计数。','',
@@ -71,6 +75,8 @@ def main():
             '| 单元 | 重构配置完成 | 最终A4已评分 | 关系头完成 |','| --- | --- | --- | --- |']
         for r in counts:
             lines.append(f'| {r["unit"]} | {len(r["completed_reconstruction_arms"])} / {len(arms)} | {r["final_checkpoint_scored"]} | {len(r["completed_relation_heads"])} / 11 |')
+        if state['brand3_diagnostics_complete']:
+            lines+=['','Brand3五折重构误差、Memory覆盖、最佳/最终点及变量级校准诊断已完成，见[专项报告](BRAND3_A4_DIAGNOSTICS_20261025.md)。']
         if 'model_two_execution' in state:
             lines+=['','模型二已迁移到Kaggle四任务；本表关系头数量仅统计已回收并导入本地的完成标记，不能据此推断Kaggle覆盖或完成数。']
             for name,task in state.get('kaggle',{}).get('tasks',{}).items():

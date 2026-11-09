@@ -1,0 +1,103 @@
+{
+  "plan_name": "rcr_revalidation_20261107",
+  "runner": "src.runners.run_rcr_revalidation",
+  "schema_version": 1,
+  "lifecycle": "preregistered_development_revalidation",
+  "purpose": "原RCR从零重训：多种子、结构/校准消融及单因素参数敏感性；不复算旧模型，不做续训。",
+  "units": ["Brand3_fold0", "Brand3_fold1", "Brand3_fold2", "Brand3_fold3", "Brand3_fold4", "NCM", "LFP"],
+  "seeds": [3407, 3408, 3409],
+  "data": {
+    "input_cache": "runs/internal/mscm_mcr_development_20261025_v2/inputs",
+    "split_seed": 3407,
+    "brand_fold_seed": 0,
+    "brand_protocol": "strict_normal_validation",
+    "normalization": "reuse archived normal-training-only MinMax input cache",
+    "cohort": "reuse original RCR full-data sample IDs and window references; never repartition by model seed",
+    "windows": {"LFP": 32, "NCM": 32, "Brand3": 127},
+    "strides": {"LFP": 4, "NCM": 4, "Brand3": 127},
+    "training": "all original normal training windows; no 80/20 calibration holdout in this plan",
+    "validation": "original normal validation, checkpoint and threshold only",
+    "test": "original test objects, final metrics only",
+    "feature_count": 7,
+    "control_indices": [1, 2]
+  },
+  "common_args": {
+    "hidden": 32,
+    "feature_graph": true,
+    "temporal": true,
+    "layers": 2,
+    "heads": 4,
+    "ffn_dim": 64,
+    "dropout": 0.1,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "optimizer": "AdamW",
+    "loss": "Huber delta=1",
+    "batch_size": 128,
+    "epochs": 30,
+    "patience": 8,
+    "checkpoint_selection": "minimum normal-validation Huber; strict improvement",
+    "scheduler": "none, matching original RCR optimizer protocol",
+    "precision": "float32",
+    "tf32": false,
+    "fresh_initialization": true,
+    "resume_interrupted_job_only": true
+  },
+  "scoring": {
+    "primary": "scale",
+    "definition": "signed residual E=X-Xhat; z=(E-mu(current,SOC))/sigma(current,SOC); score=mean(z^2)",
+    "calibration": "original normal-only linear conditional mean and log-RMS scale; all train-normal windows",
+    "min_std": 0.05,
+    "sigma_clipping": "normal-training predicted sigma P5/P95, with min_std floor",
+    "window_to_snippet": "top 5 percent mean, ceil, at least one window",
+    "snippet_to_vehicle": "Brand3 top 5 percent mean, ceil; CH remains snippet level",
+    "threshold_quantile": 0.95,
+    "threshold_partition": "normal validation, at final evaluation object level",
+    "metrics": ["ap", "auroc", "precision", "recall", "f1", "fpr"],
+    "no_calibration_ablation": "same R1 checkpoint; mean(E^2), separately fitted validation P95 threshold",
+    "additional_score_families": [],
+    "cal_abs": false,
+    "test_based_selection": false
+  },
+  "experiments": [
+    {"name": "R1_full", "stage": "multiseed", "args": {}},
+    {"name": "R4_no_graph", "stage": "ablation", "args": {"feature_graph": false}},
+    {"name": "R5_no_temporal", "stage": "ablation", "args": {"temporal": false}}
+  ],
+  "sensitivity": {
+    "seeds": [3407],
+    "method": "one factor at a time, reuse R1 at default; report all values; no test-score winner selection",
+    "training_axes": [
+      {"name": "P1_lr", "parameter": "lr", "values": [0.0003, 0.001, 0.003], "default": 0.001},
+      {"name": "P2_hidden", "parameter": "hidden", "values": [16, 32, 64], "default": 32},
+      {"name": "P3_dropout", "parameter": "dropout", "values": [0.0, 0.1, 0.2], "default": 0.1}
+    ],
+    "scoring_axis": {"name": "P4_min_std", "parameter": "min_std", "values": [0.005, 0.05, 0.1], "default": 0.05, "parent": "R1_full", "seeds": [3407, 3408, 3409], "retrain_network": false}
+  },
+  "evaluation_only": [
+    {"name": "R6_no_calibration", "parent": "R1_full", "seeds": [3407, 3408, 3409], "score": "no_calibration", "retrain_network": false}
+  ],
+  "analysis": {
+    "seeds": "compute Brand3 fivefold mean within each seed, then mean and sample std across three seeds; CH mean/std across seeds",
+    "paired_comparisons": "compare R1/R4/R5/R6 on same unit and model seed",
+    "sensitivity": "default R1 seed3407 shared across training axes; min_std reuses all 21 full checkpoints",
+    "brand_fault_correlation": "same fault vehicles repeat across folds; never treat folds or windows as independent fault vehicles",
+    "historical_results": "reference only; do not compare changed-protocol historical checkpoints as paired controls",
+    "external_comparisons": "30-epoch cap fixed; equal cap alone does not prove equality with historical external-model protocols",
+    "final_paper_matrices": "do not modify"
+  },
+  "expected": {"training_jobs": 105, "primary_training_job_scores": 105, "no_calibration_scores": 21, "extra_floor_scores": 42, "total_metric_cells": 168},
+  "execution": {
+    "predecessor": "runs/internal/mscm_memory_decoder/mscm_memory_decoder_20261107_s3407_v1",
+    "predecessor_training_jobs": 21,
+    "predecessor_metric_cells": 28,
+    "predecessor_requires": ["complete.json", "status.json"],
+    "gpu": 0,
+    "max_concurrent_gpu_jobs": 1,
+    "outside_sandbox_cuda": true,
+    "output": "runs/internal/rcr_revalidation/rcr_revalidation_20261107_v1",
+    "report": "report/analysis/rcr_revalidation/RCR_REVALIDATION_20261107.md",
+    "stop_on_failed_job": true,
+    "immutable_plan_and_source_snapshot": true
+  }
+}

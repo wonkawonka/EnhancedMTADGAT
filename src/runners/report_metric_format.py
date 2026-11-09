@@ -24,9 +24,20 @@ def bold_best_metrics(markdown):
             columns = range(1, len(headers)) if triplets else [j for j,h in enumerate(headers) if 'Recall' in h or h == '测试FPR']
             for members in groups.values():
                 for col in columns:
-                    values = {i: [float(v.strip().replace('**', '')) for v in rows[i][col].split(' / ')] for i in members}
-                    best = [(min if 'FPR' in headers[col] else max)(values[i][j] for i in members) for j in range(len(values[members[0]]))]
+                    metric_headers = headers[col].split(' / ')
+                    values = {}
                     for i in members:
+                        try:
+                            parsed = [float(v.strip().replace('**', '')) for v in rows[i][col].split(' / ')]
+                        except ValueError:
+                            continue  # Pending cells must remain visible and unranked.
+                        if len(parsed) == len(metric_headers):
+                            values[i] = parsed
+                    if not values:
+                        continue
+                    best = [(min if 'FPR' in metric_headers[j] else max)(v[j] for v in values.values())
+                            for j in range(len(metric_headers))]
+                    for i in values:
                         tokens = rows[i][col].replace('**', '').split(' / ')
                         rows[i][col] = ' / '.join('**'+token+'**' if values[i][j] == best[j] else token for j,token in enumerate(tokens))
             lines[index+2:end] = ['| ' + ' | '.join(row) + ' |' for row in rows]
