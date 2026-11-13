@@ -1,0 +1,12 @@
+{
+  "source_root": "/home/chenmj/projects/EnhancedMTADGAT/datasets/CH-BatteryGen/V1.0",
+  "selected_samples": "/home/chenmj/projects/EnhancedMTADGAT/report/analysis/ch_batterygen_raw_trends/selected_raw_samples.csv",
+  "relative_progress_points": 256,
+  "charge_discharge_pooled": true,
+  "thin_lines": "individual selected raw segments",
+  "thick_lines": "pointwise median of 12 pooled charge/discharge segments per fault class",
+  "outputs": [
+    "report/figures/ppt_stage_dataset_overview_20261018/05_control_response_raw_trends_lfp_ncm.png",
+    "report/figures/ppt_stage_dataset_overview_20261018/05_control_response_raw_trends_lfp_ncm.pdf"
+  ]
+}

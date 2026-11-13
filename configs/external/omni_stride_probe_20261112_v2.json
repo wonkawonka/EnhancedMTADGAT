@@ -1,0 +1,66 @@
+{
+  "task_id": "omni_stride_probe_20261112_v2",
+  "timing_only": true,
+  "fold": 0,
+  "seed": 3407,
+  "train_batches": 100,
+  "validation_batches": 20,
+  "warmup_batches": 3,
+  "models": {
+    "omni": {
+      "span": 100,
+      "window": 100,
+      "train_stride": 1,
+      "batch": 50,
+      "optimizer": "TF1Adam",
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "minmax",
+      "formal_epochs": 10,
+      "validation_stride": 1
+    }
+  },
+  "omni_model": {
+    "input_dim": 7,
+    "window": 100,
+    "latent_dim": 3,
+    "rnn_hidden": 500,
+    "dense_dim": 500,
+    "flow_layers": 20,
+    "std_epsilon": 0.0001
+  },
+  "order": [
+    "omni"
+  ],
+  "output": "runs/external/omni_stride_probe_20261112_v2",
+  "raw": "kaggle/brand1_packed_inputs_20261109/brand1_raw.npy",
+  "ids": "kaggle/brand1_packed_inputs_20261109/brand1_sample_ids.json",
+  "mapping": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation/sources/Brand1_fold0/mapping.json",
+  "limitations": [
+    "Bounded 100 train / 20 validation batches plus3 warmup each; not complete epochs",
+    "Full Brand1 fold0 window counts used only for time projections",
+    "No fault data or detection metrics; fewer train targets and optimizer updates per epoch",
+    "Legacy input pack; original-file missing audit found no invalid values, not certification of entire formal pipeline",
+    "No compilation, no hidden-size change, no formal stride approval inferred",
+    "Stride1 is reused from earlier run, not measured simultaneously; workload differences can affect per-batch speed"
+  ],
+  "AMP": false,
+  "TF32": false,
+  "torch_threads": 4,
+  "strides": [
+    5
+  ],
+  "change": "Only measure train stride5+tail, reuse existing stride1 timing. Validation stride1; same model/batch/precision/normalization.",
+  "source": "ISSRE2023 Practical Anomaly Detection over Multivariate Monitoring Metrics for Online Services, IV-D: efficiency experiment uses train stride5/test1; not evidence of unchanged accuracy",
+  "source_url": "https://www.cse.cuhk.edu.hk/lyu/_media/conference/jliu_issre2023_practical.pdf",
+  "prepared_inputs": "runs/external/omni_stride_probe_20261112_v1",
+  "baseline_timing": "runs/external/brand1_reference_timing_20261112_v1/omni/timing.json",
+  "cache_hashes": {
+    "train_rows.npy": "08acdb8ff34a1d94751532de2931ffeafdc6e9887b35db4fc3b54eece8f0df0d",
+    "validation_rows.npy": "9808ad015f5023d57bc325c42df4a8ba36bed24afaad1161adc895da0f76b7db",
+    "scaler.npz": "f9ca3f2637da9c95637561543a480acfe57cea7ea580b06db3a56fe742f0b4b6",
+    "preparation.json": "f57d5d1eb077efc03b6df58aa1a67088183e4e6cde4d5f661f635f30e68df5eb",
+    "preflight.json": "bd1abeb44d0c18e3d7e10ef5c05ec178f51b4d3003654e7bf94f69b57f4d5377"
+  }
+}

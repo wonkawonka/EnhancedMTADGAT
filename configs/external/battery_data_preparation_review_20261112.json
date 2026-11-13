@@ -1,0 +1,399 @@
+{
+  "plan_name": "battery_data_preparation_review_20261112",
+  "status": "partially_confirmed_review_remaining_rules",
+  "approved": false,
+  "runnable": false,
+  "scope": [
+    "LFP",
+    "NCM",
+    "Brand1 brand1_normal_entity_70_10_20_seed0_v1"
+  ],
+  "purpose": "Describe and freeze pre-training preparation and cache reuse after user confirmation; no current job modification",
+  "existing_scientific_protocol": "report/analysis/external/BATTERY_REFERENCE_PROTOCOL_20261111.md",
+  "existing_plan": "configs/external/battery_reference_protocol_review_20261111.json",
+  "timing_evidence": "runs/external/data_preparation_audit_20261112/timing.json",
+  "active_jobs_changed": false,
+  "kaggle_submitted": false,
+  "original_files_deleted": false,
+  "sequence": [
+    {
+      "step": 1,
+      "operation": "Obtain and retain original published files and source metadata",
+      "frequency": "once per dataset version, currently available locally",
+      "kaggle_policy": "Use a prepared dataset bundle; do not unpack hundreds of thousands of original snippet files for each GPU task"
+    },
+    {
+      "step": 2,
+      "operation": "Resolve sample ID, entity ID, source file, original time order and label provenance",
+      "frequency": "once per input/cohort version",
+      "CH": "Use archived sample IDs and normal entity splits; do not recreate charge/discharge segments or randomly split windows",
+      "Brand1": "New fixed normal-entity70/10/20 split; use union of archived metadata and shared raw pack; original directory names and old fold memberships do not define new partitions.",
+      "labels": "LFP/NCM final evaluation at snippet level; Brand1 at entity level; no fabricated point labels"
+    },
+    {
+      "step": 3,
+      "operation": "Extract the existing seven channels, preserve native ordering, convert to float32 model-input representation",
+      "frequency": "once per input version",
+      "features": [
+        "total/pack voltage",
+        "current",
+        "SOC",
+        "max cell voltage",
+        "min cell voltage",
+        "max temperature",
+        "min temperature"
+      ],
+      "omitted_fields": "CH individual cell voltage columns; timestamps, charge-status field, identifiers and labels are not network inputs",
+      "no_additional_processing": [
+        "no resampling",
+        "no downsampling",
+        "no smoothing",
+        "no clipping physical extremes",
+        "no new feature engineering",
+        "no reordering time points",
+        "no additional segmentation"
+      ],
+      "precision_disclosure": "Packed float32 matches the existing input loader; it is not a byte-identical copy of every original source column. TranAD subsequently receives float64 inputs."
+    },
+    {
+      "step": 4,
+      "operation": "Handle missing values and validate numerical inputs",
+      "frequency": "once when preparing input values, retain per-file counts",
+      "CH_existing": "Numeric coercion; within-snippet row-order linear interpolation; forward/backward fill; all-missing channel filled with zero",
+      "Brand1_existing": "np.nan_to_num: NaN to zero, positive/negative infinity to float32 limits",
+      "already_packed_limit": "A cleaned pack cannot reconstruct original missing-value locations; original-file audit is needed to record those counts",
+      "task_assumption": "Offline snippet detection; interpolation can use later points in the same snippet",
+      "confirmed_partial_missing_rule": "Within each snippet/channel: treat NaN and infinities as missing; interpolate gaps between valid observations and fill endpoints from nearest valid neighbor. Record invalid-value origins; do not clip finite anomaly magnitudes.",
+      "whole_missing_channel_proposal": "Confirmed 2026-11-12: fill entirely missing snippet/channel with per-fold normal-training valid-observation median, record affected IDs and positions. Do not include imputed zeros or validation/test in fitting.",
+      "whole_training_channel_unavailable": "If the variable has no valid normal-training observations, no statistically supported fallback exists; resolve the input/schema issue before launching that affected job.",
+      "shared_cache_compatibility": "Shared cleaned unnormalized pack can retain unresolved whole-channel missing markers; apply fold-specific fallback at batch load, never use one global median fitted across folds.",
+      "legacy_cache_reuse": "Old zero-filled cached values cannot reveal which zeros were originally missing; rebuild affected input packs from original files, not by replacing every zero.",
+      "long_gap_policy": "Record missing fraction and longest gap; do not automatically drop samples or introduce smoothing. Any exclusion threshold needs a separate explicit rule.",
+      "finite_check_location": "Require finite model input after all declared imputations; distinguish malformed raw measurements from runtime NaN/Inf in model loss or gradients.",
+      "whole_missing_status": "confirmed; original-file audit in progress, implementation and bundle rebuild pending"
+    },
+    {
+      "step": 5,
+      "operation": "Apply common retained cohort and freeze partition indices",
+      "frequency": "once per cohort version, reused across model seeds",
+      "minimum_length": 105,
+      "no_caps": true,
+      "no_padding": true,
+      "exclude_record": "Keep exact excluded IDs and reasons; no performance-driven exclusion",
+      "counts": {
+        "LFP": {
+          "train": 5561,
+          "validation": 793,
+          "test": 3569
+        },
+        "NCM": {
+          "train": 5297,
+          "validation": 771,
+          "test": 3385
+        },
+        "Brand1": {
+          "all_snippets": 476739,
+          "entities": 198,
+          "normal_entities": 168,
+          "fault_entities": 30,
+          "split_id": "brand1_normal_entity_70_10_20_seed0_v1",
+          "partitions": {
+            "train": {
+              "normal_entities": 117,
+              "fault_entities": 0,
+              "normal_snippets": 322490,
+              "fault_snippets": 0,
+              "snippets": 322490
+            },
+            "validation": {
+              "normal_entities": 16,
+              "fault_entities": 0,
+              "normal_snippets": 42994,
+              "fault_snippets": 0,
+              "snippets": 42994
+            },
+            "test": {
+              "normal_entities": 35,
+              "fault_entities": 30,
+              "normal_snippets": 94224,
+              "fault_snippets": 17031,
+              "snippets": 111255
+            }
+          }
+        }
+      },
+      "split_rules": "LFP/NCM archived entity splits unchanged; Brand1 fixed normal entities117/16/35 seed0, all30fault entities test. Same manifest for all models/seeds; no separate calibration holdout.",
+      "manifest": "runs/external/brand1_split_70_10_20_seed0_20261112/split_manifest.json"
+    },
+    {
+      "step": 6,
+      "operation": "Store cleaned, unnormalized model-input values once with boundaries and metadata",
+      "frequency": "once per input version",
+      "CH_layout": "Contiguous points x 7 plus snippet offsets/lengths; packed contiguity never permits a cross-snippet window",
+      "Brand1_layout": "476739 x 128 x 7 float32, one original snippet per first-axis row",
+      "fold_layout": "One immutable row-index partition per split; Brand1 current single70/10/20 split references unchanged shared raw values. Historical fivefold packs are not rewritten.",
+      "estimated_numeric_payload": {
+        "LFP_MiB": 317.54222106933594,
+        "NCM_MiB": 97.95850372314453,
+        "Brand1_GiB": 1.5912880897521973,
+        "Brand1_single_split_int32_indices_MiB": 1.8186149597167969
+      },
+      "CH_status": "Full new-protocol packs not yet built; current timing pack contains NCM train/validation only"
+    },
+    {
+      "step": 7,
+      "operation": "Fit and save normalization statistics using only retained normal training points",
+      "frequency": "once per dataset/fold/input version, not per model seed or epoch",
+      "point_weighting": "Each real training point counted once, not repeatedly through overlapping windows",
+      "MinMax": [
+        "RCR",
+        "ML4ITS MTAD-GAT",
+        "TranAD",
+        "OmniAnomaly release port",
+        "Anomaly Transformer",
+        "DCdetector"
+      ],
+      "StandardScaler": [],
+      "statistics_precision": "float64 accumulation; population std (ddof=0)",
+      "current_timing_small_denominator_rule": "For minmax width/std < 1e-12, use denominator 1; no clipping to [0,1]",
+      "legacy_Brand1_rule_disclosure": "Old Brand1 helper uses max(width,1e-6); do not silently mix this helper with current timing preprocessing. Differences must be checked before reuse.",
+      "DC_RevIN": "Preserved inside native model; it is not replaced by the saved global scaler",
+      "test_validation_use": "Frozen transform only; no fitting statistics on validation/test",
+      "confirmed_small_denominator_rule": "width/std < 1e-12 -> denominator 1; no clipping",
+      "confirmed_method": "2026-11-12用户确认：所有模型统一逐变量MinMax，相同正常训练点拟合、每数据集/折冻结；不按片段拟合，不裁剪。极差<1e-12时除数设为1。",
+      "reference_deviations": "AT/DC external StandardScaler -> MinMax; native internal normalization preserved",
+      "new_Brand1_split_policy": "Refit MinMax on new training rows only; old fold0 scaler is not valid for this split. Refit is required before training, not performed by the metadata split generator."
+    },
+    {
+      "step": 8,
+      "operation": "Verify and publish the reusable input bundle",
+      "frequency": "once per bundle revision; upload only when authorized",
+      "checks": [
+        "source provenance and feature order",
+        "complete IDs and offsets",
+        "entity partition disjointness",
+        "normal-only fitting",
+        "original-loader versus packed-input sample equality",
+        "source and bundle fingerprints"
+      ],
+      "startup_policy": "Use explicit mounted bundle path and version; check manifest/schema/counts, avoid recursive scans over all original files and repeated full raw preprocessing",
+      "network_time": "Not measured; depends on package size and transfer bandwidth, not GPU training time"
+    },
+    {
+      "step": 9,
+      "operation": "At task startup load shared values, partition indices and frozen scaler",
+      "frequency": "once per process; reuse while switching models/folds",
+      "preferred_runtime": "Load raw model-input float32 values into RAM when memory budget permits; per-batch scaling instead of writing normalized fold files",
+      "memory_limit_behavior": "Propose a disclosed sequential/mmap loading alternative if insufficient RAM; never silently change input count, batch, precision, or sample order"
+    },
+    {
+      "step": 10,
+      "operation": "Construct compact window index mapping and model-specific input/target batches on demand",
+      "frequency": "mapping per model window rule; data gathering per batch",
+      "window_rules": {
+        "RCR": {
+          "CH_window": 32,
+          "CH_stride": 4,
+          "Brand1_window": 128,
+          "Brand1_stride": 128
+        },
+        "MTAD_GAT": {
+          "input_window": 100,
+          "target": "next real point",
+          "span": 101,
+          "train_stride": 1,
+          "train_stride_scope": "LFP/NCM default; Brand1 override below",
+          "train_stride_by_dataset": {
+            "LFP": 1,
+            "NCM": 1,
+            "Brand1": 5
+          },
+          "validation_stride": 1,
+          "inference_stride": 1
+        },
+        "TranAD": {
+          "window": 10,
+          "target": "last input point",
+          "train_stride": 1,
+          "train_stride_scope": "LFP/NCM default; Brand1 override below",
+          "train_stride_by_dataset": {
+            "LFP": 1,
+            "NCM": 1,
+            "Brand1": 5
+          },
+          "validation_stride": 1,
+          "inference_stride": 1
+        },
+        "Anomaly_Transformer": {
+          "window": 100,
+          "train_stride": 100
+        },
+        "DCdetector": {
+          "window": 105,
+          "train_stride": 1,
+          "inference_stride": 105,
+          "train_stride_scope": "LFP/NCM default; Brand1 override below",
+          "train_stride_by_dataset": {
+            "LFP": 1,
+            "NCM": 1,
+            "Brand1": 5
+          },
+          "validation_stride": 1
+        },
+        "OmniAnomaly": {
+          "window": 100,
+          "train_stride": 1,
+          "score": "last-point native log likelihood",
+          "train_stride_scope": "LFP/NCM default; Brand1 override below",
+          "train_stride_by_dataset": {
+            "LFP": 1,
+            "NCM": 1,
+            "Brand1": 5
+          },
+          "validation_stride": 1,
+          "inference_stride": 1,
+          "train_batch": 500,
+          "validation_batch": 500,
+          "inference_batch": 500,
+          "noise_group_size": 50
+        }
+      },
+      "tail_rule": "Append a tail-aligned valid window if needed and not already present; never cross snippet boundaries",
+      "index_layout": "Arithmetic mapping for equal-length snippets, cumulative counts for variable lengths; avoid per-window Python tuple objects",
+      "do_not_materialize": "No complete sliding-window tensor files",
+      "sampling": "Retain per-model native shuffle and seed semantics. Validate batch membership/order before substituting a compact sampler.",
+      "native_remainder": "Omni training retains drop_last policy at effective batch500; record exact omitted windows (up to499). Validation/test retain partial batches, sample-weighted loss and original50-window noise groups."
+    },
+    {
+      "step": 11,
+      "operation": "Initialize the declared model/optimizer/device and check the first batch",
+      "frequency": "per training job",
+      "checks": "Input dimensions, target alignment, finite values, memory, first forward/backward; preserve declared model and precision",
+      "timing": "Record environment import/model initialization separately from data preparation and epoch compute"
+    }
+  ],
+  "cache_policy": {
+    "retain_for_reuse": [
+      "cleaned unnormalized values",
+      "sample/entity/label metadata",
+      "snippet boundaries",
+      "fold row indices",
+      "train-only scaler parameters",
+      "manifest and preparation audit"
+    ],
+    "avoid_creating": [
+      "full normalized copy per fold/model/seed",
+      "fully expanded sliding-window arrays",
+      "giant Python window-reference lists"
+    ],
+    "not_pretraining_cache": [
+      "encoder features",
+      "reconstruction residuals",
+      "residual moments",
+      "RCR calibration parameters",
+      "anomaly scores",
+      "thresholds",
+      "checkpoints"
+    ],
+    "weight_dependent_artifacts": "Features, residuals and calibration must be tied to exact reconstruction weights; they are not universal dataset inputs",
+    "deletion": "No existing cache deleted by this draft"
+  },
+  "confirmation_required_before_activation": [],
+  "timing_limits": "Sample-based original-file parsing extrapolations and local complete packed-read/statistics measurements; no end-to-end preparation or Kaggle timing claimed",
+  "user_confirmed_20261112": {
+    "cache_policy": "Use the recommended shared input arrays, fold indices, frozen scalers and lazy windows",
+    "missing_values": "Do not blanket-fill with zero; use within-snippet interpolation and neighboring values",
+    "RCR_training": "Dataset preparation applies to RCR reconstruction too; reusable data caches do not authorize checkpoint reuse",
+    "constant_channel_rule": "width/std < 1e-12 -> denominator 1",
+    "whole_missing_action": "Use per-fold per-variable median from valid original normal-training observations; record imputation fraction. No validation/test fitting.",
+    "omni_validation": "max 10 epochs; once per full training epoch",
+    "normalization": "2026-11-12用户确认：所有模型统一逐变量MinMax，相同正常训练点拟合、每数据集/折冻结；不按片段拟合，不裁剪。极差<1e-12时除数设为1。",
+    "Brand1_stride_and_folds": "Brand1 train stride5 for MTAD/TranAD/DC/Omni; fixed fold0 only; validation/inference stride unchanged; LFP/NCM stride unchanged",
+    "Omni_batch": "All stages physical500; preserve50-window noise groups; train update once per500, no LR/epoch change"
+  },
+  "per_job_verification_contract": {
+    "status": "specified_not_yet_integrated_into_all_runners",
+    "sources": [
+      "user-approved frozen plan",
+      "pinned model reference source",
+      "versioned data bundle manifest",
+      "version-matched numerical verification evidence"
+    ],
+    "always_check": [
+      "resolved runtime arguments versus approved plan",
+      "code and data versions versus valid evidence",
+      "partition IDs, entity separation, window/target schema",
+      "seed, fresh initialization/resume scope, precision, device, output destination",
+      "first-batch finite inputs, expected shapes and gradient paths"
+    ],
+    "rerun_full_checks_on": [
+      "model or runner or loss or scoring change",
+      "data cleaner or feature order or split or scaler change",
+      "window or target or aggregation change",
+      "environment dependency change affecting semantics"
+    ],
+    "evidence": "Per-task preflight manifest with passed/failed/not_checked, evidence paths, actual values and version fingerprints; missing required evidence is not a pass",
+    "runtime_monitor": [
+      "finite losses/gradients and exact window counts",
+      "validation objective and selected checkpoint",
+      "completion coverage and object-score mapping before report inclusion"
+    ],
+    "not_a_guarantee": "Mechanical checks catch declared mismatches; they cannot establish algorithm correctness without source review and targeted numerical references."
+  },
+  "implementation_required_before_formal_launch": [
+    "rebuild and verify interpolation packs",
+    "integrate local/Kaggle formal entry with shared gate and complete native scoring checks",
+    "Kaggle mounted-data smoke"
+  ],
+  "original_missing_audit": "runs/external/original_missing_audit_20261112_v1/summary.json",
+  "original_missing_audit_result": {
+    "status": "complete",
+    "datasets": {
+      "LFP": {
+        "total_snippets": 9923,
+        "processed": 9923,
+        "bad_value_snippets": 0,
+        "wholly_missing_snippets": 0,
+        "parse_errors": 0,
+        "status": "complete"
+      },
+      "NCM": {
+        "total_snippets": 9453,
+        "processed": 9453,
+        "bad_value_snippets": 0,
+        "wholly_missing_snippets": 0,
+        "parse_errors": 0,
+        "status": "complete"
+      },
+      "Brand1": {
+        "total_snippets": 476739,
+        "processed": 476739,
+        "bad_value_snippets": 0,
+        "wholly_missing_snippets": 0,
+        "parse_errors": 0,
+        "status": "complete"
+      }
+    },
+    "meaning": "No NaN/Inf/float32-overflow in retained original seven-channel inputs. New interpolation/whole-channel fallback rules are inactive on this dataset revision. Pack identity/equivalence is a separate check."
+  },
+  "brand1_split_preparation": {
+    "split_id": "brand1_normal_entity_70_10_20_seed0_v1",
+    "manifest": "runs/external/brand1_split_70_10_20_seed0_20261112/split_manifest.json",
+    "generator": "scripts/prepare_brand1_fixed_split.py",
+    "formal_runner_integration": "pending; metadata generation alone does not authorize or start full training"
+  },
+  "confirmed_prepared_only_execution": "2026-11-12 user: preserve prepared inputs; all subsequent local/Kaggle experiments consume the same versioned prepared data, not original files.",
+  "available_prepared_LFP": {
+    "path": "runs/external/lfp_stride_pair_20261112_v1/inputs",
+    "evidence": "runs/external/lfp_stride_pair_20261112_v1/inputs/preparation.json",
+    "partitions": [
+      "train",
+      "validation",
+      "test"
+    ],
+    "cleaned_values": "float32, unnormalized, seven frozen channels",
+    "scaler": "normal training only MinMax",
+    "raw_reparse_required": false
+  },
+  "implementation_boundary": "New LFP stride runner enforces prepared-only consumption. Historical entrypoints are not automatically migrated; their formal launches must first be adapted."
+}

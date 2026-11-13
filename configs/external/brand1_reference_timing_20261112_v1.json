@@ -1,0 +1,119 @@
+{
+  "task_id": "brand1_reference_timing_20261112_v1",
+  "timing_only": true,
+  "fold": 0,
+  "seed": 3407,
+  "train_batches": 100,
+  "validation_batches": 20,
+  "warmup_batches": 3,
+  "models": {
+    "tranad": {
+      "span": 10,
+      "window": 10,
+      "train_stride": 1,
+      "batch": 128,
+      "optimizer": "AdamW",
+      "lr": 0.0001,
+      "weight_decay": 1e-05,
+      "precision": "float64",
+      "scaler": "minmax",
+      "shuffle": false,
+      "formal_epochs": 5
+    },
+    "at": {
+      "span": 100,
+      "window": 100,
+      "train_stride": 100,
+      "batch": 32,
+      "optimizer": "Adam",
+      "lr": 0.0001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "standard",
+      "shuffle": true,
+      "formal_epochs": 10
+    },
+    "dc": {
+      "span": 105,
+      "window": 105,
+      "train_stride": 1,
+      "batch": 128,
+      "optimizer": "Adam",
+      "lr": 0.0001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "standard",
+      "shuffle": true,
+      "formal_epochs": 3
+    },
+    "mtad": {
+      "span": 101,
+      "window": 100,
+      "train_stride": 1,
+      "batch": 256,
+      "optimizer": "Adam",
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "minmax",
+      "shuffle": true,
+      "formal_epochs": 30
+    },
+    "rcr": {
+      "span": 128,
+      "window": 128,
+      "train_stride": 128,
+      "batch": 128,
+      "optimizer": "AdamW",
+      "lr": 0.001,
+      "weight_decay": 0.0001,
+      "precision": "float32",
+      "scaler": "minmax",
+      "shuffle": true,
+      "formal_epochs": 30
+    },
+    "omni": {
+      "span": 100,
+      "window": 100,
+      "train_stride": 1,
+      "batch": 50,
+      "optimizer": "TF1Adam",
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "minmax",
+      "formal_epochs": 10
+    }
+  },
+  "omni_model": {
+    "input_dim": 7,
+    "window": 100,
+    "latent_dim": 3,
+    "rnn_hidden": 500,
+    "dense_dim": 500,
+    "flow_layers": 20,
+    "std_epsilon": 0.0001
+  },
+  "order": [
+    "rcr",
+    "tranad",
+    "mtad",
+    "at",
+    "dc",
+    "omni"
+  ],
+  "output": "runs/external/brand1_reference_timing_20261112_v1",
+  "raw": "kaggle/brand1_packed_inputs_20261109/brand1_raw.npy",
+  "ids": "kaggle/brand1_packed_inputs_20261109/brand1_sample_ids.json",
+  "mapping": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation/sources/Brand1_fold0/mapping.json",
+  "limitations": [
+    "legacy input pack, not new interpolation data approval",
+    "bounded random timing sample, not full epoch",
+    "no full score/threshold pipeline certification",
+    "native training cadence unchanged by timing",
+    "TranAD first-epoch loss only; later epoch cost may differ"
+  ],
+  "AMP": false,
+  "TF32": false,
+  "torch_threads": 4
+}

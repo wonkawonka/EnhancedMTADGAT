@@ -1,0 +1,197 @@
+{
+  "policy": "one independent fit/training cell per notebook; R1 includes R6; up to available account concurrency, no monolithic 30-fit session",
+  "queues": {
+    "LFP_R1_full": [
+      {
+        "dataset": "LFP",
+        "experiment": "R1_full"
+      },
+      {
+        "dataset": "LFP",
+        "experiment": "R6_no_calibration"
+      }
+    ],
+    "LFP_MTAD_GAT_ML4ITS": [
+      {
+        "dataset": "LFP",
+        "experiment": "MTAD_GAT_ML4ITS"
+      }
+    ],
+    "LFP_TranAD_release": [
+      {
+        "dataset": "LFP",
+        "experiment": "TranAD_release"
+      }
+    ],
+    "LFP_Anomaly_Transformer": [
+      {
+        "dataset": "LFP",
+        "experiment": "Anomaly_Transformer"
+      }
+    ],
+    "LFP_DCdetector": [
+      {
+        "dataset": "LFP",
+        "experiment": "DCdetector"
+      }
+    ],
+    "LFP_OmniAnomaly_release_port": [
+      {
+        "dataset": "LFP",
+        "experiment": "OmniAnomaly_release_port"
+      }
+    ],
+    "LFP_IsolationForest": [
+      {
+        "dataset": "LFP",
+        "experiment": "IsolationForest"
+      }
+    ],
+    "LFP_DeepSVDD_MLP": [
+      {
+        "dataset": "LFP",
+        "experiment": "DeepSVDD_MLP"
+      }
+    ],
+    "LFP_R4_no_graph": [
+      {
+        "dataset": "LFP",
+        "experiment": "R4_no_graph"
+      }
+    ],
+    "LFP_R5_no_temporal": [
+      {
+        "dataset": "LFP",
+        "experiment": "R5_no_temporal"
+      }
+    ],
+    "NCM_R1_full": [
+      {
+        "dataset": "NCM",
+        "experiment": "R1_full"
+      },
+      {
+        "dataset": "NCM",
+        "experiment": "R6_no_calibration"
+      }
+    ],
+    "NCM_MTAD_GAT_ML4ITS": [
+      {
+        "dataset": "NCM",
+        "experiment": "MTAD_GAT_ML4ITS"
+      }
+    ],
+    "NCM_TranAD_release": [
+      {
+        "dataset": "NCM",
+        "experiment": "TranAD_release"
+      }
+    ],
+    "NCM_Anomaly_Transformer": [
+      {
+        "dataset": "NCM",
+        "experiment": "Anomaly_Transformer"
+      }
+    ],
+    "NCM_DCdetector": [
+      {
+        "dataset": "NCM",
+        "experiment": "DCdetector"
+      }
+    ],
+    "NCM_OmniAnomaly_release_port": [
+      {
+        "dataset": "NCM",
+        "experiment": "OmniAnomaly_release_port"
+      }
+    ],
+    "NCM_IsolationForest": [
+      {
+        "dataset": "NCM",
+        "experiment": "IsolationForest"
+      }
+    ],
+    "NCM_DeepSVDD_MLP": [
+      {
+        "dataset": "NCM",
+        "experiment": "DeepSVDD_MLP"
+      }
+    ],
+    "NCM_R4_no_graph": [
+      {
+        "dataset": "NCM",
+        "experiment": "R4_no_graph"
+      }
+    ],
+    "NCM_R5_no_temporal": [
+      {
+        "dataset": "NCM",
+        "experiment": "R5_no_temporal"
+      }
+    ],
+    "Brand1_R1_full": [
+      {
+        "dataset": "Brand1",
+        "experiment": "R1_full"
+      },
+      {
+        "dataset": "Brand1",
+        "experiment": "R6_no_calibration"
+      }
+    ],
+    "Brand1_MTAD_GAT_ML4ITS": [
+      {
+        "dataset": "Brand1",
+        "experiment": "MTAD_GAT_ML4ITS"
+      }
+    ],
+    "Brand1_TranAD_release": [
+      {
+        "dataset": "Brand1",
+        "experiment": "TranAD_release"
+      }
+    ],
+    "Brand1_Anomaly_Transformer": [
+      {
+        "dataset": "Brand1",
+        "experiment": "Anomaly_Transformer"
+      }
+    ],
+    "Brand1_DCdetector": [
+      {
+        "dataset": "Brand1",
+        "experiment": "DCdetector"
+      }
+    ],
+    "Brand1_OmniAnomaly_release_port": [
+      {
+        "dataset": "Brand1",
+        "experiment": "OmniAnomaly_release_port"
+      }
+    ],
+    "Brand1_IsolationForest": [
+      {
+        "dataset": "Brand1",
+        "experiment": "IsolationForest"
+      }
+    ],
+    "Brand1_DeepSVDD_MLP": [
+      {
+        "dataset": "Brand1",
+        "experiment": "DeepSVDD_MLP"
+      }
+    ],
+    "Brand1_R4_no_graph": [
+      {
+        "dataset": "Brand1",
+        "experiment": "R4_no_graph"
+      }
+    ],
+    "Brand1_R5_no_temporal": [
+      {
+        "dataset": "Brand1",
+        "experiment": "R5_no_temporal"
+      }
+    ]
+  }
+}

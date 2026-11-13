@@ -1,0 +1,15 @@
+{
+  "id": "daisychen2/battery-formal-lfp-rcr-20261113",
+  "title": "Battery formal LFP RCR 20261113",
+  "code_file": "battery_formal.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [
+    "daisychen2/battery-formal-prepared-20261113"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}

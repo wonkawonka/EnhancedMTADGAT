@@ -1,0 +1,80 @@
+{
+  "tranad": {
+    "commit": "7ffb98d0c18189cc3d9ab732b4cb0278200a0af0",
+    "files": {
+      "README.md": "4df63a5ee0a2b187fade70827e85440a7d2932d7e4779a6e45a22908cac16466",
+      "main.py": "0529c581d3d871bf5cc32316b45428ce9642650b8a0fa2e40e754341f57d4c0c",
+      "LICENSE": "4389d205c769d6edf92105fe2f4ac8cb8b8feabcef7baa359136dd3eec79cf12",
+      "src/models.py": "43a30e7caa7c8b28e91b5e875c724219c9c15789da1f6009bb2015fb1f81d84b",
+      "src/constants.py": "00f710d5ae8a4a5f14b9153abe6833f4eece52d8462d25522cfb8ebcf99735dc",
+      "src/dlutils.py": "35265d47f3c1c0f999590ab25cf47774cfd2293c99ca3f842419f31dfef750fe"
+    }
+  },
+  "at": {
+    "commit": "b0ee470c8012bff857fb600462aec6209c4a18d9",
+    "files": {
+      "README.md": "280d5495fd063b430f8203b2919a85cffb65f5ca65c07998796af394cc4c8fdc",
+      "solver.py": "a0a98395ed144908dcb9d5f28db7e7de3240f9f640e3135d6b24c0ea563c1d99",
+      "main.py": "b4ccc8d4efed57482525240ef5816d0c071a6da51e96f3751ceeb3983c8cc44e",
+      "LICENSE": "29d2a4c09fa577780522219dc248466977f77cd420354c5e9a0e86550be2b849",
+      "model/attn.py": "4caef08919b29c0b930458da67e570ffacfee921cb41f3009d50dabc6cc9aaf6",
+      "model/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "model/AnomalyTransformer.py": "d494f05348e5edc38c60d82ce48f34d28b35fa0c24f39aa2a26173c743097f5f",
+      "model/embed.py": "5c77a56aa84f175cd4b3a25aac71d19ed06276f4ee17e75970b08efc5731578b"
+    }
+  },
+  "mtad": {
+    "commit": "a3719416527d57e0e364f9b489c5368ade1bc8e7",
+    "files": {
+      "modules.py": "8eefec08da2d657c493ad43b42927ef0689795738e06bfbedf260d9cdf04e7f2",
+      "training.py": "c528dcd448c390bc917a992c0f81bf4b92b6a1bc89f28430641ac7079fa83409",
+      "README.md": "b8ad145925996c97c54d21eb296a739656adf7a5459025555b0933149eb45149",
+      "args.py": "c5cf24214888227234a7d3aeadf640ace00b87465d179eeb6ab3990199052a69",
+      "utils.py": "37ff7761c703350939d9ee737a6485a3b10d455eebe7633bc913c17d3f4151c2",
+      "mtad_gat.py": "1d29f52eaca4cd1d78b6becc8632c7b194f1edc621ee74b6a32fa69b07455b2f",
+      "LICENSE": "ba443cc3248b3b56a6217e9f12f63b68a744da738d128c2d2f7b55bf113ed6a4",
+      "prediction.py": "4f41e3028073ecc710affe53631646372b27fefbac97168632f19a767ffd9548"
+    }
+  },
+  "dc": {
+    "commit": "9d107cae518ef24ee2eb2ad1b92107cdcd09ea10",
+    "retrieved_via": "GitHub connector at pinned ref",
+    "files": {
+      "solver.py": "4aa5845212a44f38cbdf3b5831474806e6573e5bfe1ba8b6ae4ca7b73fb7dbb5",
+      "main.py": "23de37e39df11845b03a1ff6052fd60dbe8b0f77f931e07c576bcfea70f62725",
+      "model/attn.py": "9a05d479fce4f78450155300c6342e7b3aa2f39a353145a96d427e0bf4a8be46",
+      "model/RevIN.py": "63aa6f149e740577cc29cd1f5907e3866b34dda6b803a0417c116c868cfd8721",
+      "model/embed.py": "14803f8e7631b48e9e35554cdb061d6c9449eaeaf0ea36335283de25535bdfc8",
+      "model/DCdetector.py": "d3c3d4b3455b78cb61e60a602d91fccbbcddfbe11915f50e5ad134fd939be7e8"
+    }
+  },
+  "omni": {
+    "commit": "7fb0e0acf89ea49908896bcc9f9e80fcfff6baf4",
+    "partial_audit_only": false,
+    "files": {
+      "requirements.txt": "e94693ec5418bb25df53efea93d21595f90c0156fedd50bfe6a5a04536e502eb",
+      "main.py": "22a9bb2c063a5af7b173f5ef0bb3afa1765d4c058046fd784665713e9e393fbd",
+      "omni_anomaly/training.py": "ad4022b95f3b74a35dc9d1f28eedaa897485d652e2d716f9c9637a2c404ae8b2",
+      "omni_anomaly/model.py": "65d7eff8482290938e9608f53a353eef347e379e470af290d6d24a6614efdee4",
+      "README.md": "4a98b0a5075013112263941efbf1b2de332f43de5933fe060eacdd6263842cb2",
+      "LICENSE": "101da3d8573ea5889fa1fd8ca6c547d5908e9f9341e0e037317e2be0433454a1",
+      "omni_anomaly/recurrent_distribution.py": "70ad67cf731add316c34dd1a67bf0e6ecd953a78c1380f6d933f28c79ef28df6",
+      "omni_anomaly/vae.py": "8eedcdaf8d7629f807ec180dfa2b32fe872464664366cec37c1dace721596322",
+      "omni_anomaly/utils.py": "a3224676d1bc484a362db7244a42da8aba4b799dd2439f7bc8748221f121ca2a",
+      "omni_anomaly/wrapper.py": "a5224f6113f54092830d021fdc72b338beda2b626db8c4fce9567552452dd91a",
+      "omni_anomaly/prediction.py": "b6e2fd89db716d541dd44ed8054aa0f996d366ce12c659f236155b2957fe4203"
+    },
+    "audit_scope": "model, recurrent distribution, wrapper, flow, optimizer, prediction; no executed TensorFlow numerical parity claimed"
+  },
+  "omni_dependencies": {
+    "repository": "haowen-xu/tfsnippet",
+    "ref": "v0.2.0-alpha1",
+    "files": {
+      "LICENSE.txt": "a230a7dbe285bbfe266614d05aaa9e0cb8a3ced68b927a9250ef378d8df02df2",
+      "tfsnippet/variational/inference.py": "ab01ff1abed8be3bf8c4830b1993786323a6cffe75e696bd7bbccbd999e622bf",
+      "tfsnippet/variational/objectives.py": "2e247325930899d33be056369b700af1ac44843d37a0e04c0c36bbf34b06e5fd",
+      "tfsnippet/layers/flows/planar_nf.py": "04fb2b55284622c16ec04b74f0a7d5006445b1401e4363a05475b75c0a502b2e",
+      "tfsnippet/distributions/flow.py": "f05ba40d623683225aeb1bc2dc6fa3427c1155fa41b7c6712a7eac0602299192"
+    }
+  }
+}

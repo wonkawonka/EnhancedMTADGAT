@@ -1,0 +1,62 @@
+{
+  "task_id": "omni_hidden_probe_20261112_v1",
+  "timing_only": true,
+  "fold": 0,
+  "seed": 3407,
+  "train_batches": 100,
+  "validation_batches": 20,
+  "warmup_batches": 3,
+  "models": {
+    "omni": {
+      "span": 100,
+      "window": 100,
+      "train_stride": 5,
+      "batch": 50,
+      "optimizer": "TF1Adam",
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "minmax",
+      "formal_epochs": 10,
+      "validation_stride": 1
+    }
+  },
+  "omni_model": {
+    "input_dim": 7,
+    "window": 100,
+    "latent_dim": 3,
+    "rnn_hidden": 100,
+    "dense_dim": 100,
+    "flow_layers": 20,
+    "std_epsilon": 0.0001
+  },
+  "order": [
+    "omni"
+  ],
+  "output": "runs/external/omni_hidden_probe_20261112_v1",
+  "raw": "kaggle/brand1_packed_inputs_20261109/brand1_raw.npy",
+  "ids": "kaggle/brand1_packed_inputs_20261109/brand1_sample_ids.json",
+  "mapping": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation/sources/Brand1_fold0/mapping.json",
+  "limitations": [
+    "Only100 train/20 normal-validation batches plus3 warmup each; no complete epoch or detection metrics",
+    "Historical hidden500 baseline, identical sampled windows verified, not simultaneous measurement",
+    "Keep original mathematical modules and release gradient behavior; capacity changes, no output equivalence expected",
+    "Legacy input pack; original-file missing audit found no invalid values; full formal pipeline not certified",
+    "Train stride5 approved for Brand1; hidden100 is candidate timing only, formal hidden500 not changed"
+  ],
+  "AMP": false,
+  "TF32": false,
+  "torch_threads": 4,
+  "change": "Only rnn_hidden and dense_dim 500->100 versus completed stride5 baseline. Window100/latent3/flow20/batch50/TF1Adam remain unchanged; eager PyTorch, AMP/TF32 off.",
+  "source": "TimeEval experiment override uses rnn_hidden_size100 and linear_hidden_size100. This candidate borrows only hidden sizes, not full TimeEval settings; it is not original Omni paper default or proven accuracy equivalent.",
+  "source_url": "https://github.com/TimeEval/TimeEval/blob/7c3622757b1a3afa9a84cbc97ce132d9e379f715/timeeval_experiments/param-config.json",
+  "prepared_inputs": "runs/external/omni_stride_probe_20261112_v1",
+  "cache_hashes": {
+    "train_rows.npy": "08acdb8ff34a1d94751532de2931ffeafdc6e9887b35db4fc3b54eece8f0df0d",
+    "validation_rows.npy": "9808ad015f5023d57bc325c42df4a8ba36bed24afaad1161adc895da0f76b7db",
+    "scaler.npz": "f9ca3f2637da9c95637561543a480acfe57cea7ea580b06db3a56fe742f0b4b6",
+    "preparation.json": "f57d5d1eb077efc03b6df58aa1a67088183e4e6cde4d5f661f635f30e68df5eb",
+    "preflight.json": "bd1abeb44d0c18e3d7e10ef5c05ec178f51b4d3003654e7bf94f69b57f4d5377"
+  },
+  "baseline_output": "runs/external/omni_stride_probe_20261112_v2"
+}

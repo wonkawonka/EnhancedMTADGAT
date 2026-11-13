@@ -58,8 +58,28 @@
   "predecessor": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108",
   "expected_jobs": 40,
   "output": "runs/external/brand1_comparison_20261108_s3407",
-  "report": "report/analysis/rcr_revalidation/BRAND1_EXTERNAL_COMPARISON_20261108.md",
+  "report": "report/analysis/rcr_revalidation/RCR_REVALIDATION_20261107_v2.md",
   "gpu": 0,
   "concurrent_gpu_jobs": 1,
-  "request": "用户已确认种子3407全五折：8个模型共40组；改为4个Kaggle任务，每个10组；原始数据复用账号自有数据集，五折参考由助手上传；不额外生成计划MD。"
+  "request": "本地五模型全五折25组；Kaggle chen_b 保留 DCdetector、OmniAnomaly 共10组；PatchAD五折跳过。seed3407，其他预算、窗口、评分与阈值不变，保留已完成结果。",
+  "execution_backend": "local_cuda",
+  "packed_input": "kaggle/brand1_packed_inputs_20261109/brand1_raw.npy",
+  "packed_sample_ids": "kaggle/brand1_packed_inputs_20261109/brand1_sample_ids.json",
+  "local_methods": [
+    "mtad_gat",
+    "tranad",
+    "anomaly_transformer",
+    "isolation_forest",
+    "deep_svdd"
+  ],
+  "local_expected_jobs": 25,
+  "remote_methods": [
+    "dcdetector",
+    "omnianomaly"
+  ],
+  "remote_kernel": "chenmjdaisy/brand1-external-chen-b-20261109",
+  "skipped_methods": [
+    "patchad"
+  ],
+  "skipped_reason": "用户2026-11-10要求跳过PatchAD：训练过慢；未完成的结果不纳入对比。"
 }

@@ -1,0 +1,9 @@
+﻿chemistry,fault_type,fault_type_zh,segments,min_rows,q1_rows,median_rows,q3_rows,max_rows
+LFP,normal,正常,8000,94,568.0,711.0,1626.25,6787
+LFP,high_resistance,高内阻,600,3,577.0,714.5,1408.75,5409
+LFP,low_capacity,低容量,600,97,576.5,695.5,1410.25,6695
+LFP,self_discharge,自放电,800,196,1610.0,1815.0,2220.25,5538
+NCM,normal,正常,7586,63,180.0,238.0,443.0,3014
+NCM,high_resistance,高内阻,579,142,180.0,273.0,456.0,1506
+NCM,low_capacity,低容量,600,60,289.0,575.0,1413.0,4552
+NCM,self_discharge,自放电,713,180,180.0,267.0,460.0,1506

@@ -204,7 +204,7 @@ alpha=0/0.25/0.5/0.75/1全部评估，未选择测试最优权重。每个头的
 
 ## 本地 A 阶段与 Kaggle B/C 阶段联合分析
 
-本节联合本轮本地 A1/A2/A3、CH阶段B及Brand3阶段C；Kaggle结果只纳入通过版本与产物审计的单元，不纳入更早的旧批次。本地完整指标见 [RCR_ROUND1_LOCAL_20261003_ZH.md](RCR_ROUND1_LOCAL_20261003_ZH.md)，实验定义见 [RCR_NEXT_EXPERIMENT_PLAN_20261003_ZH.md](RCR_NEXT_EXPERIMENT_PLAN_20261003_ZH.md)。
+本节联合本轮本地 A1/A2/A3、CH阶段B及Brand3阶段C；Kaggle结果只纳入通过版本与产物审计的单元，不纳入更早的旧批次。本地完整指标见 [RCR_ROUND1_LOCAL_20261003_ZH.md](RCR_ROUND1_LOCAL_20261003_ZH.md)。
 
 | 原计划 / 研究问题 | LFP/NCM证据（本地A、KaggleB） | Kaggle Brand3 证据 | 支持的判断 |
 | --- | --- | --- | --- |

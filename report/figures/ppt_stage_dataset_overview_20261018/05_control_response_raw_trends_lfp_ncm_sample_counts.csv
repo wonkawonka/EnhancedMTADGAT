@@ -1,0 +1,17 @@
+chemistry,feature,fault_type,traces,charge,discharge
+LFP,SUM_CURRENT,normal,12,6,6
+LFP,SUM_CURRENT,high_resistance,12,6,6
+LFP,SUM_CURRENT,low_capacity,12,6,6
+LFP,SUM_CURRENT,self_discharge,12,6,6
+LFP,MIN_CELL_VOLT,normal,12,6,6
+LFP,MIN_CELL_VOLT,high_resistance,12,6,6
+LFP,MIN_CELL_VOLT,low_capacity,12,6,6
+LFP,MIN_CELL_VOLT,self_discharge,12,6,6
+NCM,SUM_CURRENT,normal,12,6,6
+NCM,SUM_CURRENT,high_resistance,12,6,6
+NCM,SUM_CURRENT,low_capacity,12,6,6
+NCM,SUM_CURRENT,self_discharge,12,6,6
+NCM,MIN_CELL_VOLT,normal,12,6,6
+NCM,MIN_CELL_VOLT,high_resistance,12,6,6
+NCM,MIN_CELL_VOLT,low_capacity,12,6,6
+NCM,MIN_CELL_VOLT,self_discharge,12,6,6

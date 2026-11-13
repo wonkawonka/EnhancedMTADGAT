@@ -1,0 +1,27 @@
+{
+  "source": "report/analysis/ch_batterygen_full_data_audit/sample_summary.csv",
+  "source_rows": 19478,
+  "chemistries": [
+    "LFP",
+    "NCM"
+  ],
+  "charge_discharge_pooled": true,
+  "fault_order": [
+    "normal",
+    "high_resistance",
+    "low_capacity",
+    "self_discharge"
+  ],
+  "pca_columns": 28,
+  "pca_visualization_clip_after_robust_scaling": [
+    -20.0,
+    20.0
+  ],
+  "correlation_semantics": "Pearson correlation of seven per-segment feature means",
+  "figures": [
+    "01_class_distribution_lfp_ncm",
+    "02_segment_length_distribution_lfp_ncm",
+    "03_pca_segment_summary_lfp_ncm",
+    "04_feature_correlation_heatmap_lfp_ncm"
+  ]
+}

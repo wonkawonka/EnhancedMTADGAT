@@ -1,0 +1,52 @@
+{
+  "raw": "kaggle/brand1_packed_inputs_20261109/brand1_raw.npy",
+  "mapping": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation/sources/Brand1_fold0/mapping.json",
+  "ids": "kaggle/brand1_packed_inputs_20261109/brand1_sample_ids.json",
+  "prepared_inputs": "runs/external/omni_stride_probe_20261112_v1",
+  "cache_hashes": {
+    "train_rows.npy": "08acdb8ff34a1d94751532de2931ffeafdc6e9887b35db4fc3b54eece8f0df0d",
+    "validation_rows.npy": "9808ad015f5023d57bc325c42df4a8ba36bed24afaad1161adc895da0f76b7db",
+    "scaler.npz": "f9ca3f2637da9c95637561543a480acfe57cea7ea580b06db3a56fe742f0b4b6",
+    "preparation.json": "f57d5d1eb077efc03b6df58aa1a67088183e4e6cde4d5f661f635f30e68df5eb",
+    "preflight.json": "bd1abeb44d0c18e3d7e10ef5c05ec178f51b4d3003654e7bf94f69b57f4d5377"
+  },
+  "baseline_output": "runs/external/omni_stride_probe_20261112_v2",
+  "task_id": "omni_training_batch_probe_20261112_v1",
+  "timing_only": true,
+  "output": "runs/external/omni_training_batch_probe_20261112_v1",
+  "seed": 3407,
+  "logical_batch": 50,
+  "physical_batch": 500,
+  "parity_sizes": [
+    500,
+    137
+  ],
+  "sanity_training_updates": 3,
+  "warmup_batches": 3,
+  "measured_batches": 100,
+  "atol": 2e-05,
+  "rtol": 0.0002,
+  "formal_protocol_changed": true,
+  "model": {
+    "input_dim": 7,
+    "window": 100,
+    "latent_dim": 3,
+    "rnn_hidden": 500,
+    "dense_dim": 500,
+    "flow_layers": 20,
+    "std_epsilon": 0.0001
+  },
+  "change": "User explicitly selects Omni batch500 in training/validation/test. Train once per500 windows, shared noise per50-window group. Model hidden500, lr.001, TF1Adam, epochs10 unchanged. Native drop_last retained at new batch500.",
+  "basis": "User-selected throughput configuration; NOT original paper batch50 and NOT equivalent to ten sequential batch50 optimizer updates.",
+  "sampling": "100 training batches+3 warmup, seeded random normal-training windows without replacement; no test data; reuse completed batch50 and validation-batch500 timing.",
+  "limitations": [
+    "Batch500 changes optimization trajectory, updates per epoch, and dropped final training windows",
+    "Same-weight accumulated-gradient check does not prove convergence/detection equivalence",
+    "No test metrics, full epoch or Kaggle measurement",
+    "No automatic LR scaling or extra epochs"
+  ],
+  "probe_stage": "training",
+  "gradient_atol": 5e-05,
+  "gradient_rtol": 0.0005,
+  "validation_timing": "runs/external/omni_validation_batch_probe_20261112_v1/result.json"
+}

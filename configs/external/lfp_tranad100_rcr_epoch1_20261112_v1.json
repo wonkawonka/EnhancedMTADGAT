@@ -1,0 +1,173 @@
+{
+  "task_id": "lfp_tranad100_rcr_epoch1_20261112_v1",
+  "approved": true,
+  "runnable": true,
+  "authorization": "2026-11-12 user: stop DC; try TranAD window100 stride5; run RCR one epoch and add window100 stride5 to existing window32 stride4 baseline. Same LFP/cache/seed and scoring rules.",
+  "dataset": "LFP",
+  "seed": 3407,
+  "epochs": 1,
+  "train_strides": [
+    4,
+    5
+  ],
+  "methods": [
+    "rcr",
+    "tranad"
+  ],
+  "output": "runs/external/lfp_tranad100_rcr_epoch1_20261112_v1",
+  "source_mapping": "runs/internal/rcr_v1/LFP/full/mapping.json",
+  "source_metadata": "runs/internal/rcr_v1/LFP/full/metadata.csv",
+  "cohort": "runs/external/reference_epoch_timing_20261111_v1/inputs/LFP_cohort_lengths.csv",
+  "protocol_reference": "configs/external/battery_reference_protocol_review_20261111.json",
+  "models": {
+    "rcr": {
+      "span": 32,
+      "window": 32,
+      "train_stride": 4,
+      "batch": 128,
+      "optimizer": "AdamW",
+      "lr": 0.001,
+      "weight_decay": 0.0001,
+      "precision": "float32",
+      "scaler": "minmax",
+      "shuffle": true,
+      "formal_epochs": 1,
+      "validation_stride": 4,
+      "inference_stride": 4
+    },
+    "tranad": {
+      "span": 10,
+      "window": 10,
+      "train_stride": 1,
+      "batch": 128,
+      "optimizer": "AdamW",
+      "lr": 0.0001,
+      "weight_decay": 1e-05,
+      "precision": "float64",
+      "scaler": "minmax",
+      "shuffle": false,
+      "formal_epochs": 1,
+      "inference_stride": 1
+    }
+  },
+  "minimum_length": 105,
+  "preprocessing": "normal-training-only MinMax; width<1e-12=>1; no clipping; per-snippet NaN/Inf interpolation and nearest endpoint; entirely missing channel=>normal-training valid-observation median",
+  "expected_counts": {
+    "train": 5561,
+    "validation": 793,
+    "test": 3569
+  },
+  "expected_points": {
+    "train": 6337018,
+    "validation": 928732,
+    "test": 4625934
+  },
+  "validation_stride": "per cell, matching the RCR window stride; TranAD1",
+  "inference_stride": "per cell",
+  "validation_checkpoints": [
+    0.0,
+    0.5,
+    1.0
+  ],
+  "checkpoint_selection": "Fixed end of epoch1 for every cell, no test-based selection",
+  "training_window_policy": "all retained normal snippets, stride1 or5, append end-aligned full tail window if necessary; no cross-snippet windows; no window cap",
+  "drop_last": false,
+  "gpu": 0,
+  "max_concurrent_gpu_jobs": 1,
+  "precision": {
+    "rcr": "float32",
+    "tranad": "float64"
+  },
+  "amp": false,
+  "tf32": false,
+  "torch_threads": 4,
+  "metrics": [
+    "AP",
+    "AUROC",
+    "Precision",
+    "Recall",
+    "F1",
+    "FPR"
+  ],
+  "aggregation": "mean of largest ceil(0.05*n) native scores per snippet, at least1",
+  "threshold": "normal validation snippet scores P95, numpy linear quantile, predict >= threshold",
+  "label_level": "snippet",
+  "evaluation_scope": "same fixed test cohort; no point adjustment; no test-based stride/checkpoint selection",
+  "native_score": {
+    "rcr": "R=X-Xhat; train-fitted conditional OLS mean/log-RMS scale, min_std0.05, train-scale P5/P95 clipping; mean calibrated squared residual per window",
+    "tranad": "mean_variables((second_output-window_last)^2)"
+  },
+  "model_identity": {
+    "rcr": "Existing RCRBackbone and Scale, same initial parameters across windows",
+    "tranad": "Author released implementation with explicit project window100 variant; author positional encoding buffer extended100; parameterized architecture unchanged"
+  },
+  "first_epoch_limitation": "TranAD native epoch1 weights are first_loss1 and second_loss0; one-epoch results do not establish final-stage quality or convergence",
+  "source_review": [
+    "scripts/run_reference_epoch_timing.py",
+    "external_baselines/reference_snapshots/tranad/src/models.py",
+    "external_baselines/reference_snapshots/tranad/src/dlutils.py",
+    "external_baselines/reference_snapshots/tranad/main.py",
+    "src/models/rcr.py",
+    "src/runners/run_rcr_revalidation.py"
+  ],
+  "excluded": [
+    "formal matrix updates",
+    "full multi-epoch runs",
+    "NCM or Brand1 changes",
+    "formal stride adoption"
+  ],
+  "storage_estimate": "Reuse0.31GiB LFP inputs; new checkpoints/scores well below0.2GiB, temporary RCR moments kept in RAM only",
+  "runtime_estimate": "RCR two cells ~15-30min including refitting and scoring; TranAD100 stride5 ~30-60min including stride1 validation/test. Total roughly45-90min, window100 throughput not yet measured.",
+  "inputs": "runs/external/lfp_stride_pair_20261112_v1/inputs",
+  "validation_diagnostic_limits": "One epoch only. TranAD first-stage validation does not assess fully trained second stage. RCR window comparison changes both window length and stride, as explicitly requested.",
+  "cache_policy": "Training/evaluation read only frozen preprocessed input files, boundaries, metadata and training-only scaler; no original CSV reload or automatic rebuild. Reuse same bundle locally and on Kaggle.",
+  "cells": [
+    {
+      "id": "rcr_w32_s4",
+      "method": "rcr",
+      "train_stride": 4,
+      "overrides": {
+        "window": 32,
+        "span": 32,
+        "validation_stride": 4,
+        "inference_stride": 4
+      }
+    },
+    {
+      "id": "rcr_w100_s5",
+      "method": "rcr",
+      "train_stride": 5,
+      "overrides": {
+        "window": 100,
+        "span": 100,
+        "validation_stride": 5,
+        "inference_stride": 5
+      }
+    },
+    {
+      "id": "tranad_w100_s5",
+      "method": "tranad",
+      "train_stride": 5,
+      "overrides": {
+        "window": 100,
+        "span": 100,
+        "validation_stride": 1,
+        "inference_stride": 1
+      },
+      "compare_initial_checkpoint": "runs/external/lfp_stride_pair_20261112_v2/tranad/initial.pt"
+    }
+  ],
+  "rcr_scale_floor": 0.05,
+  "comparisons": [
+    {
+      "name": "RCR_w100_s5_minus_w32_s4",
+      "base_cell": "rcr_w32_s4",
+      "candidate_cell": "rcr_w100_s5"
+    },
+    {
+      "name": "TranAD_w100_minus_w10_at_stride5",
+      "base_file": "runs/external/lfp_stride_pair_20261112_v2/tranad/stride5/metrics.json",
+      "candidate_cell": "tranad_w100_s5"
+    }
+  ]
+}

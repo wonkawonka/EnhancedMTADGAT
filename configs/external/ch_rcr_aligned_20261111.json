@@ -1,0 +1,49 @@
+{
+  "plan_name": "ch_rcr_aligned_20261111",
+  "datasets": ["NCM", "LFP"],
+  "methods": ["mtad_gat", "tranad", "anomaly_transformer", "dcdetector", "omnianomaly"],
+  "seed": 3407,
+  "input_cache": "runs/internal/mscm_mcr_development_20261025_v2/inputs",
+  "source_root": "runs/internal/rcr_v1",
+  "rcr_plan": "configs/internal/rcr_revalidation_20261107_v2.json",
+  "output": "runs/external/ch_rcr_aligned_20261111_s3407",
+  "expected_jobs": 10,
+  "training": {
+    "normal_training": "all frozen RCR normal training windows, no subsampling",
+    "window": 32,
+    "stride": 4,
+    "epochs": 30,
+    "patience": 8,
+    "batch_size": 128,
+    "optimizer": "AdamW",
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "scheduler": "none",
+    "precision": "float32",
+    "tf32": false,
+    "gradient_clip": 5.0,
+    "checkpoint_selection": "strict minimum full normal-validation objective, never test labels",
+    "validation_objectives": {
+      "mtad_gat": "0.5 forecast MSE + 0.5 reconstruction MSE",
+      "tranad": "0.5 first-output MSE + 0.5 second-output MSE, final time step",
+      "anomaly_transformer": "reconstruction MSE; association remains in training objective",
+      "dcdetector": "symmetric association KL (series term); do not use identically zero detached minmax difference",
+      "omnianomaly": "reconstruction MSE + 0.01 KL, deterministic validation latent mean"
+    }
+  },
+  "evaluation": {
+    "all_validation_and_test_windows": true,
+    "native_anomaly_scores": true,
+    "window_to_snippet": "top 5 percent mean, ceil, minimum one",
+    "threshold": "normal validation snippet score P95",
+    "metrics": ["ap", "auroc", "precision", "recall", "f1", "fpr"],
+    "test_selection": false
+  },
+  "declared_differences": [
+    "Native architectures, training losses and anomaly scores differ from RCR; this is not a matched-capacity structural ablation.",
+    "TranAD uses window32 here to match the frozen RCR window cohort; legacy TranAD used window10.",
+    "Baseline gradient clipping5 retained; RCR does not clip gradients.",
+    "Anomaly Transformer and DCdetector checkpoint objectives are explicitly defined above; a common numerical loss across models is not meaningful."
+  ],
+  "execution": {"gpu": 0, "max_concurrent_jobs": 1, "outside_sandbox_cuda": true, "stop_on_failure": true}
+}

@@ -1,0 +1,1673 @@
+{
+  "plan_name": "battery_reference_protocol_review_20261111",
+  "schema_version": 1,
+  "status": "choices_recorded_timing_authorized",
+  "approved": false,
+  "runnable": false,
+  "runner": null,
+  "purpose": "在共同电池数据任务上比较有来源的完整检测流程；不声称复现原论文数值，不把第三方/项目变体当原模型。",
+  "review_date": "2026-11-11",
+  "timezone": "Asia/Hong_Kong",
+  "scope": {
+    "requested_external_methods": [
+      "mtad_gat",
+      "tranad",
+      "anomaly_transformer",
+      "dcdetector",
+      "omnianomaly"
+    ],
+    "reference": "RCR R1_full Scale",
+    "datasets": [
+      "LFP",
+      "NCM",
+      "Brand1"
+    ],
+    "model_seeds_proposed": [
+      3407
+    ],
+    "excluded": [
+      "Brand2",
+      "Brand3",
+      "PatchAD",
+      "new ablations",
+      "new sensitivity sweeps"
+    ],
+    "other_brand1_methods": "IsolationForest/DeepSVDD remain outside this five-model revision; do not delete or silently validate their old results.",
+    "brand1_split_ids": [
+      "brand1_normal_entity_70_10_20_seed0_v1"
+    ]
+  },
+  "non_actions": [
+    "No formal 35/42-job batch",
+    "No test-metric selection",
+    "No Kaggle",
+    "No changes to historical completed manifests"
+  ],
+  "source_snapshot": [
+    {
+      "repository": "imperial-qore/TranAD",
+      "commit": "7ffb98d0c18189cc3d9ab732b4cb0278200a0af0",
+      "identity": "author_released_refactored_code",
+      "files": [
+        {
+          "path": "README.md",
+          "blob_sha": "cac330c417e64fd2c8c2d16178b8cc05ec4f29a9",
+          "url": "https://github.com/imperial-qore/TranAD/blob/7ffb98d0c18189cc3d9ab732b4cb0278200a0af0/README.md"
+        },
+        {
+          "path": "main.py",
+          "blob_sha": "f643fa0fa3f32061e9d729250381e08b83706f93",
+          "url": "https://github.com/imperial-qore/TranAD/blob/7ffb98d0c18189cc3d9ab732b4cb0278200a0af0/main.py"
+        },
+        {
+          "path": "src/constants.py",
+          "blob_sha": "6b199defe2f2c69934ea63dce39fcd1656e56199",
+          "url": "https://github.com/imperial-qore/TranAD/blob/7ffb98d0c18189cc3d9ab732b4cb0278200a0af0/src/constants.py"
+        },
+        {
+          "path": "src/dlutils.py",
+          "blob_sha": "f532108e4c3a5319d6e1ecf9fdc634cddb54a0fe",
+          "url": "https://github.com/imperial-qore/TranAD/blob/7ffb98d0c18189cc3d9ab732b4cb0278200a0af0/src/dlutils.py"
+        },
+        {
+          "path": "src/models.py",
+          "blob_sha": "54dc573506028fabff811d0420f5596c70ac348a",
+          "url": "https://github.com/imperial-qore/TranAD/blob/7ffb98d0c18189cc3d9ab732b4cb0278200a0af0/src/models.py"
+        }
+      ]
+    },
+    {
+      "repository": "thuml/Anomaly-Transformer",
+      "commit": "b0ee470c8012bff857fb600462aec6209c4a18d9",
+      "identity": "author_released_code",
+      "files": [
+        {
+          "path": "main.py",
+          "blob_sha": "fd2e213ff9a1a01fe6720e6fb754dbc4231842d0",
+          "url": "https://github.com/thuml/Anomaly-Transformer/blob/b0ee470c8012bff857fb600462aec6209c4a18d9/main.py"
+        },
+        {
+          "path": "solver.py",
+          "blob_sha": "a9c057e8ceac206e8ba5ee0223d0e0c8cea7ed67",
+          "url": "https://github.com/thuml/Anomaly-Transformer/blob/b0ee470c8012bff857fb600462aec6209c4a18d9/solver.py"
+        },
+        {
+          "path": "scripts/SMD.sh",
+          "blob_sha": "e74a8ddc72c6115f0612e708237ed99a104a5942",
+          "url": "https://github.com/thuml/Anomaly-Transformer/blob/b0ee470c8012bff857fb600462aec6209c4a18d9/scripts/SMD.sh"
+        },
+        {
+          "path": "data_factory/data_loader.py",
+          "blob_sha": "4ce770d95f838b5c4572f2492fd7711091d97a04",
+          "url": "https://github.com/thuml/Anomaly-Transformer/blob/b0ee470c8012bff857fb600462aec6209c4a18d9/data_factory/data_loader.py"
+        },
+        {
+          "path": "model/AnomalyTransformer.py",
+          "blob_sha": "ffcbdf2583a6c1b21342b95c1470bbcd49e6a959",
+          "url": "https://github.com/thuml/Anomaly-Transformer/blob/b0ee470c8012bff857fb600462aec6209c4a18d9/model/AnomalyTransformer.py"
+        }
+      ]
+    },
+    {
+      "repository": "DAMO-DI-ML/KDD2023-DCdetector",
+      "commit": "9d107cae518ef24ee2eb2ad1b92107cdcd09ea10",
+      "identity": "author_released_code",
+      "files": [
+        {
+          "path": "main.py",
+          "blob_sha": "595a1c3d1a28c219434f5255a636ca263eb29e55",
+          "url": "https://github.com/DAMO-DI-ML/KDD2023-DCdetector/blob/9d107cae518ef24ee2eb2ad1b92107cdcd09ea10/main.py"
+        },
+        {
+          "path": "solver.py",
+          "blob_sha": "f020778d4cf90315c7148f244104a4ce4b32d9a7",
+          "url": "https://github.com/DAMO-DI-ML/KDD2023-DCdetector/blob/9d107cae518ef24ee2eb2ad1b92107cdcd09ea10/solver.py"
+        },
+        {
+          "path": "scripts/MSL.sh",
+          "blob_sha": "0de58f1367a4d88c2b058045e39fbc5b2b766893",
+          "url": "https://github.com/DAMO-DI-ML/KDD2023-DCdetector/blob/9d107cae518ef24ee2eb2ad1b92107cdcd09ea10/scripts/MSL.sh"
+        },
+        {
+          "path": "scripts/SMD.sh",
+          "blob_sha": "381fda4fe843186d233d9eb2f060b0b20f8d23b9",
+          "url": "https://github.com/DAMO-DI-ML/KDD2023-DCdetector/blob/9d107cae518ef24ee2eb2ad1b92107cdcd09ea10/scripts/SMD.sh"
+        },
+        {
+          "path": "data_factory/data_loader.py",
+          "blob_sha": "0074c87ba66e0853df26b9f1f12c34a2dc69de1d",
+          "url": "https://github.com/DAMO-DI-ML/KDD2023-DCdetector/blob/9d107cae518ef24ee2eb2ad1b92107cdcd09ea10/data_factory/data_loader.py"
+        },
+        {
+          "path": "model/DCdetector.py",
+          "blob_sha": "de9bf26e0cf09bcf3d3d642927b5be731797b994",
+          "url": "https://github.com/DAMO-DI-ML/KDD2023-DCdetector/blob/9d107cae518ef24ee2eb2ad1b92107cdcd09ea10/model/DCdetector.py"
+        }
+      ]
+    },
+    {
+      "repository": "NetManAIOps/OmniAnomaly",
+      "commit": "7fb0e0acf89ea49908896bcc9f9e80fcfff6baf4",
+      "identity": "author_released_code",
+      "files": [
+        {
+          "path": "main.py",
+          "blob_sha": "1c6eb66184b5e0d31a43d695ebb422ae321c79db",
+          "url": "https://github.com/NetManAIOps/OmniAnomaly/blob/7fb0e0acf89ea49908896bcc9f9e80fcfff6baf4/main.py"
+        },
+        {
+          "path": "requirements.txt",
+          "blob_sha": "98041bc803dc5b177468f142c42cf81e4a5f1889",
+          "url": "https://github.com/NetManAIOps/OmniAnomaly/blob/7fb0e0acf89ea49908896bcc9f9e80fcfff6baf4/requirements.txt"
+        },
+        {
+          "path": "omni_anomaly/model.py",
+          "blob_sha": "ac577470ae9db718f0ed9e410cb5ae5890c17b8f",
+          "url": "https://github.com/NetManAIOps/OmniAnomaly/blob/7fb0e0acf89ea49908896bcc9f9e80fcfff6baf4/omni_anomaly/model.py"
+        },
+        {
+          "path": "omni_anomaly/training.py",
+          "blob_sha": "d9762fe699bdd65e520a7dcbd8bd681194c41edf",
+          "url": "https://github.com/NetManAIOps/OmniAnomaly/blob/7fb0e0acf89ea49908896bcc9f9e80fcfff6baf4/omni_anomaly/training.py"
+        },
+        {
+          "path": "omni_anomaly/prediction.py",
+          "blob_sha": "073d8b1c684395814e501fab4dc1df42d3de89d8",
+          "url": "https://github.com/NetManAIOps/OmniAnomaly/blob/7fb0e0acf89ea49908896bcc9f9e80fcfff6baf4/omni_anomaly/prediction.py"
+        },
+        {
+          "path": "omni_anomaly/utils.py",
+          "blob_sha": "6bc3046b658c7fefc0e08286d5fea83275cd4aad",
+          "url": "https://github.com/NetManAIOps/OmniAnomaly/blob/7fb0e0acf89ea49908896bcc9f9e80fcfff6baf4/omni_anomaly/utils.py"
+        }
+      ]
+    },
+    {
+      "repository": "ML4ITS/mtad-gat-pytorch",
+      "commit": "a3719416527d57e0e364f9b489c5368ade1bc8e7",
+      "identity": "third_party_declared_variant",
+      "files": [
+        {
+          "path": "README.md",
+          "blob_sha": "8e3f4bbf9479afa190c2eba7d497a57e3250e47a",
+          "url": "https://github.com/ML4ITS/mtad-gat-pytorch/blob/a3719416527d57e0e364f9b489c5368ade1bc8e7/README.md"
+        },
+        {
+          "path": "args.py",
+          "blob_sha": "9944a4f80847f1131f617dab30ed1bef25c66005",
+          "url": "https://github.com/ML4ITS/mtad-gat-pytorch/blob/a3719416527d57e0e364f9b489c5368ade1bc8e7/args.py"
+        },
+        {
+          "path": "training.py",
+          "blob_sha": "08c0382bc8bf70173f9d39f560a729c64d602afd",
+          "url": "https://github.com/ML4ITS/mtad-gat-pytorch/blob/a3719416527d57e0e364f9b489c5368ade1bc8e7/training.py"
+        },
+        {
+          "path": "prediction.py",
+          "blob_sha": "fc1167e6485dd47dc5cf9dafcb11a05dc5c5a665",
+          "url": "https://github.com/ML4ITS/mtad-gat-pytorch/blob/a3719416527d57e0e364f9b489c5368ade1bc8e7/prediction.py"
+        },
+        {
+          "path": "train.py",
+          "blob_sha": "a1caa6ffd5303b63bbdd308f6ce07e25bac1ab17",
+          "url": "https://github.com/ML4ITS/mtad-gat-pytorch/blob/a3719416527d57e0e364f9b489c5368ade1bc8e7/train.py"
+        }
+      ]
+    }
+  ],
+  "paper_sources": {
+    "mtad_gat": {
+      "url": "https://arxiv.org/pdf/2009.02040",
+      "sections": [
+        "III.B",
+        "III.D",
+        "IV.B"
+      ]
+    },
+    "tranad": {
+      "url": "https://vldb.org/pvldb/vol15/p1201-tuli.pdf",
+      "sections": [
+        "3.4",
+        "4"
+      ]
+    },
+    "anomaly_transformer": {
+      "url": "https://arxiv.org/html/2110.02642v5",
+      "sections": [
+        "4 Implementation details",
+        "Appendix B"
+      ]
+    },
+    "dcdetector": {
+      "url": "https://arxiv.org/pdf/2306.10347",
+      "sections": [
+        "4.3",
+        "Appendix B Table 8"
+      ]
+    },
+    "omnianomaly": {
+      "url": "https://netman.aiops.org/wp-content/uploads/2019/08/OmniAnomaly_camera-ready.pdf",
+      "sections": [
+        "Appendix B"
+      ]
+    }
+  },
+  "shared_proposal": {
+    "task": "离线多变量片段/实体异常检测；不宣称逐时刻故障定位或在线零延迟检测",
+    "features": [
+      "total/pack voltage",
+      "current",
+      "SOC",
+      "max cell voltage",
+      "min cell voltage",
+      "max temperature",
+      "min temperature"
+    ],
+    "feature_policy": "使用归档的七变量及顺序；不加入VIN/故障类别/测试标签；单位和采样间隔保持数据本身；跨数据集不合并训练。",
+    "cohort": "LFP/NCM保留原实体划分和样本ID；Brand1按固定正常实体7:1:2新划分。统一排除真实长度<105；各方法相同清单，无窗口数量上限。",
+    "cohort_caveat": "不是原发布数据无筛除全量；先前<32排除仍存在，本轮共同排除<105。",
+    "ch_split": {
+      "seed": 3407,
+      "normal_entity_ratio": [
+        0.7,
+        0.1,
+        0.2
+      ],
+      "normal_entities": [
+        280,
+        40,
+        80
+      ],
+      "cycles": [
+        "charge",
+        "discharge"
+      ],
+      "faults": "既有测试故障片段，不参与训练、选权重或阈值",
+      "source_mapping": "runs/internal/rcr_v1/{LFP,NCM}/full/mapping.json"
+    },
+    "brand_split": {
+      "split_id": "brand1_normal_entity_70_10_20_seed0_v1",
+      "split_seed": 0,
+      "protocol": "fixed_normal_entity_70_10_20",
+      "normal_entity_ratio": [
+        0.7,
+        0.1,
+        0.2
+      ],
+      "rounding": "floor(n*0.7) train; floor(n*0.1) validation; remainder test, same rounding as CH",
+      "normal_entities": {
+        "train": 117,
+        "validation": 16,
+        "test": 35
+      },
+      "algorithm": "Sort normal entity IDs lexicographically, shuffle once with numpy.default_rng(0), take train/validation/test slices; do not optimize sample balance or metrics",
+      "faults": "All 30 fault entities exclusively in test; no fault-label calibration",
+      "source_mapping": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation/sources/Brand1_fold0/mapping.json",
+      "source_usage": "Union of old partition metadata supplies IDs/entities/labels only; old memberships and fitted parameters are not reused",
+      "raw_pack": "kaggle/brand1_packed_inputs_20261109/brand1_raw.npy",
+      "raw_sample_ids": "kaggle/brand1_packed_inputs_20261109/brand1_sample_ids.json",
+      "artifact_directory": "runs/external/brand1_split_70_10_20_seed0_20261112",
+      "manifest": "runs/external/brand1_split_70_10_20_seed0_20261112/split_manifest.json",
+      "mapping": "runs/external/brand1_split_70_10_20_seed0_20261112/mapping.json",
+      "preparation_command": ".venv/bin/python scripts/prepare_brand1_fixed_split.py",
+      "not_paper_protocol": true,
+      "historical_five_fold_basis": {
+        "paper": "https://www.nature.com/articles/s41467-023-41226-5",
+        "author_repository": "https://github.com/962086838/Battery_fault_detection_NC_github",
+        "evidence": "Paper Fig3 reports five-fold cross-validation; author repository provides five_fold_train_test_split.ipynb",
+        "project_difference": "Historical fivefold and later fold0 scope superseded by user-requested single fixed70/10/20 split; independent normal validation, no fault-label calibration."
+      },
+      "current_scope": "User-requested single fixed 70/10/20 normal-entity split; same IDs across all methods/ablations. This is not historical fold0 or original-paper fivefold reproduction.",
+      "authorization": "2026-11-12 user: Brand1也要调整成7:1:2",
+      "seed_basis": "Retain Brand1 split seed0; model seed3407 unchanged. Ratio user-requested; rounding follows CH implementation.",
+      "reuse_policy": "Shared unnormalized raw pack only. New split requires new training-only MinMax and fresh model training/RCR calibration; old artifacts immutable.",
+      "limitations": [
+        "Ratios apply to normal entities, not all labeled snippets; unequal snippets per entity cause deviations.",
+        "Only 16 normal validation entities; P95 remains a noisy empirical threshold, not guaranteed 5% test FPR.",
+        "Historical test data/results already inspected; this is not a never-seen confirmatory holdout."
+      ]
+    },
+    "preprocessing": {
+      "fit_partition": "all real normal training points only, per chemistry/fold; no fitting on validation/test or padded values",
+      "recommended_scalers": {
+        "RCR": "MinMax",
+        "MTAD_GAT": "MinMax",
+        "TranAD": "MinMax",
+        "Anomaly_Transformer": "MinMax",
+        "DCdetector": "MinMax",
+        "OmniAnomaly": "MinMax"
+      },
+      "why": "2026-11-12用户确认：所有模型统一逐变量MinMax，相同正常训练点拟合、每数据集/折冻结；不按片段拟合，不裁剪。极差<1e-12时除数设为1。",
+      "alternative": "原生混合scaler方案未采用；原始发布版字段保留作为来源事实。",
+      "clip": false,
+      "missing_values": "2026-11-12用户确认：逐片段逐变量处理NaN/Inf，内部线性插值、端点最近有效值填充；不统一填0。整段某变量全缺失的训练中位数回退仍待确认。旧pack须从原文件重建，不能把旧0值全当缺失。",
+      "resampling": false,
+      "extra_denoising": false,
+      "mtad_paper_cleaning": "原文训练数据有SR清洗阈值3；ML4ITS默认关闭。这属于模型版本选择，不能遗漏或悄悄加入。",
+      "confirmed": "2026-11-12",
+      "denominator_rule": "training maximum-minimum < 1e-12 -> denominator 1",
+      "per_snippet_fit": false,
+      "reference_deviations": {
+        "Anomaly_Transformer": "External StandardScaler -> MinMax; architecture unchanged",
+        "DCdetector": "External StandardScaler -> MinMax; native RevIN preserved"
+      },
+      "execution_inputs_policy": "All local and Kaggle training/evaluation read frozen prepared bundles; no original CSV/pickle parsing or automatic raw reprocessing inside model jobs. Bind values, boundaries, IDs, split and training-only scaler hashes; prepare missing bundles in a separate task."
+    },
+    "time_coverage": {
+      "recommended": "使用清单内每个原始片段的全部真实时间点；每个片段独立建窗，绝不跨实体/片段。",
+      "rcr_change": "CH window32/stride4保留并增加末尾完整窗；Brand1 window128/stride128替代旧127。需新任务重训/重拟合RCR，不能混用旧指标。",
+      "alternative_reuse": "完全沿用旧RCR有效区间：CH长度截为32+4*floor((L-32)/4)，Brand1只取前127点；全部方法使用同一声明区间。旧RCR可复用，但不能称128点/每点全量。",
+      "selected": "full real temporal extent + shared length>=105 cohort; RCR fresh training",
+      "OmniAnomaly": "Release-behavior port; window100; train stride LFP5/NCM1/Brand1 5+tail; validation/scoring stride1"
+    },
+    "windowing": {
+      "native_windows": {
+        "MTAD_GAT": 100,
+        "TranAD": 10,
+        "Anomaly_Transformer": 100,
+        "DCdetector": 105,
+        "OmniAnomaly": 100
+      },
+      "dcdetector_patches": [
+        3,
+        5,
+        7
+      ],
+      "training_stride": {
+        "MTAD_GAT": 1,
+        "TranAD": 1,
+        "Anomaly_Transformer": 100,
+        "DCdetector": 1,
+        "OmniAnomaly": 1
+      },
+      "training_stride_basis": "2026-11-12用户确认LFP的MTAD-GAT/DCdetector/OmniAnomaly训练stride5+tail；TranAD窗口10的LFP默认stride1暂留，窗口100/stride5另作明确变体诊断；NCM原值、Brand1已确认值保持。验证和推理规则不变。",
+      "tail": "AT不重叠窗口后若有余数，追加一个以最后真实点结束的完整窗；不得丢弃尾部。RCR同理追加末尾窗。",
+      "short_sequences": "共同排除长度<105；不补齐；不按模型分别删样本。",
+      "short_alternative": "统一排除不满足最大span的片段，所有模型含RCR用同一新队列重训；这不再是旧清单全量，不能只让某一基线丢样本。",
+      "short_padding_is_not_native_claim": false,
+      "inference_last_point_models": "MTAD/TranAD stride1，真实目标对齐；前部仅上下文。",
+      "inference_all_point_models": "AT/DC使用不重叠块+末尾对齐窗；重叠真实点的原生分数做算术均值，补齐位置剔除。",
+      "target_alignment": {
+        "MTAD_GAT": "100点输入预测下一点；第三方版本重构时另用含该真实目标的移位窗口，按其prediction.py保留。",
+        "TranAD": "作者发布版重构输入最后点，双阶段第二输出用于分数；修正loader到评分时间映射并包含最后真实点，不把t-1的分数对到t标签。"
+      },
+      "input_source": "从原始片段/无损原始打包数组及冻结ID清单建各模型窗口；不能把旧RCR的32点窗缓存拼成100点输入。",
+      "selected_short_policy": "common_exclusion",
+      "recommended_scoring_note": "下层点/窗口数不同；共同的是片段/实体对象与外部聚合策略，不能称相同逐点检测协议。",
+      "OmniAnomaly": "Release-behavior port; window100; train stride LFP5/NCM1/Brand1 5+tail; validation/scoring stride1",
+      "training_stride_scope": "Legacy baseline values only; active per-dataset resolved settings and training_stride_by_dataset are authoritative.",
+      "training_stride_by_dataset": {
+        "LFP": {
+          "MTAD_GAT": 5,
+          "TranAD": 1,
+          "Anomaly_Transformer": 100,
+          "DCdetector": 5,
+          "OmniAnomaly": 5
+        },
+        "NCM": {
+          "MTAD_GAT": 1,
+          "TranAD": 1,
+          "Anomaly_Transformer": 100,
+          "DCdetector": 1,
+          "OmniAnomaly": 1
+        },
+        "Brand1": {
+          "MTAD_GAT": 5,
+          "TranAD": 5,
+          "Anomaly_Transformer": 100,
+          "DCdetector": 5,
+          "OmniAnomaly": 5
+        }
+      }
+    },
+    "evaluation": {
+      "level": {
+        "LFP": "snippet",
+        "NCM": "snippet",
+        "Brand1": "entity"
+      },
+      "aggregation": "原生分数到片段：最高ceil(0.05*n)个有效分数均值，至少1个；Brand1再对实体片段分数取同样top5%。",
+      "native_granularity_disclosure": "RCR输出整窗残差能量；其他方法按其原生点分数。共同的是最终评价对象与top5%聚合规则，不能声称底层时间平滑完全相同；本轮比较完整检测流程。",
+      "threshold": {
+        "source": "normal validation at final object level",
+        "quantile": 0.95,
+        "interpolation": "linear",
+        "prediction_operator": ">=",
+        "fitted_separately_per_model_seed_fold": true
+      },
+      "metrics": [
+        "sklearn average_precision_score",
+        "sklearn roc_auc_score",
+        "precision",
+        "recall",
+        "F1",
+        "FPR"
+      ],
+      "point_adjustment": false,
+      "test_best_threshold": false,
+      "test_based_checkpoint": false,
+      "extra_smoothing": false,
+      "extra_score_fusion": false,
+      "external_rcr_calibration": false,
+      "aggregation_across_runs": "Current seed3407: report LFP/NCM runs and Brand1 fixed70/10/20 split metrics, not old fold0 or fivefold results.",
+      "selected": true
+    },
+    "training_controls": {
+      "fresh_initialization": true,
+      "resume": "仅同一协议任务意外中断可恢复；不从旧简化模型续训",
+      "training_unit": "一epoch遍历声明窗口队列一次；不同模型窗口数/更新数并不一致，记录两者及耗时",
+      "precision": "参考实现精度：TranAD发布版float64，AT/DC/Omni/ML4ITS为float32；不默认AMP/TF32/编译",
+      "gradient_accumulation": 1,
+      "seed_scope": "Python/NumPy/framework/loader及随机推理，移除参考代码偷偷重置固定种子的行为并记录",
+      "batch_policy": "先使用明确选择的参考batch；显存不足报告再调整，不能静默减batch或改结构",
+      "test_access": "测试标签只做固定模型最终指标；正常验证指标不等于故障检测最优；不按本次测试胜负调参",
+      "optimizer_other_defaults": {
+        "betas": [
+          0.9,
+          0.999
+        ],
+        "epsilon": 1e-08,
+        "amsgrad": false,
+        "note": "按所选参考框架Adam/AdamW默认值明确落盘；Omni TF参数名beta1/beta2/epsilon，非PyTorch移植。"
+      },
+      "partial_batch": {
+        "proposed_drop_last": false,
+        "reason": "每轮覆盖全部声明训练窗口；参考代码若drop_last=True则登记为数据加载差异。",
+        "validation": "所有验证样本按样本数加权，不以最后小batch等权放大。"
+      },
+      "shuffle": {
+        "MTAD_GAT": "train windows shuffled",
+        "TranAD": "reference released DataLoader ordered",
+        "Anomaly_Transformer": "train windows shuffled",
+        "DCdetector": "train windows shuffled",
+        "OmniAnomaly": "train windows shuffled",
+        "validation_test": "ordered"
+      },
+      "gradient_clipping": {
+        "RCR": null,
+        "MTAD_variant": null,
+        "TranAD": null,
+        "Anomaly_Transformer": null,
+        "DCdetector": null,
+        "OmniAnomaly": 10
+      },
+      "inference_batch": "可按显存分批但需验证同一checkpoint下分数一致；不改变训练有效batch，不一次载入全部测试窗。"
+    },
+    "protocol_disclosure": "既有测试结果已经反复查看；本草案是冻结后补充验证，不伪称从未接触测试的确认性研究。"
+  },
+  "observed_data": {
+    "ch_counts": {
+      "LFP": {
+        "train": 5600,
+        "validation": 800,
+        "test": 3593
+      },
+      "NCM": {
+        "train": 5305,
+        "validation": 771,
+        "test": 3402
+      }
+    },
+    "short_raw_snippets": {
+      "LFP": {
+        "below100": {
+          "train": 4,
+          "validation": 0,
+          "test": 3
+        },
+        "below101": {
+          "train": 4,
+          "validation": 0,
+          "test": 3
+        },
+        "below105": {
+          "train": 39,
+          "validation": 7,
+          "test": 24
+        }
+      },
+      "NCM": {
+        "below100": {
+          "train": 8,
+          "validation": 0,
+          "test": 7
+        },
+        "below101": {
+          "train": 8,
+          "validation": 0,
+          "test": 8
+        },
+        "below105": {
+          "train": 8,
+          "validation": 0,
+          "test": 17
+        }
+      }
+    },
+    "short_count_evidence": "由旧32/4窗口references先定位可能的短片段，再只读取这些片段CSV行数；没有重跑模型或扫描全部原始数据。",
+    "brand1_total": {
+      "snippets": 476739,
+      "entities": 198,
+      "normal_entities": 168,
+      "fault_entities": 30,
+      "raw_shape": [
+        128,
+        7
+      ]
+    },
+    "brand1_folds": [
+      {
+        "fold": 0,
+        "snippets": {
+          "train": 269077,
+          "validation": 102574,
+          "test": 105088
+        },
+        "normal_entities": {
+          "train": 100,
+          "validation": 34,
+          "test": 34
+        }
+      },
+      {
+        "fold": 1,
+        "snippets": {
+          "train": 262106,
+          "validation": 95028,
+          "test": 119605
+        },
+        "normal_entities": {
+          "train": 100,
+          "validation": 34,
+          "test": 34
+        }
+      },
+      {
+        "fold": 2,
+        "snippets": {
+          "train": 277116,
+          "validation": 87564,
+          "test": 112059
+        },
+        "normal_entities": {
+          "train": 101,
+          "validation": 33,
+          "test": 34
+        }
+      },
+      {
+        "fold": 3,
+        "snippets": {
+          "train": 285659,
+          "validation": 86485,
+          "test": 104595
+        },
+        "normal_entities": {
+          "train": 102,
+          "validation": 33,
+          "test": 33
+        }
+      },
+      {
+        "fold": 4,
+        "snippets": {
+          "train": 285166,
+          "validation": 88057,
+          "test": 103516
+        },
+        "normal_entities": {
+          "train": 101,
+          "validation": 34,
+          "test": 33
+        }
+      }
+    ],
+    "retained_counts": {
+      "NCM": {
+        "train": {
+          "original": 5305,
+          "kept": 5297,
+          "points": 1858221,
+          "windows": {
+            "mtad": 1328521,
+            "tranad": 1810548,
+            "at": 20432,
+            "dc": 1307333,
+            "omni_compat": 428605,
+            "rcr": 428605
+          },
+          "excluded_ratio": 0.0015080113100848257
+        },
+        "validation": {
+          "original": 771,
+          "kept": 771,
+          "points": 272664,
+          "windows": {
+            "mtad": 195564,
+            "tranad": 265725,
+            "at": 2988,
+            "dc": 192480,
+            "omni_compat": 62926,
+            "rcr": 62926
+          },
+          "excluded_ratio": 0.0
+        },
+        "test": {
+          "original": 3402,
+          "kept": 3385,
+          "points": 1537577,
+          "windows": {
+            "mtad": 1199077,
+            "tranad": 1507112,
+            "at": 16678,
+            "dc": 1185537,
+            "omni_compat": 361576,
+            "rcr": 361576
+          },
+          "excluded_ratio": 0.0049970605526161085
+        }
+      },
+      "LFP": {
+        "train": {
+          "original": 5600,
+          "kept": 5561,
+          "points": 6337018,
+          "windows": {
+            "mtad": 5780918,
+            "tranad": 6286969,
+            "at": 66147,
+            "dc": 5758674,
+            "omni_compat": 1547394,
+            "rcr": 1547394
+          },
+          "excluded_ratio": 0.0069642857142857145
+        },
+        "validation": {
+          "original": 800,
+          "kept": 793,
+          "points": 928732,
+          "windows": {
+            "mtad": 849432,
+            "tranad": 921595,
+            "at": 9689,
+            "dc": 846260,
+            "omni_compat": 226933,
+            "rcr": 226933
+          },
+          "excluded_ratio": 0.00875
+        },
+        "test": {
+          "original": 3593,
+          "kept": 3569,
+          "points": 4625934,
+          "windows": {
+            "mtad": 4269034,
+            "tranad": 4593813,
+            "at": 48043,
+            "dc": 4254758,
+            "omni_compat": 1132838,
+            "rcr": 1132838
+          },
+          "excluded_ratio": 0.006679654884497634
+        }
+      }
+    },
+    "excluded_ids_evidence": "runs/external/reference_epoch_timing_20261111_v1/inputs/input_audit.json",
+    "brand1_fixed_split": {
+      "split_id": "brand1_normal_entity_70_10_20_seed0_v1",
+      "counts": {
+        "train": {
+          "normal_entities": 117,
+          "fault_entities": 0,
+          "normal_snippets": 322490,
+          "fault_snippets": 0,
+          "snippets": 322490
+        },
+        "validation": {
+          "normal_entities": 16,
+          "fault_entities": 0,
+          "normal_snippets": 42994,
+          "fault_snippets": 0,
+          "snippets": 42994
+        },
+        "test": {
+          "normal_entities": 35,
+          "fault_entities": 30,
+          "normal_snippets": 94224,
+          "fault_snippets": 17031,
+          "snippets": 111255
+        }
+      },
+      "manifest": "runs/external/brand1_split_70_10_20_seed0_20261112/split_manifest.json"
+    },
+    "common_short_exclusions": {
+      "LFP": {
+        "source_snippets": 9993,
+        "excluded": 70,
+        "excluded_percent": 0.7004903432402682
+      },
+      "NCM": {
+        "source_snippets": 9478,
+        "excluded": 25,
+        "excluded_percent": 0.26376872757965814
+      },
+      "Brand1": {
+        "source_snippets": 476739,
+        "excluded": 0,
+        "excluded_percent": 0
+      }
+    }
+  },
+  "models": {
+    "RCR": {
+      "identity": "project RCR R1_full, not an external paper model",
+      "current": {
+        "window_ch": 32,
+        "stride_ch": 4,
+        "window_brand1": 127,
+        "stride_brand1": 127,
+        "hidden": 32,
+        "graph": true,
+        "transformer_layers": 2,
+        "heads": 4,
+        "ffn_dim": 64,
+        "dropout": 0.1,
+        "optimizer": "AdamW",
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "batch": 128,
+        "max_epochs": 30,
+        "patience": 8,
+        "scheduler": "none",
+        "loss": "Huber delta=1",
+        "gradient_clip": null,
+        "precision": "float32",
+        "selection": "minimum full normal-validation Huber"
+      },
+      "score": {
+        "name": "Scale",
+        "definition": "signed residual; conditional linear mean and log-RMS scale; mean(z^2)",
+        "min_std": 0.05,
+        "sigma_clip": "training predicted sigma per-variable P5/P95",
+        "cal_abs": false
+      },
+      "proposal": "保留上述架构/训练/Scale；只有选择全部真实时间点方案时按shared_proposal.time_coverage重训。"
+    },
+    "MTAD_GAT": {
+      "paper": {
+        "window": 100,
+        "gru_hidden": 300,
+        "forecast_hidden": 300,
+        "vae_latent": 300,
+        "optimizer": "Adam",
+        "lr": 0.001,
+        "epochs": 100,
+        "gamma": 0.8,
+        "batch": null,
+        "batch_note": "本次核对的原文Setup未找到明确batch，不猜测",
+        "reconstruction": "VAE",
+        "loss": "forecast RMSE plus VAE objective",
+        "score": "sum_i[(forecast_error_i)^2+gamma*(1-p_i)]/(1+gamma)",
+        "preprocessing": "train-only MinMax + training SR cleaning threshold3"
+      },
+      "public_variant": {
+        "repository": "ML4ITS/mtad-gat-pytorch",
+        "window": 100,
+        "gru_hidden": 150,
+        "forecast_hidden": 150,
+        "reconstruction_hidden": 150,
+        "reconstruction": "GRU decoder, not VAE",
+        "gat": "GATv2 default",
+        "kernel": 7,
+        "gru_layers": 1,
+        "forecast_layers": 3,
+        "dropout": 0.3,
+        "alpha": 0.2,
+        "optimizer": "Adam",
+        "lr": 0.001,
+        "weight_decay": 0,
+        "batch": 256,
+        "max_epochs": 30,
+        "gamma": 1,
+        "scheduler": "none",
+        "loss": "forecast RMSE + reconstruction RMSE",
+        "score": "mean_i(abs forecast error + gamma*abs reconstruction error)",
+        "score_scaling": false,
+        "smoothing": false,
+        "sr_cleaning": false
+      },
+      "old_local_difference": "Enhanced_MTADGAT hidden64，下一点预测变成输入最后点，双MSE，非论文VAE。",
+      "recommended": "用户已接受 ML4ITS GATv2/GRU 第三方变体；不称原论文复现。",
+      "variant_selection_proposal": "30固定轮，按完整正常验证RMSE和选最佳；修复原仓库append后与自身比较导致每轮覆盖checkpoint的逻辑，明确披露。",
+      "unresolved": []
+    },
+    "TranAD": {
+      "paper": {
+        "window": 10,
+        "encoder_layers": 1,
+        "feedforward_layers": 2,
+        "encoder_hidden": 64,
+        "dropout": 0.1,
+        "optimizer": "AdamW",
+        "lr": 0.01,
+        "meta_lr": 0.02,
+        "scheduler_statement": "step-scheduler step size0.5，具体映射需核对，不自行翻译成StepLR参数",
+        "heads": "feature count",
+        "split": "80/20",
+        "selection": "validation accuracy deteriorates; exact max epoch/patience not specified in checked setup",
+        "mechanisms": [
+          "self conditioning",
+          "adversarial training",
+          "MAML"
+        ]
+      },
+      "release": {
+        "window": 10,
+        "d_model": "2*features =14",
+        "heads": 7,
+        "encoder_layers": 1,
+        "decoder_layers_each": 1,
+        "ffn_dim": 16,
+        "dropout": 0.1,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "weight_decay": 1e-05,
+        "lr_by_dataset": {
+          "SMD": 0.0001,
+          "WADI": 0.0001,
+          "SMAP": 0.001,
+          "MSL": 0.002,
+          "SWaT": 0.008
+        },
+        "epochs_per_invocation": 5,
+        "scheduler": {
+          "type": "StepLR",
+          "step_size": 5,
+          "gamma": 0.9
+        },
+        "precision": "float64",
+        "training_loss": "(1/n)*MSE(x1,target)+(1-1/n)*MSE(x2,target), n=epoch+1",
+        "score": "second output MSE across features",
+        "maml_in_active_main_path": false,
+        "layer_implementation": "author custom LeakyReLU layers and author positional encoding"
+      },
+      "old_local_difference": "通用torch Transformer/ReLU/LayerNorm、另一位置编码、固定.5/.5损失、窗口32和全局AdamW配置。",
+      "recommended": {
+        "identity": "TranAD author-released refactored implementation; not full paper-method equivalence",
+        "lr": 0.0001,
+        "lr_basis": "明确迁移作者SMD设置；不是电池专属推荐，也不同于论文0.01",
+        "epochs": 5,
+        "selection": "fixed final checkpoint",
+        "precision": "float64"
+      },
+      "alternative": "按论文0.01/hidden64/MAML重建整套方法，不能只把作者重构版的lr改为0.01便称论文版。"
+    },
+    "Anomaly_Transformer": {
+      "paper": {
+        "window": 100,
+        "window_sampling": "non-overlapping",
+        "d_model": 512,
+        "heads": 8,
+        "layers": 3,
+        "association_lambda": 3,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "batch": 32,
+        "max_epochs": 10
+      },
+      "release": {
+        "ffn_dim": 512,
+        "dropout": 0,
+        "activation": "gelu",
+        "batch_parser_default": 1024,
+        "batch_SMD_script": 256,
+        "weight_decay": 0,
+        "patience": 3,
+        "scheduler": "epoch-end adjust_learning_rate: base_lr*0.5**(epoch-1)",
+        "score_temperature": 50,
+        "preprocessing": "StandardScaler",
+        "validation_loader_in_train": "test_loader",
+        "training_loss": "backprop both rec-k*series and rec+k*prior; keep detach semantics and both rec contributions"
+      },
+      "old_local_difference": "loss had only one reconstruction contribution, score temperature50 omitted, only last-point score, batch128/lr.001, val reconstruction-only。",
+      "recommended": {
+        "window": 100,
+        "batch": 32,
+        "max_epochs": 10,
+        "patience": 3,
+        "training_stride": 100,
+        "selection": "reference dual validation objectives evaluated on common NORMAL validation instead of test",
+        "score": "original association softmax weighting times pointwise reconstruction error, T=50; retain all real positions"
+      },
+      "declared_adaptations": [
+        "replace test-loader checkpoint selection with independent normal validation",
+        "tail-aligned window and short-fragment padding",
+        "common object-level aggregation and validation P95 threshold"
+      ]
+    },
+    "DCdetector": {
+      "paper": {
+        "batch": 128,
+        "epochs": 3,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "window_patch_by_dataset": {
+          "MSL": {
+            "window": 90,
+            "patch": [
+              3,
+              5
+            ]
+          },
+          "SMAP": {
+            "window": 105,
+            "patch": [
+              3,
+              5,
+              7
+            ]
+          },
+          "SMD": {
+            "window": 105,
+            "patch": [
+              5,
+              7
+            ]
+          },
+          "PSM": {
+            "window": 60,
+            "patch": [
+              1,
+              3,
+              5
+            ]
+          },
+          "SWaT": {
+            "window": 105,
+            "patch": [
+              3,
+              5,
+              7
+            ]
+          },
+          "NIPS_SWAN": {
+            "window": 36,
+            "patch": [
+              1,
+              3
+            ]
+          },
+          "NIPS_GECCO": {
+            "window": 90,
+            "patch": [
+              1,
+              3,
+              5
+            ]
+          }
+        }
+      },
+      "release": {
+        "parser_window": 100,
+        "parser_patch": [
+          5
+        ],
+        "d_model": 256,
+        "heads": 1,
+        "layers": 3,
+        "dropout": 0,
+        "parser_epochs": 10,
+        "MSL_script": {
+          "epochs": 3,
+          "batch": 64,
+          "window": 90,
+          "patch": [
+            3,
+            5
+          ]
+        },
+        "SMD_script": {
+          "epochs": 2,
+          "batch": 256,
+          "window": 105,
+          "patch": [
+            5,
+            7
+          ]
+        },
+        "weight_decay": 0,
+        "patience": 5,
+        "scheduler": "epoch-end lr=base_lr*0.5**(epoch-1)",
+        "score_temperature": 50,
+        "preprocessing": "StandardScaler + native RevIN",
+        "training_loss": "prior_loss-series_loss, preserve stop-gradient branches; not MSE reconstruction"
+      },
+      "old_local_difference": "窗口32/patch[4,8,16]、无temperature50、只用最后点分数、全局AdamW和正KL验证量。",
+      "recommended": {
+        "window": 105,
+        "patch": [
+          3,
+          5,
+          7
+        ],
+        "basis": "迁移论文SMAP/SWaT多尺度设置，不称电池最优",
+        "batch": 128,
+        "epochs": 3,
+        "selection": "fixed final checkpoint; do not rank checkpoints using the cancelling validation objective",
+        "train_stride": 1,
+        "inference_stride": 105
+      },
+      "unresolved": "参考验证prior-series前向相消且loss_2空列表；不以此声称有效早停。建议固定3轮，是需确认的训练选择规则。"
+    },
+    "OmniAnomaly": {
+      "paper": {
+        "window": 100,
+        "rnn_hidden": 500,
+        "dense_hidden": 500,
+        "latent": 3,
+        "normalizing_flow_layers": 20,
+        "batch": 50,
+        "max_epochs": 20,
+        "optimizer": "Adam",
+        "lr": 0.001,
+        "gradient_clip": 10,
+        "l2": 0.0001,
+        "std_epsilon": 0.0001,
+        "validation_portion": 0.3
+      },
+      "release": {
+        "window": 100,
+        "hidden": 500,
+        "latent": 3,
+        "nf": 20,
+        "max_epochs_default": 10,
+        "README_MSL_epochs": 20,
+        "batch": 50,
+        "optimizer": "TF Adam",
+        "lr": 0.001,
+        "lr_anneal": {
+          "factor": 0.5,
+          "every_epochs": 40
+        },
+        "test_n_z": 1,
+        "validation_every_steps": 100,
+        "precision": "float32",
+        "framework": "tensorflow-gpu1.12.0 + tensorflow_probability0.5.0 + tfsnippet",
+        "preprocessing_issue": "utils.get_data calls preprocess separately on train and test, each fitting MinMax; must replace with normal-train-only scaler",
+        "training_objective": "mean(log q_flow - log p(x|z)); released final optimized loss omits constructed LGSSM prior",
+        "score": "negative native reconstruction log probability",
+        "gradient_behavior": "posterior sampling and density tf.scan(back_prop=False); posterior encoder gradients absent; flow and decoder train",
+        "gradient_clip_scope": "each parameter tensor independently",
+        "regularization_audit": "l2_reg config field exists but inspected model attaches no regularizers; do not add Adam weight decay"
+      },
+      "old_local_difference": "GRU hidden32/latent8、无normalizing flow，MSE+.01KL训练，MSE异常评分。",
+      "recommended": {
+        "status": "implementation_selected_one_epoch_timing",
+        "reference": "configs/external/omni_release_epoch_timing_20261112_v1.json"
+      },
+      "unresolved": [
+        "Executed TF1-vs-PyTorch output/gradient parity not available in unchanged environment",
+        "Formal training budget and validation schedule must be distinguished from one-epoch timing"
+      ],
+      "selected_implementation": {
+        "identity": "author_release_semantics_project_pytorch_port",
+        "module": "src.models.omni_anomaly_port.OmniAnomalyPort",
+        "semantics": "release",
+        "source_commit": "7fb0e0acf89ea49908896bcc9f9e80fcfff6baf4",
+        "user_confirmation": "2026-11-12: 按作者发布代码来",
+        "corrected_full_elbo_authorized": false,
+        "old_simplified_variant_authorized": false
+      },
+      "paper_release_metadata_status": "reference and explicitly selected author-release semantics; no paper-formula repairs"
+    }
+  },
+  "decisions": [
+    {
+      "id": "D1",
+      "topic": "模型身份",
+      "recommended": "四个作者发布实现；MTAD原文版本暂待补。可选加入明确命名的ML4ITS第三方变体。",
+      "alternatives": [
+        "选择ML4ITS变体作为第五个实际运行方法",
+        "坚持MTAD论文结构，先完成独立忠实复现审查后再跑"
+      ],
+      "selected": "ML4ITS MTAD variant accepted; simplified Omni NOT accepted after clarification"
+    },
+    {
+      "id": "D2",
+      "topic": "训练预算",
+      "recommended": "参考配置：TranAD5、AT最多10、DC3、Omni20；MTAD第三方30或论文100。RCR保留最多30。",
+      "alternatives": [
+        "全部最多30：明确预算受限对比，并逐模型重定早停/固定最终规则；不能仍称原论文预算"
+      ],
+      "selected": "MTAD30、TranAD5、AT最多10、DC3、RCR最多30；Omni未选定可接受实现，不设可运行预算"
+    },
+    {
+      "id": "D3",
+      "topic": "共同数据与归一化",
+      "recommended": "2026-11-12用户确认：所有模型统一逐变量MinMax，相同正常训练点拟合、每数据集/折冻结；不按片段拟合，不裁剪。极差<1e-12时除数设为1。",
+      "alternatives": [
+        "原生混合scaler方案未采用"
+      ],
+      "selected": "2026-11-12用户确认：所有模型统一逐变量MinMax，相同正常训练点拟合、每数据集/折冻结；不按片段拟合，不裁剪。极差<1e-12时除数设为1。 共同保留length>=105队列；AT/DC披露预处理适配。"
+    },
+    {
+      "id": "D4",
+      "topic": "时间覆盖与RCR复用",
+      "recommended": "Full retained temporal extent; common exclusion length<105; fresh RCR for LFP/NCM/Brand1 fixed70/10/20",
+      "alternatives": [
+        "所有方法沿旧RCR有效区间，复用旧RCR；明确Brand1前127点/CH尾部截断",
+        "共同排除不足最大span的片段；全部重训，报告新队列及排除数量"
+      ],
+      "selected": "full real temporal extent; common exclusion of short snippets; new RCR training required"
+    },
+    {
+      "id": "D5",
+      "topic": "参数迁移冲突",
+      "recommended": "TranAD用发布版/SMD lr1e-4；AT优先论文batch32/非重叠窗；DC用论文105+[3,5,7]/batch128/3轮；Omni优先论文20轮但L2与环境先核定。",
+      "alternatives": [
+        "TranAD重建完整论文版",
+        "AT沿作者SMD脚本batch256、训练stride1",
+        "DC沿main默认100+[5]"
+      ],
+      "selected": "TranAD/AT/DC按已列参考配置；Omni必须保留完整机制且不更改现有环境，待核验实现，未接受简化版"
+    },
+    {
+      "id": "D6",
+      "topic": "评价与规模",
+      "recommended": "seed3407; LFP/NCM/Brand1 fixed70/10/20; same IDs across models; native scores/top5%/normal-validationP95",
+      "alternatives": [
+        "先只跑LFP/NCM，Brand1协议同样冻结但延后",
+        "后续增加3408/3409三种子；须单独核定资源"
+      ],
+      "selected": "2026-11-12 user: Brand1 fixed70/10/20, no extra folds; all six methods use same retained cohort"
+    }
+  ],
+  "workload": {
+    "units_per_method": 3,
+    "external_jobs_if_MTAD_variant_selected": 15,
+    "external_jobs_if_MTAD_deferred": 12,
+    "new_RCR_jobs_if_full_time_coverage_selected": 3,
+    "total_jobs_range_single_seed": [
+      15,
+      18
+    ],
+    "three_seed_note": "Three seeds would require54 training jobs; current seed3407 only, do not expand",
+    "brand1_full128_windows_per_snippet_training": {
+      "MTAD_next100_stride5": 7,
+      "TranAD10_stride5": 25,
+      "AT_nonoverlap100_plus_tail": 2,
+      "DC105_stride5": 6,
+      "RCR128": 1,
+      "Omni100_stride5": 7
+    },
+    "runtime_estimate": "runs/external/brand1_split_70_10_20_seed0_20261112/budget_projection.json",
+    "runtime_reason": "Six NCM complete epoch timings and six Brand1 bounded training/validation timings available. LFP/Brand1 budgets projected; Kaggle hardware not measured.",
+    "storage_estimate": null,
+    "storage_policy": "保持项目原盘路径，窗口按需生成；不预生成巨大窗口/特征缓存。待选版本后按参数、Adam状态与分数数量估算；不自动清理旧结果。",
+    "output_proposal": "runs/external/battery_reference_20261112_split712_v1/",
+    "gpu_proposal": 0,
+    "max_concurrent_gpu_jobs_proposed": 1,
+    "backend": "local WSL CUDA outside sandbox; no Kaggle unless requested",
+    "currently_source_verified_external_jobs": 12,
+    "held_Omni_jobs": 0,
+    "RCR_fresh_jobs": 3,
+    "total_jobs_single_seed": 18,
+    "runtime_estimate_status": "Old LFP totals assume stride1 and are superseded for MTAD/DC/Omni by user-selected stride5. Existing raw timing evidence unchanged; current one-epoch diagnostics remain independent.",
+    "runtime_estimate_Brand1_current": "runs/external/brand1_split_70_10_20_seed0_20261112/budget_projection.json",
+    "historical_brand1_fold0_train_windows": {
+      "MTAD": 1883539,
+      "TranAD": 6726925,
+      "AT": 538154,
+      "DC": 1614462,
+      "RCR": 269077,
+      "Omni": 1883539
+    },
+    "brand1_current_train_windows": {
+      "tranad": 8062250,
+      "at": 644980,
+      "dc": 1934940,
+      "mtad": 2257430,
+      "rcr": 322490,
+      "omni": 2257430
+    }
+  },
+  "launch_blockers": [
+    "Implement approved within-snippet interpolation and train-only median fallback; complete original-file audit and rebuild/verify input bundles",
+    "Rebuild interpolation input bundle and verify original-to-pack numerical equivalence",
+    "Integrate formal local/Kaggle entry with shared preflight and native scoring/aggregation/threshold checks",
+    "Run Kaggle mounted-bundle smoke before any formal batch; local timings do not certify Kaggle environment"
+  ],
+  "evidence_limits": [
+    "Source-level parameter comparison completed; no forward/loss/gradient equivalence test claimed.",
+    "Short-snippet counts checked on raw rows only for metadata-selected candidates.",
+    "No promise of outperforming RCR; author settings do not certify best battery-dataset performance."
+  ],
+  "authorization": {
+    "source": "user accepts recommendations and asks one-epoch timing; Omni clarification forbids inferring acceptance of simplified model",
+    "authorized_execution": "one full NCM epoch per available model plus normal validation",
+    "formal_batch_launched": false,
+    "omni_selection": "User: 按作者发布代码来; implementation and earlier one-epoch timing authorized, no full formal batch started"
+  },
+  "confirmed_overrides": {
+    "short_snippets": "exclude length<105 for all models; publish exact IDs and counts",
+    "OmniAnomaly": "Author release behavior selected 2026-11-12; current-environment PyTorch port, no simplified model or undocumented fixes",
+    "timing_plan": "configs/external/battery_reference_epoch_timing_20261111_v2.json",
+    "omni_timing_plan": "configs/external/omni_release_epoch_timing_20261112_v1.json",
+    "normalization": "2026-11-12用户确认：所有模型统一逐变量MinMax，相同正常训练点拟合、每数据集/折冻结；不按片段拟合，不裁剪。极差<1e-12时除数设为1。",
+    "Brand1_training_stride": {
+      "MTAD_GAT": 5,
+      "TranAD": 5,
+      "DCdetector": 5,
+      "OmniAnomaly": 5
+    },
+    "Brand1_folds": [
+      0
+    ],
+    "Omni_batch": "2026-11-12 user: train/validation/test physical batch500; noise groups50; one optimizer update per500 training windows; lr and epochs unchanged"
+  },
+  "confirmed_effective_training": {
+    "tranad": {
+      "span": 10,
+      "window": 10,
+      "train_stride": 1,
+      "batch": 128,
+      "optimizer": "AdamW",
+      "lr": 0.0001,
+      "weight_decay": 1e-05,
+      "precision": "float64",
+      "scaler": "minmax",
+      "shuffle": false,
+      "formal_epochs": 5
+    },
+    "at": {
+      "span": 100,
+      "window": 100,
+      "train_stride": 100,
+      "batch": 32,
+      "optimizer": "Adam",
+      "lr": 0.0001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "minmax",
+      "shuffle": true,
+      "formal_epochs": 10
+    },
+    "dc": {
+      "span": 105,
+      "window": 105,
+      "train_stride": 1,
+      "batch": 128,
+      "optimizer": "Adam",
+      "lr": 0.0001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "minmax",
+      "shuffle": true,
+      "formal_epochs": 3
+    },
+    "mtad": {
+      "span": 101,
+      "window": 100,
+      "train_stride": 1,
+      "batch": 256,
+      "optimizer": "Adam",
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "minmax",
+      "shuffle": true,
+      "formal_epochs": 30
+    },
+    "rcr": {
+      "span": 32,
+      "window": 32,
+      "train_stride": 4,
+      "batch": 128,
+      "optimizer": "AdamW",
+      "lr": 0.001,
+      "weight_decay": 0.0001,
+      "precision": "float32",
+      "scaler": "minmax",
+      "shuffle": true,
+      "formal_epochs": 30
+    },
+    "omni": {
+      "span": 100,
+      "window": 100,
+      "train_stride": 1,
+      "validation_stride": 1,
+      "batch": 500,
+      "optimizer": "TF1Adam",
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "minmax",
+      "shuffle": true,
+      "formal_epochs": 10,
+      "validation_batch": 500,
+      "inference_batch": 500,
+      "noise_group_size": 50,
+      "optimizer_update_windows": 500
+    }
+  },
+  "scale_floor_diagnostic": {
+    "evidence": "runs/external/reference_epoch_timing_20261111_v1/scale_floor_audit.json",
+    "seed": 3407,
+    "floor": 0.05,
+    "all_seven_channels_fixed_at_floor_on_LFP_NCM_Brand1_all_folds": true,
+    "proposed_main_comparison": "keep existing0.05, describe effective conditional-mean calibration; no claim of useful dynamic scale",
+    "lowering_to_0p005": "CH remains almost fixed at floor; do not test-tune floor"
+  },
+  "confirmed_implementation_count": 4,
+  "runtime_verification_status_20261112": {
+    "shared_module": "src/experiment_preflight.py",
+    "compact_window_module": "src/data/compact_battery_windows.py",
+    "integrated_entry": "scripts/run_brand1_reference_timing.py",
+    "scope": "bounded training/normal-validation timing only; legacy formal entry points not retrofitted",
+    "cpu_tests": "tests/test_compact_battery_preflight.py",
+    "ncm_timing": "All six timing jobs complete, including Omni release port",
+    "brand1_timing_plan": "configs/external/brand1_reference_timing_20261112_v1.json"
+  },
+  "confirmed_20261112_final_training_choices": {
+    "window_diagnostics_followup": "2026-11-12用户确认保留原配置，不采用窗口100候选：LFP TranAD窗口10/训练步长1，RCR窗口32/步长4。已完成的一轮窗口100诊断独立保留，不覆盖旧结果；一轮TranAD第二阶段损失权重为0，不作为充分训练后的模型排名依据。",
+    "normalization_denominator": "width/std < 1e-12 -> 1",
+    "omni_max_epochs": 10,
+    "omni_validation_frequency": "once per complete training epoch",
+    "omni_schedule_difference": "release every100steps -> once per epoch; fewer checkpoint candidates; training data unchanged",
+    "whole_missing_rule": "Per-fold normal-training valid-value median fallback; record fraction. No validation/test use.",
+    "normalization": "2026-11-12用户确认：所有模型统一逐变量MinMax，相同正常训练点拟合、每数据集/折冻结；不按片段拟合，不裁剪。极差<1e-12时除数设为1。",
+    "Brand1_training_stride": "2026-11-12用户确认：仅Brand1四个原stride1模型训练stride改为5并追加末尾对齐窗；LFP/NCM原值，AT/RCR原值；验证及测试步长不变。项目计算预算适配，不称原生推荐配置。",
+    "Omni_batch": "2026-11-12 user: train/validation/test physical batch500; noise groups50; one optimizer update per500 training windows; lr and epochs unchanged",
+    "Brand1_split": "brand1_normal_entity_70_10_20_seed0_v1: normal entities117/16/35, all30fault entities test; retain split seed0 and model seed3407",
+    "split_final_confirmation": "User confirmed keeping current splits after reviewing overall snippet ratios: LFP56.04/7.99/35.97, NCM56.04/8.16/35.81, Brand167.64/9.02/23.34 percent. 70/10/20 applies to normal entities only.",
+    "LFP_training_stride": "2026-11-12用户确认LFP的MTAD-GAT/DCdetector/OmniAnomaly训练stride5+tail；TranAD窗口10的LFP默认stride1暂留，窗口100/stride5另作明确变体诊断；NCM原值、Brand1已确认值保持。验证和推理规则不变。"
+  },
+  "confirmed_effective_training_scope": "Legacy CH baseline retained for provenance; actual jobs must resolve confirmed_effective_training_by_dataset. LFP now differs from NCM.",
+  "confirmed_effective_training_by_dataset": {
+    "LFP": {
+      "tranad": {
+        "span": 10,
+        "window": 10,
+        "train_stride": 1,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "lr": 0.0001,
+        "weight_decay": 1e-05,
+        "precision": "float64",
+        "scaler": "minmax",
+        "shuffle": false,
+        "formal_epochs": 5,
+        "inference_stride": 1
+      },
+      "at": {
+        "span": 100,
+        "window": 100,
+        "train_stride": 100,
+        "batch": 32,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 10,
+        "validation_stride": 100,
+        "inference_stride": 100
+      },
+      "dc": {
+        "span": 105,
+        "window": 105,
+        "train_stride": 5,
+        "batch": 128,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 3,
+        "validation_stride": 1,
+        "inference_stride": 105
+      },
+      "mtad": {
+        "span": 101,
+        "window": 100,
+        "train_stride": 5,
+        "batch": 256,
+        "optimizer": "Adam",
+        "lr": 0.001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 30,
+        "inference_stride": 1,
+        "validation_stride": 1
+      },
+      "rcr": {
+        "span": 32,
+        "window": 32,
+        "train_stride": 4,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 30,
+        "validation_stride": 4,
+        "inference_stride": 4
+      },
+      "omni": {
+        "span": 100,
+        "window": 100,
+        "train_stride": 5,
+        "validation_stride": 1,
+        "batch": 500,
+        "optimizer": "TF1Adam",
+        "lr": 0.001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 10,
+        "inference_stride": 1,
+        "validation_batch": 500,
+        "inference_batch": 500,
+        "noise_group_size": 50,
+        "optimizer_update_windows": 500
+      }
+    },
+    "NCM": {
+      "tranad": {
+        "span": 10,
+        "window": 10,
+        "train_stride": 1,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "lr": 0.0001,
+        "weight_decay": 1e-05,
+        "precision": "float64",
+        "scaler": "minmax",
+        "shuffle": false,
+        "formal_epochs": 5,
+        "inference_stride": 1
+      },
+      "at": {
+        "span": 100,
+        "window": 100,
+        "train_stride": 100,
+        "batch": 32,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 10,
+        "validation_stride": 100,
+        "inference_stride": 100
+      },
+      "dc": {
+        "span": 105,
+        "window": 105,
+        "train_stride": 1,
+        "batch": 128,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 3,
+        "validation_stride": 1,
+        "inference_stride": 105
+      },
+      "mtad": {
+        "span": 101,
+        "window": 100,
+        "train_stride": 1,
+        "batch": 256,
+        "optimizer": "Adam",
+        "lr": 0.001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 30,
+        "inference_stride": 1
+      },
+      "rcr": {
+        "span": 32,
+        "window": 32,
+        "train_stride": 4,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 30,
+        "validation_stride": 4,
+        "inference_stride": 4
+      },
+      "omni": {
+        "span": 100,
+        "window": 100,
+        "train_stride": 1,
+        "validation_stride": 1,
+        "batch": 500,
+        "optimizer": "TF1Adam",
+        "lr": 0.001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 10,
+        "inference_stride": 1,
+        "validation_batch": 500,
+        "inference_batch": 500,
+        "noise_group_size": 50,
+        "optimizer_update_windows": 500
+      }
+    },
+    "Brand1": {
+      "tranad": {
+        "span": 10,
+        "window": 10,
+        "train_stride": 5,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "lr": 0.0001,
+        "weight_decay": 1e-05,
+        "precision": "float64",
+        "scaler": "minmax",
+        "shuffle": false,
+        "formal_epochs": 5,
+        "validation_stride": 1,
+        "inference_stride": 1
+      },
+      "at": {
+        "span": 100,
+        "window": 100,
+        "train_stride": 100,
+        "batch": 32,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 10,
+        "validation_stride": 100,
+        "inference_stride": 100
+      },
+      "dc": {
+        "span": 105,
+        "window": 105,
+        "train_stride": 5,
+        "batch": 128,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 3,
+        "validation_stride": 1,
+        "inference_stride": 105
+      },
+      "mtad": {
+        "span": 101,
+        "window": 100,
+        "train_stride": 5,
+        "batch": 256,
+        "optimizer": "Adam",
+        "lr": 0.001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 30,
+        "validation_stride": 1,
+        "inference_stride": 1
+      },
+      "rcr": {
+        "span": 128,
+        "window": 128,
+        "train_stride": 128,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 30,
+        "validation_stride": 128,
+        "inference_stride": 128
+      },
+      "omni": {
+        "span": 100,
+        "window": 100,
+        "train_stride": 5,
+        "validation_stride": 1,
+        "batch": 500,
+        "optimizer": "TF1Adam",
+        "lr": 0.001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 10,
+        "inference_stride": 1,
+        "validation_batch": 500,
+        "inference_batch": 500,
+        "noise_group_size": 50,
+        "optimizer_update_windows": 500
+      }
+    }
+  }
+}

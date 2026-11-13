@@ -1,0 +1,187 @@
+{
+  "task_id": "lfp_stride_pair_20261112_v2",
+  "approved": true,
+  "runnable": true,
+  "authorization": "2026-11-12 user selected LFP MTAD-GAT and TranAD, stride1 vs5, one epoch each; same initialization, normal validation and fixed test metrics, exploratory only; user subsequently expanded to all four original stride1 models",
+  "dataset": "LFP",
+  "seed": 3407,
+  "epochs": 1,
+  "train_strides": [
+    1,
+    5
+  ],
+  "methods": [
+    "mtad",
+    "tranad",
+    "omni",
+    "dc"
+  ],
+  "output": "runs/external/lfp_stride_pair_20261112_v2",
+  "source_mapping": "runs/internal/rcr_v1/LFP/full/mapping.json",
+  "source_metadata": "runs/internal/rcr_v1/LFP/full/metadata.csv",
+  "cohort": "runs/external/reference_epoch_timing_20261111_v1/inputs/LFP_cohort_lengths.csv",
+  "protocol_reference": "configs/external/battery_reference_protocol_review_20261111.json",
+  "models": {
+    "mtad": {
+      "span": 101,
+      "window": 100,
+      "train_stride": 1,
+      "batch": 256,
+      "optimizer": "Adam",
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "minmax",
+      "shuffle": true,
+      "formal_epochs": 1,
+      "inference_stride": 1,
+      "validation_stride": 1
+    },
+    "tranad": {
+      "span": 10,
+      "window": 10,
+      "train_stride": 1,
+      "batch": 128,
+      "optimizer": "AdamW",
+      "lr": 0.0001,
+      "weight_decay": 1e-05,
+      "precision": "float64",
+      "scaler": "minmax",
+      "shuffle": false,
+      "formal_epochs": 1,
+      "inference_stride": 1,
+      "validation_stride": 1
+    },
+    "omni": {
+      "span": 100,
+      "window": 100,
+      "train_stride": 1,
+      "validation_stride": 1,
+      "batch": 500,
+      "optimizer": "TF1Adam",
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "minmax",
+      "shuffle": true,
+      "formal_epochs": 1,
+      "inference_stride": 1,
+      "validation_batch": 500,
+      "inference_batch": 500,
+      "noise_group_size": 50,
+      "optimizer_update_windows": 500
+    },
+    "dc": {
+      "span": 105,
+      "window": 105,
+      "train_stride": 1,
+      "batch": 128,
+      "optimizer": "Adam",
+      "lr": 0.0001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "minmax",
+      "shuffle": true,
+      "formal_epochs": 1,
+      "validation_stride": 1,
+      "inference_stride": 105
+    }
+  },
+  "minimum_length": 105,
+  "preprocessing": "normal-training-only MinMax; width<1e-12=>1; no clipping; per-snippet NaN/Inf interpolation and nearest endpoint; entirely missing channel=>normal-training valid-observation median",
+  "expected_counts": {
+    "train": 5561,
+    "validation": 793,
+    "test": 3569
+  },
+  "expected_points": {
+    "train": 6337018,
+    "validation": 928732,
+    "test": 4625934
+  },
+  "validation_stride": 1,
+  "inference_stride": {
+    "mtad": 1,
+    "tranad": 1,
+    "omni": 1,
+    "dc": 105
+  },
+  "validation_checkpoints": [
+    0.0,
+    0.5,
+    1.0
+  ],
+  "checkpoint_selection": "fixed end of epoch1; interim validation diagnostic only",
+  "training_window_policy": "all retained normal snippets, stride1 or5, append end-aligned full tail window if necessary; no cross-snippet windows; no window cap",
+  "drop_last": {
+    "omni": true,
+    "other": false
+  },
+  "gpu": 0,
+  "max_concurrent_gpu_jobs": 1,
+  "precision": {
+    "mtad": "float32",
+    "tranad": "float64",
+    "omni": "float32",
+    "dc": "float32"
+  },
+  "amp": false,
+  "tf32": false,
+  "torch_threads": 4,
+  "metrics": [
+    "AP",
+    "AUROC",
+    "Precision",
+    "Recall",
+    "F1",
+    "FPR"
+  ],
+  "aggregation": "mean of largest ceil(0.05*n) native scores per snippet, at least1",
+  "threshold": "normal validation snippet scores P95, numpy linear quantile, predict >= threshold",
+  "label_level": "snippet",
+  "evaluation_scope": "same fixed test cohort; no point adjustment; no test-based stride/checkpoint selection",
+  "native_score": {
+    "mtad": "mean_variables(abs(forecast-y)+abs(shifted_window_reconstruction_last-y)), gamma1, no score scaling",
+    "tranad": "mean_variables((second_output-window_last)^2)",
+    "omni": "author release port negative Gaussian log probability at last window point; batch500 with separate shared-noise groups50",
+    "dc": "author temperature50 softmax(-sum forward and reverse KL), all window points; scoring stride105+tail; overlap average then snippet top5%"
+  },
+  "model_identity": {
+    "mtad": "ML4ITS third-party GATv2/GRU variant, accepted by user",
+    "tranad": "author released implementation, legacy API compatibility shim only",
+    "omni": "author-release project PyTorch port, previously accepted semantics and batch500",
+    "dc": "author DCdetector snapshot, native minimax gradients and score"
+  },
+  "first_epoch_limitation": "TranAD native epoch1 weights are first_loss1 and second_loss0; one-epoch results do not establish final-stage quality or convergence",
+  "source_review": [
+    "external_baselines/reference_snapshots/mtad/mtad_gat.py",
+    "external_baselines/reference_snapshots/mtad/modules.py",
+    "external_baselines/reference_snapshots/mtad/prediction.py",
+    "external_baselines/reference_snapshots/tranad/src/models.py",
+    "external_baselines/reference_snapshots/tranad/src/dlutils.py",
+    "scripts/run_reference_epoch_timing.py",
+    "external_baselines/reference_snapshots/dc/solver.py",
+    "external_baselines/reference_snapshots/dc/model/DCdetector.py",
+    "src/models/omni_anomaly_port.py"
+  ],
+  "excluded": [
+    "formal matrix updates",
+    "full multi-epoch runs",
+    "NCM or Brand1 changes",
+    "formal stride adoption"
+  ],
+  "storage_estimate": "Reuse existing~0.31GiB LFP cache; eight checkpoint and score sets estimated<1GiB extra",
+  "runtime_estimate": "Approximately5-6h including full normal validation at0/50/100%, score validation/test; CPU preparation reused. No automatic reruns on failure.",
+  "inputs": "runs/external/lfp_stride_pair_20261112_v1/inputs",
+  "omni_model": {
+    "input_dim": 7,
+    "window": 100,
+    "latent_dim": 3,
+    "rnn_hidden": 500,
+    "dense_dim": 500,
+    "flow_layers": 20,
+    "std_epsilon": 0.0001
+  },
+  "validation_diagnostic_limits": "DC objective is cancelling and not a convergence criterion; report separate prior/series components; Omni uses identical dedicated normal-validation RNG streams for paired comparisons",
+  "cache_policy": "Training/evaluation read only frozen preprocessed input files, boundaries, metadata and training-only scaler; no original CSV reload or automatic rebuild. Reuse same bundle locally and on Kaggle."
+}

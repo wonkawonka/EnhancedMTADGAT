@@ -1,0 +1,34 @@
+{
+  "task_id": "omni_compile_probe_20261112_v1",
+  "seed": 3407,
+  "output": "runs/external/omni_compile_probe_20261112_v1",
+  "timing_inputs": "runs/external/brand1_reference_timing_20261112_v1",
+  "raw": "kaggle/brand1_packed_inputs_20261109/brand1_raw.npy",
+  "model": {
+    "input_dim": 7,
+    "window": 100,
+    "latent_dim": 3,
+    "rnn_hidden": 500,
+    "dense_dim": 500,
+    "flow_layers": 20,
+    "std_epsilon": 0.0001
+  },
+  "batch": 50,
+  "warmup": 3,
+  "measured_steps": 30,
+  "atol": 2e-05,
+  "rtol": 0.0002,
+  "gradient_atol": 5e-05,
+  "gradient_rtol": 0.0005,
+  "timeout_seconds": 300,
+  "change": "Official torch.compile of two TF1GRU.step bound methods only, default mode, fullgraph=True",
+  "limitations": [
+    "legacy pack; complete original invalid-value audit found no affected snippets",
+    "not full training",
+    "not proof of long-run anomaly detection metric equivalence",
+    "fixed pre-generated shared truncated noise for paired computations",
+    "compile/caches local project output only"
+  ],
+  "input_only_normal": true,
+  "formal_protocol_changed": false
+}

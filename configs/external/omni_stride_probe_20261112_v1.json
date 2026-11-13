@@ -1,0 +1,57 @@
+{
+  "task_id": "omni_stride_probe_20261112_v1",
+  "timing_only": true,
+  "fold": 0,
+  "seed": 3407,
+  "train_batches": 100,
+  "validation_batches": 20,
+  "warmup_batches": 3,
+  "models": {
+    "omni": {
+      "span": 100,
+      "window": 100,
+      "train_stride": 1,
+      "batch": 50,
+      "optimizer": "TF1Adam",
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "precision": "float32",
+      "scaler": "minmax",
+      "formal_epochs": 10,
+      "validation_stride": 1
+    }
+  },
+  "omni_model": {
+    "input_dim": 7,
+    "window": 100,
+    "latent_dim": 3,
+    "rnn_hidden": 500,
+    "dense_dim": 500,
+    "flow_layers": 20,
+    "std_epsilon": 0.0001
+  },
+  "order": [
+    "omni"
+  ],
+  "output": "runs/external/omni_stride_probe_20261112_v1",
+  "raw": "kaggle/brand1_packed_inputs_20261109/brand1_raw.npy",
+  "ids": "kaggle/brand1_packed_inputs_20261109/brand1_sample_ids.json",
+  "mapping": "runs/internal/rcr_revalidation/rcr_brand1_revalidation_20261108/preparation/sources/Brand1_fold0/mapping.json",
+  "limitations": [
+    "Bounded 100 train / 20 validation batches plus3 warmup each; not complete epochs",
+    "Full Brand1 fold0 window counts used only for time projections",
+    "No fault data or detection metrics; fewer train targets and optimizer updates per epoch",
+    "Legacy input pack; original-file missing audit found no invalid values, not certification of entire formal pipeline",
+    "No compilation, no hidden-size change, no formal stride approval inferred"
+  ],
+  "AMP": false,
+  "TF32": false,
+  "torch_threads": 4,
+  "strides": [
+    1,
+    5
+  ],
+  "change": "Timing comparison only: training stride1 versus5 with tail alignment; validation stride1 fixed; eager PyTorch, no compilation or architecture changes",
+  "source": "ISSRE2023 Practical Anomaly Detection over Multivariate Monitoring Metrics for Online Services, IV-D: efficiency experiment uses train stride5/test1; not evidence of unchanged accuracy",
+  "source_url": "https://www.cse.cuhk.edu.hk/lyu/_media/conference/jliu_issre2023_practical.pdf"
+}

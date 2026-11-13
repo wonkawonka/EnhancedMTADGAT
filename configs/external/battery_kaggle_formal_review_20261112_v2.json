@@ -1,0 +1,1135 @@
+{
+  "plan_name": "battery_kaggle_formal_review_20261112_v2",
+  "schema_version": 1,
+  "status": "base_protocol_user_approved_two_additional_baselines_pending",
+  "approved": false,
+  "runnable": false,
+  "runner": null,
+  "purpose": "Confirm formal comparison and RCR structural/calibration ablation rules before implementation and Kaggle submission; no training authorized by this draft",
+  "protocol_sources": [
+    "configs/external/battery_reference_protocol_review_20261111.json",
+    "configs/external/battery_data_preparation_review_20261112.json",
+    "configs/internal/rcr_revalidation_20261107_v2.json"
+  ],
+  "precedence": "This draft resolves only current effective values; historical plans remain immutable. After approval a new executable plan must bind source/data/environment and implement these rules; no fallback to historical defaults.",
+  "pending_confirmations": [
+    {
+      "id": "C6_IF",
+      "proposal": "sklearn IsolationForest on all real 7D time points for all three datasets;200trees,max_samples256,seed3407;native negative score_samples then existing snippet/entity top5% and validationP95",
+      "difference": "Brand1 old128x7 flattened-input IF becomes pointwise; removes oldCH100k preselection; 256 per tree is intrinsic sampling not a dataset cap"
+    },
+    {
+      "id": "C7_DeepSVDD",
+      "proposal": "explicitly labelled project MLP adaptation; CH32/stride4, Brand1128/stride128; hidden64/latent32; AE5 epochs then one-class30 epochs; Adam.001,wd0,batch128; final checkpoint each stage; center fixed on all normaltrain windows",
+      "difference": "not original author image network or paper150-epoch setup; preserves project compact encoder/core objective, removes old data caps, Brand1 batch64->128, retains all partial batches; formal numerical/gradient audit still required"
+    }
+  ],
+  "data": {
+    "datasets": [
+      "LFP",
+      "NCM",
+      "Brand1"
+    ],
+    "model_seeds_proposed": [
+      3407
+    ],
+    "input_channels": [
+      "total_voltage",
+      "current",
+      "SOC",
+      "max_cell_voltage",
+      "min_cell_voltage",
+      "max_temperature",
+      "min_temperature"
+    ],
+    "task": "offline snippet/entity anomaly detection, not point labels or online prediction claims",
+    "split": "normal entities70/10/20; all faults test only; same frozen IDs across models/seeds",
+    "LFP": {
+      "train": 5561,
+      "validation": 793,
+      "test_normal": 1585,
+      "test_fault": 1984,
+      "train_points": 6337018,
+      "validation_points": 928732,
+      "test_points": 4625934,
+      "split_seed": 3407,
+      "evaluation_unit": "snippet"
+    },
+    "NCM": {
+      "train": 5297,
+      "validation": 771,
+      "test_normal": 1508,
+      "test_fault": 1877,
+      "train_points": 1858221,
+      "validation_points": 272664,
+      "test_points": 1537577,
+      "split_seed": 3407,
+      "evaluation_unit": "snippet"
+    },
+    "Brand1": {
+      "train": 322490,
+      "validation": 42994,
+      "test_normal": 94224,
+      "test_fault": 17031,
+      "train_points": 41278720,
+      "validation_points": 5503232,
+      "test_points": 14240640,
+      "split_seed": 0,
+      "normal_entities": [
+        117,
+        16,
+        35
+      ],
+      "fault_entities_test": 30,
+      "split_id": "brand1_normal_entity_70_10_20_seed0_v1",
+      "evaluation_unit": "entity"
+    },
+    "minimum_snippet_length": 105,
+    "excluded_counts": {
+      "LFP": 70,
+      "NCM": 25,
+      "Brand1": 0
+    },
+    "training_window_limit": null,
+    "no_cross_snippet_windows": true,
+    "cleaning": "NaN/Inf/float32 overflow -> missing; within-snippet linear interpolation, nearest valid endpoint; entirely missing channel -> normal-training valid-value median; record counts; no smoothing or clipping finite fault amplitudes",
+    "missing_audit": "retained original inputs audited: zero invalid values in all three datasets; new cleaning fallbacks inactive in this version",
+    "normalization": "common train-only per-variable MinMax; each retained real training point counted once; denominator1 when range<1e-12; no clipping on validation/test",
+    "prepare_once": "cleaned unnormalized float32 values, boundaries, IDs, labels, splits, scaler and version hashes; no raw parsing in model jobs",
+    "input_precision": "prepared float32 then model dtype (TranAD double); no claim preserving original float64 precision",
+    "bundle_status": {
+      "LFP": "complete at runs/external/lfp_stride_pair_20261112_v1/inputs; recheck manifest before packaging",
+      "NCM": "full formal input bundle location/hash not yet bound to this plan",
+      "Brand1": "new split manifest exists; complete bundle/new-split scaler validation not yet bound"
+    },
+    "all_data_meaning": "all retained normal snippets with declared stride, not every possible stride1 window; Omni drops final incomplete training batch only"
+  },
+  "models": {
+    "rcr": {
+      "identity": "project RCR R1_full Scale",
+      "module": "src.models.rcr.RCRBackbone",
+      "hidden": 32,
+      "node_dim": 8,
+      "feature_graph": true,
+      "temporal": true,
+      "layers": 2,
+      "heads": 4,
+      "ffn_dim": 64,
+      "dropout": 0.1,
+      "positional_encoding": "existing dynamic sin/cos",
+      "graph": "global learned node-embedding adjacency; not input-conditioned GAT",
+      "decoder": "Linear32x32, GELU, Linear32x7"
+    },
+    "mtad": {
+      "identity": "ML4ITS third-party GATv2/GRU variant; not original paper exact implementation",
+      "kernel_size": 7,
+      "use_gatv2": true,
+      "gru_layers": 1,
+      "gru_hidden": 150,
+      "forecast_layers": 3,
+      "forecast_hidden": 150,
+      "reconstruction_layers": 1,
+      "reconstruction_hidden": 150,
+      "dropout": 0.3,
+      "alpha": 0.2,
+      "gamma": 1,
+      "sr_cleaning": false,
+      "score_scaling": false,
+      "smoothing": false
+    },
+    "tranad": {
+      "identity": "author released refactored implementation; not full paper MAML reproduction",
+      "d_model": 14,
+      "heads": 7,
+      "encoder_layers": 1,
+      "decoder_layers_each": 1,
+      "ffn_dim": 16,
+      "dropout": 0.1,
+      "positional_encoding": "author sin+cos at every coordinate",
+      "layer_definition": "author custom layers, no LayerNorm; preserve literal activation behavior",
+      "output_activation": "Sigmoid",
+      "compatibility": "legacy causal API arguments only; forward and gradient checks required"
+    },
+    "at": {
+      "identity": "author implementation",
+      "d_model": 512,
+      "heads": 8,
+      "layers": 3,
+      "ffn_dim": 512,
+      "dropout": 0,
+      "activation": "gelu",
+      "association_weight": 3,
+      "score_temperature": 50
+    },
+    "dc": {
+      "identity": "author implementation",
+      "d_model": 256,
+      "heads": 1,
+      "layers": 3,
+      "dropout": 0,
+      "patch": [
+        3,
+        5,
+        7
+      ],
+      "score_temperature": 50,
+      "internal_RevIN": "preserve native"
+    },
+    "omni": {
+      "identity": "author-release semantics project PyTorch port; cross-framework parity not established",
+      "module": "src.models.omni_anomaly_port.OmniAnomalyPort",
+      "semantics": "release",
+      "hidden": 500,
+      "dense_dim": 500,
+      "dense_layers": 2,
+      "dense_activation": null,
+      "latent": 3,
+      "planar_flow_layers": 20,
+      "std_epsilon": 0.0001,
+      "noise": "one independent truncated Gaussian group per50 windows; physical batch500 contains10 groups",
+      "score_samples": 1,
+      "gradient_behavior": "preserve release back_prop=False posterior path",
+      "no_undeclared_paper_repairs": true
+    }
+  },
+  "training_by_dataset": {
+    "LFP": {
+      "tranad": {
+        "span": 10,
+        "window": 10,
+        "train_stride": 1,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "lr": 0.0001,
+        "weight_decay": 1e-05,
+        "precision": "float64",
+        "scaler": "minmax",
+        "shuffle": false,
+        "formal_epochs": 5,
+        "inference_stride": 1,
+        "validation_stride": 1,
+        "validation_batch": 128,
+        "inference_batch": 128,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "at": {
+        "span": 100,
+        "window": 100,
+        "train_stride": 100,
+        "batch": 32,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 10,
+        "validation_stride": 100,
+        "inference_stride": 100,
+        "validation_batch": 32,
+        "inference_batch": 32,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "dc": {
+        "span": 105,
+        "window": 105,
+        "train_stride": 5,
+        "batch": 128,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 3,
+        "validation_stride": 1,
+        "inference_stride": 105,
+        "validation_batch": 128,
+        "inference_batch": 128,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "mtad": {
+        "span": 101,
+        "window": 100,
+        "train_stride": 5,
+        "batch": 256,
+        "optimizer": "Adam",
+        "lr": 0.001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 30,
+        "inference_stride": 1,
+        "validation_stride": 1,
+        "validation_batch": 256,
+        "inference_batch": 256,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "rcr": {
+        "span": 32,
+        "window": 32,
+        "train_stride": 4,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 30,
+        "validation_stride": 4,
+        "inference_stride": 4,
+        "validation_batch": 128,
+        "inference_batch": 128,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "omni": {
+        "span": 100,
+        "window": 100,
+        "train_stride": 5,
+        "validation_stride": 1,
+        "batch": 500,
+        "optimizer": "TF1Adam",
+        "lr": 0.001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 10,
+        "inference_stride": 1,
+        "validation_batch": 500,
+        "inference_batch": 500,
+        "noise_group_size": 50,
+        "optimizer_update_windows": 500,
+        "drop_last_train": true,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": "per_parameter_l2_norm_10"
+      }
+    },
+    "NCM": {
+      "tranad": {
+        "span": 10,
+        "window": 10,
+        "train_stride": 1,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "lr": 0.0001,
+        "weight_decay": 1e-05,
+        "precision": "float64",
+        "scaler": "minmax",
+        "shuffle": false,
+        "formal_epochs": 5,
+        "inference_stride": 1,
+        "validation_stride": 1,
+        "validation_batch": 128,
+        "inference_batch": 128,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "at": {
+        "span": 100,
+        "window": 100,
+        "train_stride": 100,
+        "batch": 32,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 10,
+        "validation_stride": 100,
+        "inference_stride": 100,
+        "validation_batch": 32,
+        "inference_batch": 32,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "dc": {
+        "span": 105,
+        "window": 105,
+        "train_stride": 1,
+        "batch": 128,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 3,
+        "validation_stride": 1,
+        "inference_stride": 105,
+        "validation_batch": 128,
+        "inference_batch": 128,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "mtad": {
+        "span": 101,
+        "window": 100,
+        "train_stride": 1,
+        "batch": 256,
+        "optimizer": "Adam",
+        "lr": 0.001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 30,
+        "inference_stride": 1,
+        "validation_stride": 1,
+        "validation_batch": 256,
+        "inference_batch": 256,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "rcr": {
+        "span": 32,
+        "window": 32,
+        "train_stride": 4,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 30,
+        "validation_stride": 4,
+        "inference_stride": 4,
+        "validation_batch": 128,
+        "inference_batch": 128,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "omni": {
+        "span": 100,
+        "window": 100,
+        "train_stride": 1,
+        "validation_stride": 1,
+        "batch": 500,
+        "optimizer": "TF1Adam",
+        "lr": 0.001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 10,
+        "inference_stride": 1,
+        "validation_batch": 500,
+        "inference_batch": 500,
+        "noise_group_size": 50,
+        "optimizer_update_windows": 500,
+        "drop_last_train": true,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": "per_parameter_l2_norm_10"
+      }
+    },
+    "Brand1": {
+      "tranad": {
+        "span": 10,
+        "window": 10,
+        "train_stride": 5,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "lr": 0.0001,
+        "weight_decay": 1e-05,
+        "precision": "float64",
+        "scaler": "minmax",
+        "shuffle": false,
+        "formal_epochs": 5,
+        "validation_stride": 1,
+        "inference_stride": 1,
+        "validation_batch": 128,
+        "inference_batch": 128,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "at": {
+        "span": 100,
+        "window": 100,
+        "train_stride": 100,
+        "batch": 32,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 10,
+        "validation_stride": 100,
+        "inference_stride": 100,
+        "validation_batch": 32,
+        "inference_batch": 32,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "dc": {
+        "span": 105,
+        "window": 105,
+        "train_stride": 5,
+        "batch": 128,
+        "optimizer": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 3,
+        "validation_stride": 1,
+        "inference_stride": 105,
+        "validation_batch": 128,
+        "inference_batch": 128,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "mtad": {
+        "span": 101,
+        "window": 100,
+        "train_stride": 5,
+        "batch": 256,
+        "optimizer": "Adam",
+        "lr": 0.001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 30,
+        "validation_stride": 1,
+        "inference_stride": 1,
+        "validation_batch": 256,
+        "inference_batch": 256,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "rcr": {
+        "span": 128,
+        "window": 128,
+        "train_stride": 128,
+        "batch": 128,
+        "optimizer": "AdamW",
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 30,
+        "validation_stride": 128,
+        "inference_stride": 128,
+        "validation_batch": 128,
+        "inference_batch": 128,
+        "drop_last_train": false,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": null
+      },
+      "omni": {
+        "span": 100,
+        "window": 100,
+        "train_stride": 5,
+        "validation_stride": 1,
+        "batch": 500,
+        "optimizer": "TF1Adam",
+        "lr": 0.001,
+        "weight_decay": 0.0,
+        "precision": "float32",
+        "scaler": "minmax",
+        "shuffle": true,
+        "formal_epochs": 10,
+        "inference_stride": 1,
+        "validation_batch": 500,
+        "inference_batch": 500,
+        "noise_group_size": 50,
+        "optimizer_update_windows": 500,
+        "drop_last_train": true,
+        "drop_last_validation": false,
+        "drop_last_test": false,
+        "gradient_accumulation": 1,
+        "optimizer_betas": [
+          0.9,
+          0.999
+        ],
+        "optimizer_epsilon": 1e-08,
+        "amsgrad": false,
+        "gradient_clip": "per_parameter_l2_norm_10"
+      }
+    }
+  },
+  "training_policies": {
+    "rcr": {
+      "epochs": 30,
+      "early_stopping_patience": 8,
+      "selection": "strict_minimum_full_normal_validation_Huber_delta1; earliest on tie",
+      "scheduler": "none",
+      "loss": "Huber delta=1, mean over batch/time/variables"
+    },
+    "mtad": {
+      "epochs": 30,
+      "early_stopping_patience": null,
+      "selection": "strict_minimum_full_normal_validation_forecast_RMSE_plus_reconstruction_RMSE; earliest on tie",
+      "scheduler": "none",
+      "loss": "sqrt(batch_forecast_MSE)+sqrt(batch_reconstruction_MSE)"
+    },
+    "tranad": {
+      "epochs": 5,
+      "early_stopping_patience": null,
+      "selection": "final epoch5, not best test or first-stage validation loss",
+      "scheduler": "StepLR(step_size=5,gamma=0.9), step after each completed epoch",
+      "loss": "epoch n=1..5: MSE(first,last_input)/n + (1-1/n)*MSE(second,last_input)"
+    },
+    "at": {
+      "epochs": 10,
+      "early_stopping_patience": 3,
+      "selection": "author dual validation comparator on NORMAL validation: save when neither objective is worse than its saved value, delta0; equal qualifies per author code",
+      "scheduler": "after epoch n=1..10 set lr=base_lr*0.5**(n-1)",
+      "loss": "backprop(rec-3*series_KL) and (rec+3*prior_KL); preserve both reconstruction gradients and detached branches"
+    },
+    "dc": {
+      "epochs": 3,
+      "early_stopping_patience": null,
+      "selection": "final epoch3; cancelling prior-series validation objective is diagnostic only",
+      "scheduler": "after epoch n=1..3 set lr=base_lr*0.5**(n-1)",
+      "loss": "prior_KL-series_KL; preserve original stop-gradient branches"
+    },
+    "omni": {
+      "epochs": 10,
+      "early_stopping_patience": null,
+      "selection": "PROPOSAL: strict_minimum_full_normal_validation_release_loss, once per epoch, earliest on tie; run all10 epochs",
+      "scheduler": "release factor0.5 every40epochs; inactive within10epochs",
+      "loss": "mean(log q_flow - log p(x|z)); release stopped posterior gradients; no extra LGSSM prior or L2"
+    }
+  },
+  "native_scores": {
+    "rcr": "window mean(((X-Xhat-mu(q))/sigma(q))**2) over time and all7 variables",
+    "mtad": "mean_variables(abs(forecast-target)+abs(shifted_window_reconstruction_last-target)); gamma1",
+    "tranad": "mean_variables((second_output-last_input)**2)",
+    "at": "author softmax association weights at temperature50 * pointwise mean-variable reconstruction MSE",
+    "dc": "author softmax(-series_KL*50-prior_KL*50) across window positions; no reconstruction score",
+    "omni": "negative Gaussian reconstruction log_probability, sum_variables, last_input_point; one latent sample"
+  },
+  "validation": "once per complete epoch; full normal validation; no test metrics during training; MTAD sample-weighted mean batch forecast RMSE+reconstruction RMSE, matching reference batch metric convention; others sample-weighted objectives; initial/half-epoch diagnostics excluded from checkpoint candidates",
+  "window_policy": "span=window except MTAD span=window+1; starts from0 at declared stride, append final valid aligned window if absent; no padding; no cross-boundary targets; do not treat initial context as independent scored points",
+  "rcr_calibration": {
+    "kind": "Scale only",
+    "residual": "signed X-Xhat",
+    "condition_features": [
+      "current_mean",
+      "current_std_ddof0",
+      "current_range",
+      "current_abs_diff_mean",
+      "SOC_mean",
+      "SOC_std_ddof0",
+      "SOC_range",
+      "SOC_last_minus_first"
+    ],
+    "fit": "all normal train windows at each model own stride, after selecting backbone checkpoint",
+    "mean": "OLS window residual means on standardized q+intercept",
+    "condition_standardization_floor": 1e-08,
+    "scale": "OLS log(max(centered_window_RMS,0.05)); exp(linear_prediction clipped[-30,30]); per-channel train-predictionP5/P95 clipped with lower floor0.05",
+    "min_std": 0.05,
+    "freeze_on_validation_test": true,
+    "refit_for_each_retrained_backbone": true,
+    "no_independent_calibration_holdout": true,
+    "no_MAD_or_shrinkage_this_batch": true,
+    "no_cal_abs": true
+  },
+  "experiments": [
+    {
+      "id": "R1_full",
+      "method": "rcr",
+      "overrides": {},
+      "retrain": true,
+      "seed": 3407,
+      "parent": null
+    },
+    {
+      "id": "MTAD_GAT_ML4ITS",
+      "method": "mtad",
+      "overrides": {},
+      "retrain": true,
+      "seed": 3407,
+      "parent": null
+    },
+    {
+      "id": "TranAD_release",
+      "method": "tranad",
+      "overrides": {},
+      "retrain": true,
+      "seed": 3407,
+      "parent": null
+    },
+    {
+      "id": "Anomaly_Transformer",
+      "method": "at",
+      "overrides": {},
+      "retrain": true,
+      "seed": 3407,
+      "parent": null
+    },
+    {
+      "id": "DCdetector",
+      "method": "dc",
+      "overrides": {},
+      "retrain": true,
+      "seed": 3407,
+      "parent": null
+    },
+    {
+      "id": "OmniAnomaly_release_port",
+      "method": "omni",
+      "overrides": {},
+      "retrain": true,
+      "seed": 3407,
+      "parent": null
+    },
+    {
+      "id": "R4_no_graph",
+      "method": "rcr",
+      "overrides": {
+        "feature_graph": false
+      },
+      "retrain": true,
+      "seed": 3407,
+      "parent": null
+    },
+    {
+      "id": "R5_no_temporal",
+      "method": "rcr",
+      "overrides": {
+        "temporal": false
+      },
+      "retrain": true,
+      "seed": 3407,
+      "parent": null
+    },
+    {
+      "id": "R6_no_calibration",
+      "method": "rcr",
+      "overrides": {
+        "score": "mean((X-Xhat)**2)"
+      },
+      "retrain": false,
+      "seed": 3407,
+      "parent": "R1_full"
+    }
+  ],
+  "expected_if_proposal_accepted": {
+    "comparison_training": 18,
+    "ablation_training": 6,
+    "score_only": 3,
+    "total_training": 24,
+    "total_metrics": 27
+  },
+  "excluded_this_batch": [
+    "Brand2",
+    "Brand3",
+    "SWaT",
+    "PatchAD",
+    "MSCM/Memory",
+    "RCR relation heads",
+    "parameter sensitivity",
+    "additional seeds; pending scope confirmation"
+  ],
+  "evaluation": {
+    "score_to_snippet": "mean of top max(1,ceil(.05*n)) native scores",
+    "AT_DC_overlap": "average native scores at same real time point before snippet aggregation",
+    "Brand1": "top5% snippet scores per entity, same ceil rule; each entity one final observation",
+    "threshold": "per model/dataset/seed/variant normal validation final-object scores P95, numpy linear quantile; anomaly >= threshold",
+    "metrics": [
+      "AP=sklearn.average_precision_score",
+      "AUROC",
+      "Precision",
+      "Recall",
+      "F1",
+      "FPR"
+    ],
+    "zero_division": 0,
+    "test_labels": "metrics only, no threshold/checkpoint/hyperparameter/split selection",
+    "point_adjustment": false,
+    "score_flipping": false,
+    "extra_fusion": false,
+    "external_RCR_calibration": false,
+    "report": "single-seed numbers only; no seed std; no old-protocol metrics mixed as paired controls; Brand1 fixed single split not fivefold",
+    "limitations": "AP/AUROC and validation loss answer different questions; same data/evaluation does not mean same update budget; Brand1 P95 from16 normal validation entities unstable; repeated past test access disclosed"
+  },
+  "execution": {
+    "backend": "Kaggle, not submitted",
+    "command": null,
+    "account": null,
+    "kernel_ids": [],
+    "dataset_versions": {},
+    "git_commit": null,
+    "reference_versions": {
+      "tranad": "7ffb98d0c18189cc3d9ab732b4cb0278200a0af0",
+      "at": "b0ee470c8012bff857fb600462aec6209c4a18d9",
+      "mtad": "a3719416527d57e0e364f9b489c5368ade1bc8e7",
+      "dc": "9d107cae518ef24ee2eb2ad1b92107cdcd09ea10",
+      "omni": "7fb0e0acf89ea49908896bcc9f9e80fcfff6baf4",
+      "omni_dependencies": null
+    },
+    "device": "one GPU per training job; actual assigned device/memory recorded before smoke",
+    "precision": "TranAD float64; all others float32; AMP/TF32/compile disabled",
+    "fresh_initialization": true,
+    "resume": "only same cell/config/code/data; save model, optimizer, scheduler, epoch/step, sampler and RNG states, early-stop state; no silent warm start",
+    "checkpoint_policy": "selected best (where applicable) plus latest recovery checkpoint; fixed-final models also save final; no every-epoch weight archive",
+    "preflight": "resolved plan values, reference implementation, model gradients/native scores, data bundle/scaler/IDs/boundaries, first batch, complete miniature evaluation path on Kaggle actual mounts; no multi-hour full preparation in GPU jobs",
+    "immutability": "clone submitted latest git once then record resolved commit; no mid-run git pull or pip change; changing code/data/protocol requires new task version",
+    "notebook": "orchestration in Kaggle notebook; no per-account launching scripts added to src",
+    "outputs": "/kaggle/working/artifacts/<task>/<dataset>/<method>/seed3407",
+    "local_download": "runs/kaggle_downloads; original project filesystem retained, no C-drive relocation",
+    "quota": "record actual account session/wallclock/quota before allocating shards; do not assume all24 cells fit one session or an arbitrary4-way split",
+    "failures": "stop affected cell on nonfinite model states/OOM/mismatch; save explicit failure, no silent batch/window/data/score changes; completed cells preserved",
+    "no_submission_yet": true
+  },
+  "required_artifacts": [
+    "plan_snapshot.json",
+    "effective_config.json",
+    "protocol_manifest.json",
+    "preflight.json",
+    "source/environment/data fingerprints",
+    "sample and entity mapping",
+    "training/validation history and selection reason",
+    "selected and latest checkpoints with optimizer/RNG for resume",
+    "RCR calibration.npz when applicable",
+    "validation/test scores with IDs",
+    "metrics.json",
+    "complete.json only after required checks pass"
+  ],
+  "implementation_status": {
+    "rules": "draft recorded",
+    "local_one_epoch": "six model timing paths exist; LFP RCR/MTAD/TranAD/Omni scored diagnostics completed; not proof all formal runners are ready",
+    "formal_multi_epoch": "not fully integrated/verified; one-epoch TranAD loss helper cannot be reused unmodified for epochs2..5",
+    "Kaggle_mounted_smoke": "pending",
+    "full_formal_bundles": "LFP present; NCM and Brand1 new-split versions need binding and verification",
+    "resume": "must verify full-state resume, not weights-only continuation",
+    "artifact_export": "pending formal integration and archive content/hash smoke",
+    "efficiency_logging": "pending formal phase counters and GPU/RSS collection; local old training-only timers insufficient"
+  },
+  "resource_estimates": {
+    "input_payload_GiB": 2.0,
+    "input_basis": "approximately LFP.31 + NCM.096 + Brand1 1.59 GiB numeric inputs, excluding small metadata and packaging copies",
+    "output_estimate_GiB_range": [
+      2,
+      6
+    ],
+    "output_basis": "engineering estimate for24cells with selected/latest states and native/object scores; exclude expanded windows/features/residual tensors; verify actual size before upload",
+    "runtime": "No reliable total Kaggle wallclock estimate until device and end-to-end scoring timings are measured. Local one-epoch tests are not Kaggle guarantees; no additional timing/training launched by this draft."
+  },
+  "supersedes": "configs/external/battery_kaggle_formal_review_20261112_v1.json",
+  "base_protocol_approval": {
+    "approved": true,
+    "user_message": "全部按这版",
+    "date": "2026-11-12",
+    "confirmed_ids": [
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "C5"
+    ],
+    "meaning": "all previous five choices approved; no reapproval needed; added IF/DeepSVDD methodological choices not yet approved"
+  },
+  "requested_additional_baselines": {
+    "isolation_forest": {
+      "status": "scope requested; method proposal pending confirmation",
+      "identity": "sklearn.ensemble.IsolationForest",
+      "input": "one real time point x7 channels for ALL datasets",
+      "window": 1,
+      "train_stride": 1,
+      "validation_stride": 1,
+      "inference_stride": 1,
+      "n_estimators": 200,
+      "max_samples": 256,
+      "max_features": 1.0,
+      "bootstrap": false,
+      "contamination": "auto",
+      "random_state": 3407,
+      "warm_start": false,
+      "n_jobs": -1,
+      "training": "one fit on entire retained normal-training point population; sklearn internal per-tree sampling retained; no external100k cap",
+      "score": "-score_samples, not predict/decision threshold; existing common aggregation/P95",
+      "basis": "256 is sklearn auto per-tree sample default;200trees project existing choice, sklearn default100; pointwise input is project common adaptation and changes Brand1 old flattened variant",
+      "source": "https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.IsolationForest.html",
+      "runtime": "CPU; record sklearn version/effective CPUs/threads; GPU memory N/A; record fit and full scoring time"
+    },
+    "deep_svdd": {
+      "status": "scope requested; implementation and complete settings pending confirmation",
+      "identity": "Deep SVDD (project MLP time-series adaptation), not author exact network",
+      "module": "src.models.unified_external_baselines.DeepSVDDAutoEncoder / DeepSVDDEncoder",
+      "input": "flatten full window; CH32x7, Brand1128x7",
+      "window_by_dataset": {
+        "LFP": 32,
+        "NCM": 32,
+        "Brand1": 128
+      },
+      "stride_all_stages_by_dataset": {
+        "LFP": 4,
+        "NCM": 4,
+        "Brand1": 128
+      },
+      "hidden": 64,
+      "latent": 32,
+      "bias": false,
+      "encoder": "Linear(input,64),ReLU,Linear(64,32)",
+      "pretrain_decoder": "Linear(32,64),ReLU,Linear(64,input), all without bias",
+      "ae_epochs": 5,
+      "svdd_epochs": 30,
+      "batch": 128,
+      "precision": "float32",
+      "optimizer": "Adam",
+      "lr": 0.001,
+      "weight_decay": 0,
+      "betas": [
+        0.9,
+        0.999
+      ],
+      "epsilon": 1e-08,
+      "scheduler": null,
+      "pretrain_loss": "mean squared reconstruction error",
+      "pretrain_gradient_clip": null,
+      "svdd_loss": "mean(sum((encoder(x)-c)^2))",
+      "svdd_gradient_clip_global_norm": 5.0,
+      "center": "mean encoder output over ALL normaltrain windows after selected AE; fix permanently; abs(c)<.1 => -.1 if negative else+.1 including exactlyzero, matching existing project rule",
+      "selection": "AE fixed epoch5 final, SVDD fixed epoch30 final; normal validation curves diagnostic, no early stopping or test-based selection",
+      "shuffle": true,
+      "drop_last": false,
+      "score": "sum((encoder(x)-c)^2) per window; common top5% and normalvalidationP95",
+      "reference": "https://github.com/lukasruff/Deep-SVDD-PyTorch",
+      "reference_difference": "author MNIST example AE150+SVDD150, lr1e-4 and LeNet; present5+30/MLP/lr.001/wd0 are project existing budget/adapter choices, not paper recommendations; center zero handling and clip5 also declared project choices",
+      "basis": "existing project structure and pretraining; published one-class fixed-center objective, audit against source before running"
+    }
+  },
+  "expected_with_additions_if_approved": {
+    "comparison_fits": 24,
+    "ablation_training": 6,
+    "score_only": 3,
+    "total_training_or_IF_fit": 30,
+    "total_metrics": 33,
+    "DeepSVDD_stage_counting": "one model cell contains AE5+SVDD30; not counted as two independent models"
+  },
+  "artifact_export": {
+    "authorized": true,
+    "format": "ordinary zip with lossless compression; numeric arrays npz lossless without changing float dtype; no quantization or truncation",
+    "layout": {
+      "results": "metrics, efficiency, full curves, config/plan/source/data hashes, threshold, selection reason, validation/test snippet/entity scores, ordered ID and label mapping; shared per-dataset mapping stored once with explicit package dependency",
+      "weights": "selected model/IF forest, RCR calibration or SVDD center, full inference configuration; separate from results for optional download",
+      "native_scores": "all required native validation/test point/window scores and mapping/offsets, separate compressed detailed evidence; no need to download for aggregate tables",
+      "recovery": "latest full optimizer/scheduler/RNG/sampler/early-stop state while running; interrupted cells retain separate recovery archive; completed cells can keep a separately downloadable recovery archive, never put it into small results package"
+    },
+    "granularity": "per dataset/method/seed cell; shared metadata once per dataset; completed cell packaged promptly, not only at notebook termination",
+    "size_policy": "target results zip<=256MiB, weights/detail zip<=512MiB per file; if too large shard records into independent npz members with global offsets and package manifest, never downsample or remove required results; targets not guaranteed compression ratios",
+    "exclude": [
+      "raw/prepared dataset contents",
+      "expanded windows",
+      "full latent/residual/moments caches",
+      "repository/.git",
+      "installed environments/download caches",
+      "duplicate copy per epoch"
+    ],
+    "verification": "relative paths only, explicit allowlist; validate every archive CRC and manifest member count/size/SHA256; publish archive index with byte size, SHA256, task/kernel/scriptVersionId where available, dataset/model/seed and dependencies",
+    "retention": "do not delete original datasets or historical artifacts; avoid keeping duplicate unpacked completed output in Kaggle export only AFTER verified archives; incomplete evidence must never be labelled complete",
+    "download": "Kaggle Output full pagination and matching scriptVersionId; download results first, weights/native/recovery by need; all required evidence remains downloadable",
+    "implementation_status": "contract recorded; packer must be integrated and exercised on actual formal output before submission"
+  },
+  "efficiency_metrics": {
+    "authorized": true,
+    "file": "efficiency.json per cell plus merged efficiency.csv",
+    "environment": [
+      "GPU model,count,total_memory",
+      "CPU model,allocated cores,thread settings",
+      "host RAM",
+      "Python/PyTorch/CUDA/cuDNN/sklearn versions",
+      "batch,precision,window,strides",
+      "code/input protocol hashes"
+    ],
+    "size": [
+      "total and trainable parameter counts (selected SVDD encoder and AE separately)",
+      "model/checkpoint bytes",
+      "archive bytes",
+      "IF tree count and nodes (no neural parameter count)"
+    ],
+    "time": [
+      "input load seconds",
+      "window-index preparation seconds",
+      "initialization/warmup seconds",
+      "AE/SVDD or other training seconds per epoch and total",
+      "full validation seconds per epoch and total",
+      "RCR calibration seconds",
+      "validation and test scoring seconds separately",
+      "aggregation and metric seconds",
+      "checkpoint IO seconds",
+      "compression seconds",
+      "end-to-end wallclock and elapsed per resumed segment"
+    ],
+    "memory": [
+      "phase peak torch CUDA allocated bytes",
+      "phase peak torch CUDA reserved bytes",
+      "sampled process RSS peak with interval and measured scope",
+      "optional device-memory/utilization sample mean/max with interval; N/A if unavailable"
+    ],
+    "throughput": [
+      "training windows/sec with actual used windows and optimizer updates",
+      "scoring effective outputs/sec and snippets/sec",
+      "final entities/sec for Brand1",
+      "mean time per snippet from complete scoring (not claimed single-request latency)"
+    ],
+    "measurement": "synchronize CUDA at measured stage/epoch boundaries, monotonic wall timer; reset memory peaks per phase; do not synchronize every batch solely for metrics; phase outputs preserve exact timing scope and whether IO included; per-batch warmup excluded only in separately labelled microbenchmarks, included in end-to-end cost",
+    "fairness": "separate CPU IF and GPU training; no cross-GPU speed ranking; preserve actual hardware/batch; no claim FLOPs equivalent for attention/stochastic/tree methods; failed metrics N/A, not zero",
+    "implementation_status": "schema recorded; formal runner/resource sampler and archive integration still require checks"
+  }
+}
